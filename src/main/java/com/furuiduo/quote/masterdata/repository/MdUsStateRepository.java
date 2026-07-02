@@ -26,10 +26,10 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
 
   @Query(
       """
-      SELECT DISTINCT s FROM MdUsState s
-      JOIN MdDestCity c ON c.stateId = s.id
-      LEFT JOIN MdDestZip z ON z.cityId = c.id
-      WHERE (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+      SELECT DISTINCT s FROM MdUsState s, MdDestCity c, MdDestZip z
+      WHERE c.stateId = s.id
+        AND z.cityId = c.id
+        AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
         AND (
           :keyword IS NULL OR TRIM(:keyword) = ''
           OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')

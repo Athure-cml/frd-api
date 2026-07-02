@@ -19,10 +19,10 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
           """
           SELECT new com.furuiduo.quote.masterdata.dto.DestAddressRowResponse(
             z.id, s.code, s.id, c.name, c.id, z.zipCode)
-          FROM MdDestZip z
-          JOIN MdDestCity c ON c.id = z.cityId
-          JOIN MdUsState s ON s.id = c.stateId
-          WHERE (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+          FROM MdDestZip z, MdDestCity c, MdUsState s
+          WHERE c.id = z.cityId
+            AND s.id = c.stateId
+            AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
               :keyword IS NULL OR TRIM(:keyword) = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
@@ -34,10 +34,10 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
       countQuery =
           """
           SELECT COUNT(z)
-          FROM MdDestZip z
-          JOIN MdDestCity c ON c.id = z.cityId
-          JOIN MdUsState s ON s.id = c.stateId
-          WHERE (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+          FROM MdDestZip z, MdDestCity c, MdUsState s
+          WHERE c.id = z.cityId
+            AND s.id = c.stateId
+            AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
               :keyword IS NULL OR TRIM(:keyword) = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
@@ -55,10 +55,10 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
           """
           SELECT new com.furuiduo.quote.masterdata.dto.DestAddressRowResponse(
             z.id, s.code, s.id, c.name, c.id, z.zipCode)
-          FROM MdDestZip z
-          JOIN MdDestCity c ON c.id = z.cityId
-          JOIN MdUsState s ON s.id = c.stateId
-          WHERE LOWER(z.zipCode) LIKE LOWER(CONCAT(:keyword, '%'))
+          FROM MdDestZip z, MdDestCity c, MdUsState s
+          WHERE c.id = z.cityId
+            AND s.id = c.stateId
+            AND LOWER(z.zipCode) LIKE LOWER(CONCAT(:keyword, '%'))
           ORDER BY z.zipCode ASC, c.name ASC
           """,
       countQuery =
