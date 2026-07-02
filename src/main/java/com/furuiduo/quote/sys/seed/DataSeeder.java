@@ -54,7 +54,7 @@ public class DataSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (departmentRepository.count() > 0) {
+    if (userRepository.existsByUsername("vben")) {
       return;
     }
 
@@ -77,11 +77,18 @@ public class DataSeeder implements ApplicationRunner {
 
     Map<String, SysDepartment> map = new LinkedHashMap<>();
     for (String[] row : rows) {
-      SysDepartment department = new SysDepartment();
-      department.setCode(row[0]);
-      department.setName(row[1]);
-      department.setSort(Integer.parseInt(row[2]));
-      map.put(row[0], departmentRepository.save(department));
+      SysDepartment department =
+          departmentRepository
+              .findByCode(row[0])
+              .orElseGet(
+                  () -> {
+                    SysDepartment created = new SysDepartment();
+                    created.setCode(row[0]);
+                    created.setName(row[1]);
+                    created.setSort(Integer.parseInt(row[2]));
+                    return departmentRepository.save(created);
+                  });
+      map.put(row[0], department);
     }
     return map;
   }
@@ -144,12 +151,19 @@ public class DataSeeder implements ApplicationRunner {
 
     Map<String, SysPermission> map = new LinkedHashMap<>();
     for (PermDef def : defs) {
-      SysPermission permission = new SysPermission();
-      permission.setCode(def.code());
-      permission.setName(def.name());
-      permission.setType(def.type());
-      permission.setSort(def.sort());
-      map.put(def.code(), permissionRepository.save(permission));
+      SysPermission permission =
+          permissionRepository
+              .findByCode(def.code())
+              .orElseGet(
+                  () -> {
+                    SysPermission created = new SysPermission();
+                    created.setCode(def.code());
+                    created.setName(def.name());
+                    created.setType(def.type());
+                    created.setSort(def.sort());
+                    return permissionRepository.save(created);
+                  });
+      map.put(def.code(), permission);
     }
     return map;
   }
@@ -419,6 +433,9 @@ public class DataSeeder implements ApplicationRunner {
       Set<SysRole> userRoles,
       String encodedPassword,
       String rawPassword) {
+    if (userRepository.existsByUsername(username)) {
+      return;
+    }
     SysUser user = new SysUser();
     user.setUsername(username);
     user.setRealName(realName);
@@ -433,12 +450,17 @@ public class DataSeeder implements ApplicationRunner {
 
   private SysRole saveRole(
       String code, String name, DataScope dataScope, Set<SysPermission> permissionSet) {
-    SysRole role = new SysRole();
-    role.setCode(code);
-    role.setName(name);
-    role.setDataScope(dataScope);
-    role.setPermissions(permissionSet);
-    return roleRepository.save(role);
+    return roleRepository
+        .findByCode(code)
+        .orElseGet(
+            () -> {
+              SysRole role = new SysRole();
+              role.setCode(code);
+              role.setName(name);
+              role.setDataScope(dataScope);
+              role.setPermissions(permissionSet);
+              return roleRepository.save(role);
+            });
   }
 
   private Set<SysPermission> allPermissionCodes(Map<String, SysPermission> permissions) {
