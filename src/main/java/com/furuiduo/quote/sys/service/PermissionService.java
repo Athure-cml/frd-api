@@ -44,6 +44,9 @@ public class PermissionService {
   }
 
   public boolean hasPermission(SysUser user, String permissionCode) {
+    if (getRoleCodes(user).contains("super_admin")) {
+      return true;
+    }
     return getPermissionCodes(user).contains(permissionCode);
   }
 }

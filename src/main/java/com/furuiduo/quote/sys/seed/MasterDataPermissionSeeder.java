@@ -20,13 +20,15 @@ import com.furuiduo.quote.sys.repository.SysPermissionRepository;
 import com.furuiduo.quote.sys.repository.SysRoleRepository;
 
 @Component
-@Order(103)
+@Order(950)
 public class MasterDataPermissionSeeder implements ApplicationRunner {
 
   private record PermDef(String code, String name, int sort) {}
 
   private static final List<PermDef> PERMISSIONS =
       List.of(
+          new PermDef(PermissionCodes.MD_US_STATE_VIEW, "美国州-查看", 53),
+          new PermDef(PermissionCodes.MD_US_STATE_MANAGE, "美国州-管理", 54),
           new PermDef(PermissionCodes.MD_DEST_ADDRESS_VIEW, "美国州邮政编码-查看", 55),
           new PermDef(PermissionCodes.MD_DEST_ADDRESS_MANAGE, "美国州邮政编码-管理", 56),
           new PermDef(PermissionCodes.MD_GLOBAL_PORT_VIEW, "全球港口-查看", 57),
@@ -104,6 +106,7 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
     } else if (ROLES_WITH_MANAGE.contains(code)) {
       permissions.values().forEach(grants::add);
     } else if (ROLES_WITH_VIEW.contains(code)) {
+      addIfPresent(permissions, PermissionCodes.MD_US_STATE_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_DEST_ADDRESS_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_GLOBAL_PORT_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_INLAND_POR_VIEW, grants);

@@ -1,9 +1,13 @@
 # Render 生产环境：PostgreSQL + 端口由 PORT 注入（免费实例通常为 10000）
 # 数据源由 RenderDataSourceConfig 读取 DATABASE_URL 或 PGHOST 等变量
+# 表结构由 Flyway 管理，见 db/migration/V1__init_schema.sql
 spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
 
 quote:
