@@ -1,12 +1,7 @@
 # Render 生产环境：PostgreSQL + 端口由 PORT 注入（免费实例通常为 10000）
+# 数据源由 RenderDataSourceConfig 读取 DATABASE_URL 或 PGHOST 等变量
 spring:
-  datasource:
-    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?sslmode=require
-    username: ${PGUSER}
-    password: ${PGPASSWORD}
-    driver-class-name: org.postgresql.Driver
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
     show-sql: false
