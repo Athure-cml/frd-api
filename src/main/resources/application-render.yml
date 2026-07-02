@@ -15,6 +15,9 @@ quote:
     # 在 Render 环境变量中覆盖，例如：
     # CORS_ALLOWED_ORIGIN_PATTERNS=https://your-app.vercel.app,https://*.vercel.app
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app,http://localhost:*}
+  # 仅 Render 一次性清库重建：环境变量 QUOTE_DB_RESET=true，部署成功后删除该变量
+  db:
+    reset: ${QUOTE_DB_RESET:false}
   upload-dir: /tmp/uploads
   masterdata:
     us-zip:
