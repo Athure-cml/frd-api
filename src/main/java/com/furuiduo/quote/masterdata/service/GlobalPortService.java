@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.masterdata.dto.GlobalPortResponse;
@@ -52,9 +54,28 @@ public class GlobalPortService {
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
 
+    String normalizedCode = SearchText.orEmpty(code);
+    String normalizedNameEn = SearchText.orEmpty(nameEn);
+    String normalizedNameZh = SearchText.orEmpty(nameZh);
+    String normalizedRoute = SearchText.orEmpty(route);
+    String normalizedCountryRegion = SearchText.orEmpty(countryRegion);
+    if (normalizedCode.isEmpty()
+        && normalizedNameEn.isEmpty()
+        && normalizedNameZh.isEmpty()
+        && normalizedRoute.isEmpty()
+        && normalizedCountryRegion.isEmpty()
+        && portType == null) {
+      return paginate(repository.findAll(Sort.by("code")), safePage, safePageSize);
+    }
+
     List<MdGlobalPort> filtered =
         repository.search(
-            trim(code), trim(nameEn), trim(nameZh), trim(route), trim(countryRegion), portType);
+            normalizedCode,
+            normalizedNameEn,
+            normalizedNameZh,
+            normalizedRoute,
+            normalizedCountryRegion,
+            portType);
 
     return paginate(filtered, safePage, safePageSize);
   }
@@ -118,7 +139,12 @@ public class GlobalPortService {
       PortType portType) {
     List<MdGlobalPort> items =
         repository.search(
-            trim(code), trim(nameEn), trim(nameZh), trim(route), trim(countryRegion), portType);
+            SearchText.orEmpty(code),
+            SearchText.orEmpty(nameEn),
+            SearchText.orEmpty(nameZh),
+            SearchText.orEmpty(route),
+            SearchText.orEmpty(countryRegion),
+            portType);
 
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Global Port");

@@ -17,11 +17,13 @@ public interface CurrencyRepository extends JpaRepository<Currency, Long> {
 
   Optional<Currency> findByBaseTrue();
 
+  List<Currency> findByStatusOrderBySortAscCodeAsc(Integer status);
+
   @Query(
       """
       SELECT c FROM Currency c
-      WHERE (:code IS NULL OR UPPER(c.code) LIKE UPPER(CONCAT('%', :code, '%')))
-        AND (:name IS NULL OR UPPER(c.name) LIKE UPPER(CONCAT('%', :name, '%')))
+      WHERE (:code = '' OR UPPER(c.code) LIKE UPPER(CONCAT('%', :code, '%')))
+        AND (:name = '' OR UPPER(c.name) LIKE UPPER(CONCAT('%', :name, '%')))
         AND (:status IS NULL OR c.status = :status)
       ORDER BY c.sort ASC, c.code ASC
       """)

@@ -21,18 +21,18 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
   @Query(
       """
       SELECT q FROM QuoteOrder q WHERE
-      (:quoteNo IS NULL OR :quoteNo = '' OR UPPER(q.quoteNo) LIKE UPPER(CONCAT('%', :quoteNo, '%')))
-      AND (:customerName IS NULL OR :customerName = '' OR UPPER(q.customerName) LIKE UPPER(CONCAT('%', :customerName, '%')))
+      (:quoteNo = '' OR UPPER(q.quoteNo) LIKE UPPER(CONCAT('%', :quoteNo, '%')))
+      AND (:customerName = '' OR UPPER(q.customerName) LIKE UPPER(CONCAT('%', :customerName, '%')))
       AND (:transportMode IS NULL OR q.transportMode = :transportMode)
       AND (:status IS NULL OR q.status = :status)
-      AND (:zipCode IS NULL OR :zipCode = '' OR UPPER(q.zipCode) LIKE UPPER(CONCAT('%', :zipCode, '%')))
-      AND (:city IS NULL OR :city = '' OR UPPER(q.city) LIKE UPPER(CONCAT('%', :city, '%')))
-      AND (:state IS NULL OR :state = '' OR UPPER(TRIM(q.state)) = UPPER(TRIM(:state)))
-      AND (:por IS NULL OR :por = '' OR UPPER(TRIM(q.por)) = UPPER(TRIM(:por)))
-      AND (:pol IS NULL OR :pol = '' OR UPPER(TRIM(q.pol)) = UPPER(TRIM(:pol)))
-      AND (:pod IS NULL OR :pod = '' OR UPPER(TRIM(q.pod)) = UPPER(TRIM(:pod)))
-      AND (:ssl IS NULL OR :ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', TRIM(:ssl), '%')))
-      AND (:followUpByName IS NULL OR :followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
+      AND (:zipCode = '' OR UPPER(q.zipCode) LIKE UPPER(CONCAT('%', :zipCode, '%')))
+      AND (:city = '' OR UPPER(q.city) LIKE UPPER(CONCAT('%', :city, '%')))
+      AND (:state = '' OR UPPER(TRIM(q.state)) = UPPER(:state))
+      AND (:por = '' OR UPPER(TRIM(q.por)) = UPPER(:por))
+      AND (:pol = '' OR UPPER(TRIM(q.pol)) = UPPER(:pol))
+      AND (:pod = '' OR UPPER(TRIM(q.pod)) = UPPER(:pod))
+      AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
+      AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.deptId = :deptId) OR

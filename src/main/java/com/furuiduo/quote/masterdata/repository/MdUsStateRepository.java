@@ -18,8 +18,8 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
   @Query(
       """
       SELECT s FROM MdUsState s
-      WHERE (:code IS NULL OR UPPER(s.code) LIKE UPPER(CONCAT('%', :code, '%')))
-        AND (:nameZh IS NULL OR s.nameZh LIKE CONCAT('%', :nameZh, '%'))
+      WHERE (:code = '' OR UPPER(s.code) LIKE UPPER(CONCAT('%', :code, '%')))
+        AND (:nameZh = '' OR s.nameZh LIKE CONCAT('%', :nameZh, '%'))
       ORDER BY s.code ASC
       """)
   List<MdUsState> search(@Param("code") String code, @Param("nameZh") String nameZh);
@@ -29,9 +29,9 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
       SELECT DISTINCT s FROM MdUsState s, MdDestCity c, MdDestZip z
       WHERE c.stateId = s.id
         AND z.cityId = c.id
-        AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+        AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
         AND (
-          :keyword IS NULL OR TRIM(:keyword) = ''
+          :keyword = ''
           OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
           OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
           OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))

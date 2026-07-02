@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
@@ -61,18 +62,25 @@ public class QuoteCostMatchService {
 
     List<CostRoad> roads =
         costRoadRepository.matchByRoute(
-            request.city(), request.state(), request.por(), request.pol());
+            SearchText.orEmpty(request.city()),
+            SearchText.orEmpty(request.state()),
+            SearchText.orEmpty(request.por()),
+            SearchText.orEmpty(request.pol()));
     if (!roads.isEmpty()) {
       matches.add(QuoteCostSnapshotMapper.fromRoad(roads.getFirst(), keys));
     }
 
     List<CostSea> seas =
-        costSeaRepository.matchByRoute(request.pol(), request.pod(), request.ssl());
+        costSeaRepository.matchByRoute(
+            SearchText.orEmpty(request.pol()),
+            SearchText.orEmpty(request.pod()),
+            SearchText.orEmpty(request.ssl()));
     if (!seas.isEmpty()) {
       matches.add(QuoteCostSnapshotMapper.fromSea(seas.getFirst(), keys));
     }
 
-    List<CostFumigation> fums = costFumigationRepository.matchByPort(request.pod());
+    List<CostFumigation> fums =
+        costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
     if (!fums.isEmpty()) {
       matches.add(QuoteCostSnapshotMapper.fromFumigation(fums.getFirst(), keys));
     }
@@ -91,7 +99,10 @@ public class QuoteCostMatchService {
           case ROAD -> {
             List<CostRoad> roads =
                 costRoadRepository.matchByRoute(
-                    request.city(), request.state(), request.por(), request.pol());
+                    SearchText.orEmpty(request.city()),
+                    SearchText.orEmpty(request.state()),
+                    SearchText.orEmpty(request.por()),
+                    SearchText.orEmpty(request.pol()));
             if (roads.isEmpty()) {
               yield null;
             }
@@ -99,14 +110,18 @@ public class QuoteCostMatchService {
           }
           case SEA -> {
             List<CostSea> seas =
-                costSeaRepository.matchByRoute(request.pol(), request.pod(), request.ssl());
+                costSeaRepository.matchByRoute(
+                    SearchText.orEmpty(request.pol()),
+                    SearchText.orEmpty(request.pod()),
+                    SearchText.orEmpty(request.ssl()));
             if (seas.isEmpty()) {
               yield null;
             }
             yield QuoteCostSnapshotMapper.fromSea(seas.getFirst(), keys);
           }
           case FUMIGATION -> {
-            List<CostFumigation> fums = costFumigationRepository.matchByPort(request.pod());
+            List<CostFumigation> fums =
+                costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
             if (fums.isEmpty()) {
               yield null;
             }

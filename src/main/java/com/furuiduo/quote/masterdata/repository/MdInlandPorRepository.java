@@ -13,8 +13,8 @@ public interface MdInlandPorRepository extends JpaRepository<MdInlandPor, Long> 
   @Query(
       """
       SELECT p FROM MdInlandPor p
-      WHERE (:name IS NULL OR UPPER(p.name) LIKE UPPER(CONCAT('%', :name, '%')))
-        AND (:region IS NULL OR UPPER(p.region) LIKE UPPER(CONCAT('%', :region, '%')))
+      WHERE (:name = '' OR UPPER(p.name) LIKE UPPER(CONCAT('%', :name, '%')))
+        AND (:region = '' OR UPPER(p.region) LIKE UPPER(CONCAT('%', :region, '%')))
         AND (:polId IS NULL OR p.polId = :polId)
       ORDER BY p.name ASC
       """)

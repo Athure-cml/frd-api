@@ -16,7 +16,7 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
       SELECT c FROM MdDestCity c
       WHERE c.stateId = :stateId
         AND (
-          :keyword IS NULL OR TRIM(:keyword) = ''
+          :keyword = ''
           OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
           OR EXISTS (
             SELECT 1 FROM MdDestZip z

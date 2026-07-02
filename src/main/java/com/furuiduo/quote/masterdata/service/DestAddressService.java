@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
@@ -60,16 +61,16 @@ public class DestAddressService {
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     Page<DestAddressRowResponse> result =
         zipRepository.searchRows(
-            normalizeFilter(stateCode),
-            normalizeFilter(keyword),
+            SearchText.orEmpty(stateCode),
+            SearchText.orEmpty(keyword),
             PageRequest.of(safePage - 1, safePageSize));
     return new PageResult<>(result.getContent(), result.getTotalElements());
   }
 
   @Transactional(readOnly = true)
   public List<DestAddressRowResponse> lookup(String keyword, int limit) {
-    String normalized = normalizeFilter(keyword);
-    if (normalized == null) {
+    String normalized = SearchText.orEmpty(keyword);
+    if (normalized.isEmpty()) {
       return List.of();
     }
     int size = Math.min(Math.max(limit, 1), 50);
@@ -145,15 +146,15 @@ public class DestAddressService {
 
   @Transactional(readOnly = true)
   public List<DestAddressTreeNodeResponse> listStateNodes(String stateCode, String keyword) {
-    String normalizedState = normalizeFilter(stateCode);
-    String normalizedKeyword = normalizeFilter(keyword);
+    String normalizedState = SearchText.orEmpty(stateCode);
+    String normalizedKeyword = SearchText.orEmpty(keyword);
     List<MdUsState> states;
-    if (normalizedKeyword == null && normalizedState == null) {
+    if (normalizedKeyword.isEmpty() && normalizedState.isEmpty()) {
       states =
           stateRepository.findAll().stream()
               .sorted(Comparator.comparing(MdUsState::getCode))
               .toList();
-    } else if (normalizedKeyword == null) {
+    } else if (normalizedKeyword.isEmpty()) {
       states =
           stateRepository.findAll().stream()
               .filter(state -> state.getCode().equalsIgnoreCase(normalizedState))
@@ -186,7 +187,7 @@ public class DestAddressService {
         stateRepository
             .findById(stateId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "州不存在"));
-    String normalizedKeyword = normalizeFilter(keyword);
+    String normalizedKeyword = SearchText.orEmpty(keyword);
     String stateNodeId = "state-" + state.getId();
     List<DestAddressTreeNodeResponse> nodes = new ArrayList<>();
     for (MdDestCity city : cityRepository.findByStateIdWithKeyword(stateId, normalizedKeyword)) {
@@ -216,7 +217,7 @@ public class DestAddressService {
         stateRepository
             .findById(city.getStateId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "州不存在"));
-    String normalizedKeyword = normalizeFilter(keyword);
+    String normalizedKeyword = SearchText.orEmpty(keyword);
     String cityNodeId = "city-" + city.getId();
     List<DestAddressTreeNodeResponse> nodes = new ArrayList<>();
     for (MdDestZip zip : zipRepository.findByCityIdWithKeyword(cityId, normalizedKeyword)) {
@@ -234,14 +235,6 @@ public class DestAddressService {
               false));
     }
     return nodes;
-  }
-
-  private static String normalizeFilter(String value) {
-    if (value == null) {
-      return null;
-    }
-    String trimmed = value.trim();
-    return trimmed.isEmpty() ? null : trimmed;
   }
 
   @Transactional

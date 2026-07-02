@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpResponse;
 import com.furuiduo.quote.quote.dto.QuoteListItem;
@@ -71,18 +72,18 @@ public class QuoteQueryService {
 
     var result =
         quoteOrderRepository.search(
-            quoteNo,
-            customerName,
+            SearchText.orEmpty(quoteNo),
+            SearchText.orEmpty(customerName),
             parseTransportMode(transportMode),
             parseStatus(status),
-            zipCode,
-            city,
-            state,
-            por,
-            pol,
-            pod,
-            ssl,
-            followUpByName,
+            SearchText.orEmpty(zipCode),
+            SearchText.orEmpty(city),
+            SearchText.orEmpty(state),
+            SearchText.orEmpty(por),
+            SearchText.orEmpty(pol),
+            SearchText.orEmpty(pod),
+            SearchText.orEmpty(ssl),
+            SearchText.orEmpty(followUpByName),
             scope == DataScope.ALL,
             scope == DataScope.DEPT,
             scope == DataScope.SELF,

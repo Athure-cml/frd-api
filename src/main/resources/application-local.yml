@@ -1,4 +1,6 @@
-# 本地开发：嵌入式 H2，无需安装 MySQL
+# [Legacy] 嵌入式 H2，仅用于无 PostgreSQL 的快速演示
+# 与 Flyway V1（PostgreSQL/JSONB）不兼容，schema 可能与生产环境漂移
+# 推荐改用 postgres profile
 spring:
   flyway:
     enabled: false
@@ -12,5 +14,7 @@ spring:
       enabled: true
       path: /h2-console
   jpa:
+    hibernate:
+      ddl-auto: update
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: true

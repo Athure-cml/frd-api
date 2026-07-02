@@ -9,7 +9,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -55,8 +54,7 @@ public class SysOperationLog {
   @Column(name = "request_uri", length = 256)
   private String requestUri;
 
-  @Lob
-  @Column(name = "request_body")
+  @Column(name = "request_body", columnDefinition = "TEXT")
   private String requestBody;
 
   @Column(name = "ip_address", length = 64)

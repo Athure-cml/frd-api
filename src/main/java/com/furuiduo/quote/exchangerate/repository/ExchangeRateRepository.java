@@ -15,8 +15,8 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
   @Query(
       """
       SELECT e FROM ExchangeRate e
-      WHERE (:fromCurrency IS NULL OR e.fromCurrency = :fromCurrency)
-        AND (:toCurrency IS NULL OR e.toCurrency = :toCurrency)
+      WHERE (:fromCurrency = '' OR e.fromCurrency = :fromCurrency)
+        AND (:toCurrency = '' OR e.toCurrency = :toCurrency)
         AND (:status IS NULL OR e.status = :status)
       ORDER BY e.effectiveDate DESC, e.fromCurrency ASC, e.toCurrency ASC
       """)

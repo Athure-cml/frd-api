@@ -6,7 +6,7 @@
 |------|------|
 | http://localhost:8080/swagger-ui/index.html | 可视化接口文档 |
 | http://localhost:8080/api-docs | OpenAPI JSON |
-| http://localhost:8080/h2-console | 本地 H2 数据库控制台（仅 `local` 配置） |
+| http://localhost:8080/h2-console | H2 控制台（仅 legacy `local` profile） |
 
 权限设计详见：[docs/AUTHZ.md](docs/AUTHZ.md)
 
@@ -23,8 +23,11 @@
 
 ## 数据库
 
-- **默认**：嵌入式 H2，数据文件 `./data/furuiduo`（无需安装 MySQL）
-- **切换 MySQL**：`--spring.profiles.active=mysql`，先建库 `furuiduo_quote`
+- **默认**：本地 PostgreSQL（profile `postgres`），库名 `frd_postgres`，表结构由 Flyway 管理
+- **环境变量**：`SPRING_DATASOURCE_URL` / `USERNAME` / `PASSWORD`
+- **Legacy H2**：`--spring.profiles.active=local`（与生产 schema 不兼容，仅快速演示）
+- **Legacy MySQL**：`--spring.profiles.active=mysql`（不启用 Flyway）
+- **清库重建**：执行 `scripts/reset-postgres.sql` 后重启服务
 
 ## 当前接口
 

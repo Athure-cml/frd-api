@@ -25,11 +25,11 @@ public interface MdGlobalPortRepository extends JpaRepository<MdGlobalPort, Long
   @Query(
       """
       SELECT p FROM MdGlobalPort p
-      WHERE (:code IS NULL OR UPPER(p.code) LIKE UPPER(CONCAT('%', :code, '%')))
-        AND (:nameEn IS NULL OR UPPER(p.nameEn) LIKE UPPER(CONCAT('%', :nameEn, '%')))
-        AND (:nameZh IS NULL OR p.nameZh LIKE CONCAT('%', :nameZh, '%'))
-        AND (:route IS NULL OR UPPER(p.route) LIKE UPPER(CONCAT('%', :route, '%')))
-        AND (:countryRegion IS NULL OR UPPER(p.countryRegion) LIKE UPPER(CONCAT('%', :countryRegion, '%')))
+      WHERE (:code = '' OR UPPER(p.code) LIKE UPPER(CONCAT('%', :code, '%')))
+        AND (:nameEn = '' OR UPPER(p.nameEn) LIKE UPPER(CONCAT('%', :nameEn, '%')))
+        AND (:nameZh = '' OR p.nameZh LIKE CONCAT('%', :nameZh, '%'))
+        AND (:route = '' OR UPPER(p.route) LIKE UPPER(CONCAT('%', :route, '%')))
+        AND (:countryRegion = '' OR UPPER(p.countryRegion) LIKE UPPER(CONCAT('%', :countryRegion, '%')))
         AND (:portType IS NULL OR p.portType = :portType)
       ORDER BY p.code ASC
       """)

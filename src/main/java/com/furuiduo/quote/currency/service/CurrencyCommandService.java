@@ -84,8 +84,8 @@ public class CurrencyCommandService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "币种已被报价单引用，无法删除");
     }
     long rateCount =
-        exchangeRateRepository.search(currency.getCode(), null, null).size()
-            + exchangeRateRepository.search(null, currency.getCode(), null).size();
+        exchangeRateRepository.search(currency.getCode(), "", null).size()
+            + exchangeRateRepository.search("", currency.getCode(), null).size();
     if (rateCount > 0) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "币种已配置汇率，无法删除");
     }

@@ -5,10 +5,10 @@ spring:
   application:
     name: quote-api
   profiles:
-    active: local
+    active: postgres
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     open-in-view: false
     show-sql: false
     properties:

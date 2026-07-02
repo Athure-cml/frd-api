@@ -1,5 +1,5 @@
--- 报价单业务表结构（字段名与 Excel 模板英文一致，snake_case 存库）
--- Hibernate ddl-auto=update 会自动同步；生产环境建议用 Flyway 执行本脚本
+-- 报价单业务表结构参考（历史 MySQL 草稿，仅供参考）
+-- 生产环境以 src/main/resources/db/migration/V1__init_schema.sql（PostgreSQL）为准
 
 -- quote_order 扩展列（在既有 quote_order 表上 ALTER）
 ALTER TABLE quote_order ADD COLUMN IF NOT EXISTS zip_code VARCHAR(16);

@@ -2,11 +2,13 @@ package com.furuiduo.quote.masterdata.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.masterdata.dto.UsStateResponse;
 import com.furuiduo.quote.masterdata.dto.UsStateSaveRequest;
 import com.furuiduo.quote.masterdata.entity.MdUsState;
@@ -26,7 +28,14 @@ public class UsStateService {
 
   @Transactional(readOnly = true)
   public List<UsStateResponse> list(String code, String nameZh) {
-    return repository.search(trim(code), trim(nameZh)).stream().map(UsStateResponse::from).toList();
+    String normalizedCode = SearchText.orEmpty(code);
+    String normalizedNameZh = SearchText.orEmpty(nameZh);
+    if (normalizedCode.isEmpty() && normalizedNameZh.isEmpty()) {
+      return repository.findAll(Sort.by("code")).stream().map(UsStateResponse::from).toList();
+    }
+    return repository.search(normalizedCode, normalizedNameZh).stream()
+        .map(UsStateResponse::from)
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -98,12 +107,5 @@ public class UsStateService {
 
   private String normalizeCode(String code) {
     return code.trim().toUpperCase();
-  }
-
-  private String trim(String value) {
-    if (value == null || value.isBlank()) {
-      return null;
-    }
-    return value.trim();
   }
 }

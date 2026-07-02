@@ -22,9 +22,9 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
           FROM MdDestZip z, MdDestCity c, MdUsState s
           WHERE c.id = z.cityId
             AND s.id = c.stateId
-            AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+            AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
-              :keyword IS NULL OR TRIM(:keyword) = ''
+              :keyword = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
               OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
               OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
@@ -37,9 +37,9 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
           FROM MdDestZip z, MdDestCity c, MdUsState s
           WHERE c.id = z.cityId
             AND s.id = c.stateId
-            AND (:stateCode IS NULL OR TRIM(:stateCode) = '' OR UPPER(s.code) = UPPER(:stateCode))
+            AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
-              :keyword IS NULL OR TRIM(:keyword) = ''
+              :keyword = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
               OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
               OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
@@ -75,7 +75,7 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
       SELECT z FROM MdDestZip z
       WHERE z.cityId = :cityId
         AND (
-          :keyword IS NULL OR TRIM(:keyword) = ''
+          :keyword = ''
           OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
         )
       ORDER BY z.zipCode ASC

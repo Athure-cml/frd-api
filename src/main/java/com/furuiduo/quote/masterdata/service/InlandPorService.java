@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.masterdata.dto.InlandPorResponse;
@@ -45,7 +46,8 @@ public class InlandPorService {
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
 
-    List<MdInlandPor> filtered = repository.search(trim(name), trim(region), polId);
+    List<MdInlandPor> filtered =
+        repository.search(SearchText.orEmpty(name), SearchText.orEmpty(region), polId);
     Map<Long, MdGlobalPort> portMap = loadPortMap(filtered);
 
     return paginate(filtered, portMap, safePage, safePageSize);
@@ -103,7 +105,8 @@ public class InlandPorService {
 
   @Transactional(readOnly = true)
   public byte[] exportExcel(String name, String region, Long polId) {
-    List<MdInlandPor> items = repository.search(trim(name), trim(region), polId);
+    List<MdInlandPor> items =
+        repository.search(SearchText.orEmpty(name), SearchText.orEmpty(region), polId);
     Map<Long, MdGlobalPort> portMap = loadPortMap(items);
 
     try (Workbook workbook = new XSSFWorkbook()) {
