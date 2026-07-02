@@ -26,8 +26,8 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
             AND (
               :keyword IS NULL OR TRIM(:keyword) = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
-              OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-              OR LOWER(z.zipCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
+              OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
             )
           ORDER BY s.code ASC, c.name ASC, z.zipCode ASC
           """,
@@ -41,8 +41,8 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
             AND (
               :keyword IS NULL OR TRIM(:keyword) = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
-              OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-              OR LOWER(z.zipCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
+              OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
             )
           """)
   Page<DestAddressRowResponse> searchRows(
@@ -58,14 +58,14 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
           FROM MdDestZip z, MdDestCity c, MdUsState s
           WHERE c.id = z.cityId
             AND s.id = c.stateId
-            AND LOWER(z.zipCode) LIKE LOWER(CONCAT(:keyword, '%'))
+            AND UPPER(z.zipCode) LIKE UPPER(CONCAT(:keyword, '%'))
           ORDER BY z.zipCode ASC, c.name ASC
           """,
       countQuery =
           """
           SELECT COUNT(z)
           FROM MdDestZip z
-          WHERE LOWER(z.zipCode) LIKE LOWER(CONCAT(:keyword, '%'))
+          WHERE UPPER(z.zipCode) LIKE UPPER(CONCAT(:keyword, '%'))
           """)
   Page<DestAddressRowResponse> searchRowsByZipPrefix(
       @Param("keyword") String keyword, Pageable pageable);
@@ -76,7 +76,7 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
       WHERE z.cityId = :cityId
         AND (
           :keyword IS NULL OR TRIM(:keyword) = ''
-          OR LOWER(z.zipCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
         )
       ORDER BY z.zipCode ASC
       """)

@@ -17,11 +17,11 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
       WHERE c.stateId = :stateId
         AND (
           :keyword IS NULL OR TRIM(:keyword) = ''
-          OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
           OR EXISTS (
             SELECT 1 FROM MdDestZip z
             WHERE z.cityId = c.id
-              AND LOWER(z.zipCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              AND UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
           )
         )
       ORDER BY c.name ASC

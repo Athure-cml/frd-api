@@ -99,15 +99,15 @@ public class OperationLogService {
           }
           if (username != null && !username.isBlank()) {
             predicates.add(
-                cb.like(cb.lower(root.get("username")), "%" + username.trim().toLowerCase() + "%"));
+                cb.like(cb.upper(root.get("username")), "%" + username.trim().toLowerCase() + "%"));
           }
           if (keyword != null && !keyword.isBlank()) {
             String like = "%" + keyword.trim().toLowerCase() + "%";
             predicates.add(
                 cb.or(
-                    cb.like(cb.lower(root.get("summary")), like),
-                    cb.like(cb.lower(root.get("requestUri")), like),
-                    cb.like(cb.lower(root.get("realName")), like)));
+                    cb.like(cb.upper(root.get("summary")), like),
+                    cb.like(cb.upper(root.get("requestUri")), like),
+                    cb.like(cb.upper(root.get("realName")), like)));
           }
           if (startAt != null) {
             predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startAt));

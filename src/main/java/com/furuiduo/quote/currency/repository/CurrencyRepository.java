@@ -20,8 +20,8 @@ public interface CurrencyRepository extends JpaRepository<Currency, Long> {
   @Query(
       """
       SELECT c FROM Currency c
-      WHERE (:code IS NULL OR LOWER(c.code) LIKE LOWER(CONCAT('%', :code, '%')))
-        AND (:name IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%')))
+      WHERE (:code IS NULL OR UPPER(c.code) LIKE UPPER(CONCAT('%', :code, '%')))
+        AND (:name IS NULL OR UPPER(c.name) LIKE UPPER(CONCAT('%', :name, '%')))
         AND (:status IS NULL OR c.status = :status)
       ORDER BY c.sort ASC, c.code ASC
       """)

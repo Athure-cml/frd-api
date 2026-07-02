@@ -18,7 +18,7 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
   @Query(
       """
       SELECT s FROM MdUsState s
-      WHERE (:code IS NULL OR LOWER(s.code) LIKE LOWER(CONCAT('%', :code, '%')))
+      WHERE (:code IS NULL OR UPPER(s.code) LIKE UPPER(CONCAT('%', :code, '%')))
         AND (:nameZh IS NULL OR s.nameZh LIKE CONCAT('%', :nameZh, '%'))
       ORDER BY s.code ASC
       """)
@@ -33,8 +33,8 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
         AND (
           :keyword IS NULL OR TRIM(:keyword) = ''
           OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
-          OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-          OR LOWER(z.zipCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
+          OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
         )
       ORDER BY s.code ASC
       """)
