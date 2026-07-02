@@ -1,0 +1,45 @@
+# Render Blueprint — 福瑞多报价系统后端
+# 用法：Render Dashboard → New → Blueprint，连接 quote-api 仓库后导入
+
+databases:
+  - name: furuiduo-postgres
+    databaseName: furuiduo_quote
+    user: furuiduo
+    plan: free
+
+services:
+  - type: web
+    name: furuiduo-quote-api
+    runtime: java
+    plan: free
+    region: singapore
+    buildCommand: mvn clean package -DskipTests
+    startCommand: java -jar target/quote-api-0.0.1-SNAPSHOT.jar
+    healthCheckPath: /hello
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: render
+      - key: JAVA_VERSION
+        value: "21"
+      - key: CORS_ALLOWED_ORIGIN_PATTERNS
+        value: https://*.vercel.app,http://localhost:*
+      - key: PGHOST
+        fromDatabase:
+          name: furuiduo-postgres
+          property: host
+      - key: PGPORT
+        fromDatabase:
+          name: furuiduo-postgres
+          property: port
+      - key: PGUSER
+        fromDatabase:
+          name: furuiduo-postgres
+          property: user
+      - key: PGPASSWORD
+        fromDatabase:
+          name: furuiduo-postgres
+          property: password
+      - key: PGDATABASE
+        fromDatabase:
+          name: furuiduo-postgres
+          property: database

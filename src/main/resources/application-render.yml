@@ -1,0 +1,31 @@
+# Render 生产环境：PostgreSQL + 端口由 PORT 注入（免费实例通常为 10000）
+spring:
+  datasource:
+    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?sslmode=require
+    username: ${PGUSER}
+    password: ${PGPASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+quote:
+  cors:
+    # 在 Render 环境变量中覆盖，例如：
+    # CORS_ALLOWED_ORIGIN_PATTERNS=https://your-app.vercel.app,https://*.vercel.app
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app,http://localhost:*}
+  upload-dir: /tmp/uploads
+  masterdata:
+    us-zip:
+      enabled: false
+    global-port:
+      enabled: false
+      sync:
+        enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.furuiduo.quote: INFO

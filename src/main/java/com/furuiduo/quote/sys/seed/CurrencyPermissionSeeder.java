@@ -1,0 +1,123 @@
+package com.furuiduo.quote.sys.seed;
+
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.furuiduo.quote.sys.PermissionCodes;
+import com.furuiduo.quote.sys.entity.PermissionType;
+import com.furuiduo.quote.sys.entity.SysPermission;
+import com.furuiduo.quote.sys.entity.SysRole;
+import com.furuiduo.quote.sys.repository.SysPermissionRepository;
+import com.furuiduo.quote.sys.repository.SysRoleRepository;
+
+@Component
+@Order(102)
+public class CurrencyPermissionSeeder implements ApplicationRunner {
+
+  private record PermDef(String code, String name, int sort) {}
+
+  private static final List<PermDef> PERMISSIONS =
+      List.of(
+          new PermDef(PermissionCodes.CURRENCY_VIEW, "币种-查看", 49),
+          new PermDef(PermissionCodes.CURRENCY_MANAGE, "币种-管理", 50),
+          new PermDef(PermissionCodes.EXCHANGE_RATE_VIEW, "汇率-查看", 51),
+          new PermDef(PermissionCodes.EXCHANGE_RATE_MANAGE, "汇率-管理", 52));
+
+  private static final Set<String> ROLES_WITH_VIEW =
+      Set.of(
+          "super_admin",
+          "admin",
+          "dept_manager",
+          "sales",
+          "doc_clerk",
+          "overseas_operator",
+          "booker",
+          "finance",
+          "viewer");
+
+  private static final Set<String> ROLES_WITH_MANAGE =
+      Set.of("super_admin", "admin", "finance");
+
+  private final SysPermissionRepository permissionRepository;
+  private final SysRoleRepository roleRepository;
+
+  public CurrencyPermissionSeeder(
+      SysPermissionRepository permissionRepository, SysRoleRepository roleRepository) {
+    this.permissionRepository = permissionRepository;
+    this.roleRepository = roleRepository;
+  }
+
+  @Override
+  @Transactional
+  public void run(ApplicationArguments args) {
+    if (permissionRepository.count() == 0) {
+      return;
+    }
+
+    Map<String, SysPermission> currencyPermissions = ensurePermissions();
+    for (SysRole role : roleRepository.findAll()) {
+      if (grantPermissions(role, currencyPermissions)) {
+        roleRepository.save(role);
+      }
+    }
+  }
+
+  private Map<String, SysPermission> ensurePermissions() {
+    Map<String, SysPermission> map = new LinkedHashMap<>();
+    for (PermDef def : PERMISSIONS) {
+      SysPermission permission =
+          permissionRepository
+              .findByCode(def.code())
+              .orElseGet(
+                  () -> {
+                    SysPermission created = new SysPermission();
+                    created.setCode(def.code());
+                    created.setName(def.name());
+                    created.setType(PermissionType.API);
+                    created.setSort(def.sort());
+                    return permissionRepository.save(created);
+                  });
+      map.put(def.code(), permission);
+    }
+    return map;
+  }
+
+  private boolean grantPermissions(SysRole role, Map<String, SysPermission> permissions) {
+    Set<SysPermission> grants = new HashSet<>();
+    String code = role.getCode();
+
+    if ("super_admin".equals(code)) {
+      permissions.values().forEach(grants::add);
+    } else if (ROLES_WITH_MANAGE.contains(code)) {
+      permissions.values().forEach(grants::add);
+    } else if (ROLES_WITH_VIEW.contains(code)) {
+      addIfPresent(permissions, PermissionCodes.CURRENCY_VIEW, grants);
+      addIfPresent(permissions, PermissionCodes.EXCHANGE_RATE_VIEW, grants);
+    }
+
+    if (grants.isEmpty()) {
+      return false;
+    }
+    Set<SysPermission> current = role.getPermissions();
+    int before = current.size();
+    current.addAll(grants);
+    return current.size() > before;
+  }
+
+  private void addIfPresent(
+      Map<String, SysPermission> permissions, String code, Set<SysPermission> grants) {
+    SysPermission permission = permissions.get(code);
+    if (permission != null) {
+      grants.add(permission);
+    }
+  }
+}
