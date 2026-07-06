@@ -36,6 +36,9 @@ public class CostRoad {
   @Column(name = "log_yard_name_address", length = 512)
   private String logYardNameAddress;
 
+  @Column(name = "zip_code", length = 32)
+  private String zipCode;
+
   @Column(length = 64)
   private String city;
 

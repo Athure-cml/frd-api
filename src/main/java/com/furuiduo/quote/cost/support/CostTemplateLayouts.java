@@ -34,6 +34,7 @@ public final class CostTemplateLayouts {
                     "validDate",
                     "supplier",
                     "logYardNameAddress",
+                    "zipCode",
                     "city",
                     "state",
                     "por",

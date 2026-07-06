@@ -191,10 +191,16 @@ public class QuoteCostMatchService {
       }
       if ("SEA".equals(item.costType())) {
         Object rate = snap.get("ofRateUsd");
+        if (rate == null || String.valueOf(rate).isBlank()) {
+          rate = formatOfRateFromSnapshot(snap);
+        }
         if (rate != null && !String.valueOf(rate).isBlank()) {
           ofUsd = String.valueOf(rate);
         }
         Object carrier = snap.get("ssl");
+        if (carrier == null || String.valueOf(carrier).isBlank()) {
+          carrier = snap.get("carrier");
+        }
         if (carrier != null && !String.valueOf(carrier).isBlank()) {
           ssl = String.valueOf(carrier);
         }
@@ -203,6 +209,9 @@ public class QuoteCostMatchService {
         truckingNonOak = toBigDecimal(snap.get("allInNonOak"));
         truckingOak = toBigDecimal(snap.get("allInOak"));
         BigDecimal fsc = toBigDecimal(snap.get("fscFreight"));
+        if (fsc == null) {
+          fsc = toBigDecimal(snap.get("fsc"));
+        }
         fmNonOak = fsc;
         fmOak = fsc;
       }
@@ -267,5 +276,28 @@ public class QuoteCostMatchService {
     } catch (NumberFormatException ex) {
       return null;
     }
+  }
+
+  private String formatOfRateFromSnapshot(Map<String, Object> snap) {
+    Object priceObj = snap.get("allIn");
+    if (priceObj == null) {
+      priceObj = snap.get("unitPrice");
+    }
+    if (priceObj == null) {
+      return "";
+    }
+    String price = String.valueOf(priceObj);
+    if (price.isBlank()) {
+      return "";
+    }
+    Object spec = snap.get("spec");
+    Object unit = snap.get("unit");
+    String denom =
+        spec != null && !String.valueOf(spec).isBlank()
+            ? String.valueOf(spec).trim()
+            : unit != null && !String.valueOf(unit).isBlank()
+                ? String.valueOf(unit).trim()
+                : "";
+    return denom.isBlank() ? price : price + "/" + denom;
   }
 }

@@ -201,23 +201,10 @@ public class CostFumigationService {
   }
 
   private String validateImportRow(CostFumigation entity) {
-    if (entity.getPort() == null || entity.getPort().isBlank()) {
-      return "PORT 不能为空";
-    }
-    if (entity.getStation() == null || entity.getStation().isBlank()) {
-      return "STATION 不能为空";
-    }
     return null;
   }
 
-  private void validateSave(FumigationCostSaveRequest request) {
-    if (request.port() == null || request.port().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PORT 不能为空");
-    }
-    if (request.station() == null || request.station().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "STATION 不能为空");
-    }
-  }
+  private void validateSave(FumigationCostSaveRequest request) {}
 
   private void applySave(CostFumigation entity, FumigationCostSaveRequest request) {
     entity.setPort(request.port());

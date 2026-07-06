@@ -19,6 +19,8 @@ quote:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app,http://localhost:*}
   db:
     reset: ${QUOTE_DB_RESET:false}
+  cost:
+    reset: ${QUOTE_COST_RESET:false}
   upload-dir: /tmp/uploads
   masterdata:
     us-zip:

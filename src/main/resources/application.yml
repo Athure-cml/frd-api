@@ -18,13 +18,15 @@ spring:
         order_inserts: true
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 2MB
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 quote:
   upload-dir: ./uploads
+  cost:
+    reset: ${QUOTE_COST_RESET:false}
   cors:
-    allowed-origin-patterns: http://localhost:*,http://127.0.0.1:*
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
   masterdata:
     us-zip:
       enabled: true

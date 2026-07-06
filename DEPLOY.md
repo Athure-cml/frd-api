@@ -48,6 +48,18 @@ Render 启动时 `spring.flyway.enabled=true`，自动执行迁移。`ddl-auto=n
 3. **立刻删除** `QUOTE_DB_RESET` 环境变量，再 **Manual Deploy** 一次（否则每次启动都会清库）
 4. 验证：`GET https://frd-api.onrender.com/hello` → 200，用 `vben` / `123456` 登录
 
+## 仅重置三个成本库测试数据（不影响用户/权限/报价单）
+
+1. Render → **frd-api** → **Environment** → 新增：
+
+   ```
+   QUOTE_COST_RESET=true
+   ```
+
+2. **Manual Deploy**，等日志出现「成本库测试数据已重建」
+3. **立刻删除** `QUOTE_COST_RESET`，再 **Manual Deploy** 一次
+4. 三个成本库各为 20 条全新测试数据（含 zipCode 等最新字段）
+
 ### 方式 B：Render CLI + psql
 
 ```bash

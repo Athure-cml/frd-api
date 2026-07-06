@@ -18,6 +18,7 @@ public final class CostFieldCatalog {
           "validDate",
           "supplier",
           "logYardNameAddress",
+          "zipCode",
           "city",
           "state",
           "por",

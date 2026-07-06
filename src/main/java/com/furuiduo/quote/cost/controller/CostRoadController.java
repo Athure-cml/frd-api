@@ -70,9 +70,11 @@ public class CostRoadController {
       @RequestParam(required = false) String supplier,
       @RequestParam(required = false) String city,
       @RequestParam(required = false) String state,
-      @RequestParam(required = false) String pol) {
+      @RequestParam(required = false) String pol,
+      @RequestParam(required = false) String zipCode) {
     requireView(authService.requireUser(authorization));
-    return ApiResponse.ok(costRoadService.list(page, pageSize, supplier, city, state, pol));
+    return ApiResponse.ok(
+        costRoadService.list(page, pageSize, supplier, city, state, pol, zipCode));
   }
 
   @Operation(
@@ -167,10 +169,11 @@ public class CostRoadController {
       @RequestParam(required = false) String city,
       @RequestParam(required = false) String state,
       @RequestParam(required = false) String pol,
+      @RequestParam(required = false) String zipCode,
       @RequestParam(required = false) Long templateId) {
     requireView(authService.requireUser(authorization));
     byte[] bytes =
-        costRoadService.exportExcel(supplier, city, state, pol, templateId);
+        costRoadService.exportExcel(supplier, city, state, pol, zipCode, templateId);
     String filename =
         URLEncoder.encode("road-cost.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()

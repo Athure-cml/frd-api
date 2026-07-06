@@ -203,6 +203,18 @@ public class DestAddressController {
   }
 
   @Operation(
+      summary = "从 GeoNames US.txt 导入美国州邮政编码",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping(value = "/import-geonames", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ApiResponse<CostImportResult> importGeonames(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam("file") MultipartFile file)
+      throws IOException {
+    requireManage(authService.requireUser(authorization));
+    return ApiResponse.ok(destAddressService.importGeonames(file));
+  }
+
+  @Operation(
       summary = "导出美国州邮政编码",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @GetMapping("/export")

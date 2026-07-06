@@ -1,7 +1,7 @@
 package com.furuiduo.quote.sys.dto;
 
-import java.time.LocalDateTime;
 
+import com.furuiduo.quote.quote.support.QuoteDateTimes;
 import com.furuiduo.quote.sys.entity.OperationAction;
 import com.furuiduo.quote.sys.entity.SysOperationLog;
 
@@ -24,7 +24,7 @@ public record OperationLogResponse(
     @Schema(description = "IP") String ipAddress,
     @Schema(description = "是否成功") Boolean success,
     @Schema(description = "错误信息") String errorMessage,
-    @Schema(description = "时间") LocalDateTime createdAt) {
+    @Schema(description = "时间") String createdAt) {
 
   public static OperationLogResponse from(SysOperationLog log) {
     return new OperationLogResponse(
@@ -43,6 +43,6 @@ public record OperationLogResponse(
         log.getIpAddress(),
         log.getSuccess(),
         log.getErrorMessage(),
-        log.getCreatedAt());
+        QuoteDateTimes.format(log.getCreatedAt()));
   }
 }

@@ -10,6 +10,7 @@ public record RoadCostSaveRequest(
     @Schema(description = "有效期") String validDate,
     @Schema(description = "供应商") String supplier,
     @Schema(description = "堆场地址") String logYardNameAddress,
+    @Schema(description = "Zip code") String zipCode,
     @Schema(description = "城市") String city,
     @Schema(description = "州") String state,
     @Schema(description = "POR") String por,

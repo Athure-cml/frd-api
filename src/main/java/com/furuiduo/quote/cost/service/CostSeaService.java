@@ -237,23 +237,10 @@ public class CostSeaService {
   }
 
   private String validateImportRow(CostSea entity) {
-    if (entity.getOrigin() == null || entity.getOrigin().isBlank()) {
-      return "起运港不能为空";
-    }
-    if (entity.getDestination() == null || entity.getDestination().isBlank()) {
-      return "目的港不能为空";
-    }
     return null;
   }
 
-  private void validateSave(FreightCostSaveRequest request) {
-    if (request.origin() == null || request.origin().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "起运港不能为空");
-    }
-    if (request.destination() == null || request.destination().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目的港不能为空");
-    }
-  }
+  private void validateSave(FreightCostSaveRequest request) {}
 
   private void applySave(CostSea entity, FreightCostSaveRequest request) {
     entity.setOrigin(request.origin());

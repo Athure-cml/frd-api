@@ -1,0 +1,21 @@
+[Unit]
+Description=Furuiduo Quote API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/frd-api
+ExecStart=/usr/bin/java -jar /opt/frd-api/quote-api-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=10
+
+Environment=SPRING_PROFILES_ACTIVE=postgres
+Environment=PORT=8080
+Environment=SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/frd_postgres
+Environment=SPRING_DATASOURCE_USERNAME=postgres
+Environment=SPRING_DATASOURCE_PASSWORD=CHANGE_ME
+Environment=QUOTE_MASTERDATA_US_ZIP_ENABLED=false
+
+[Install]
+WantedBy=multi-user.target

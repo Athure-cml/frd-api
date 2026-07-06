@@ -74,6 +74,28 @@ public class OperationLogService {
     operationLogRepository.save(log);
   }
 
+  public PageResult<OperationLogResponse> listForQuote(Long quoteId, int page, int pageSize) {
+    int safePage = Math.max(page, 1);
+    int safeSize = Math.min(Math.max(pageSize, 1), 100);
+    PageRequest pageable =
+        PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+    String quoteIdText = String.valueOf(quoteId);
+    String uriPattern = "%/quotes/" + quoteId + "%";
+
+    Specification<SysOperationLog> spec =
+        (root, query, cb) ->
+            cb.and(
+                cb.equal(root.get("module"), "quote"),
+                cb.or(
+                    cb.equal(root.get("resourceId"), quoteIdText),
+                    cb.like(root.get("requestUri"), uriPattern)));
+
+    Page<SysOperationLog> result = operationLogRepository.findAll(spec, pageable);
+    List<OperationLogResponse> items =
+        result.getContent().stream().map(OperationLogResponse::from).toList();
+    return new PageResult<>(items, result.getTotalElements());
+  }
+
   public PageResult<OperationLogResponse> list(
       int page,
       int pageSize,

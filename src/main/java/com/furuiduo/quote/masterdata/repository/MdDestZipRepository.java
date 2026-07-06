@@ -92,4 +92,7 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
   void deleteByCityId(Long cityId);
 
   boolean existsByCityId(Long cityId);
+
+  @Query("SELECT z.cityId, LOWER(z.zipCode) FROM MdDestZip z")
+  List<Object[]> findExistingZipKeys();
 }

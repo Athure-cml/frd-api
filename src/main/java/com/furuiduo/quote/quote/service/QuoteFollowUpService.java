@@ -16,6 +16,7 @@ import com.furuiduo.quote.quote.repository.QuoteFollowUpRepository;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
 import com.furuiduo.quote.sys.entity.SysUser;
+import com.furuiduo.quote.sys.repository.SysUserRepository;
 
 @Service
 public class QuoteFollowUpService {
@@ -23,14 +24,17 @@ public class QuoteFollowUpService {
   private final QuoteFollowUpRepository followUpRepository;
   private final QuoteOrderRepository quoteOrderRepository;
   private final QuoteAccessService quoteAccessService;
+  private final SysUserRepository userRepository;
 
   public QuoteFollowUpService(
       QuoteFollowUpRepository followUpRepository,
       QuoteOrderRepository quoteOrderRepository,
-      QuoteAccessService quoteAccessService) {
+      QuoteAccessService quoteAccessService,
+      SysUserRepository userRepository) {
     this.followUpRepository = followUpRepository;
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteAccessService = quoteAccessService;
+    this.userRepository = userRepository;
   }
 
   public List<QuoteFollowUpResponse> list(SysUser user, Long quoteId) {
@@ -46,14 +50,11 @@ public class QuoteFollowUpService {
     QuoteOrder order = requireQuote(user, quoteId);
     QuoteFollowUp record = new QuoteFollowUp();
     record.setQuoteOrder(order);
-    record.setFollowStatus(request.followStatus().trim());
+    record.setFollowStatus(order.getStatus().name());
     record.setContent(request.content().trim());
-    record.setFollowUpBy(user.getId());
-    record.setFollowUpByName(user.getRealName());
+    assignFollowUpBy(record, order, user, request.followUpBy());
     record.setFollowUpAt(LocalDateTime.now());
     record.setUpdatedAt(LocalDateTime.now());
-    order.setFollowUpBy(user.getId());
-    order.setFollowUpByName(user.getRealName());
     order.setUpdatedAt(LocalDateTime.now());
     quoteOrderRepository.save(order);
     return toResponse(followUpRepository.save(record));
@@ -74,7 +75,6 @@ public class QuoteFollowUpService {
     if (!record.getFollowUpBy().equals(user.getId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅可编辑本人跟进记录");
     }
-    record.setFollowStatus(request.followStatus().trim());
     record.setContent(request.content().trim());
     record.setUpdatedAt(LocalDateTime.now());
     return toResponse(followUpRepository.save(record));
@@ -100,10 +100,20 @@ public class QuoteFollowUpService {
     return quoteAccessService.requireReadable(user, quoteId);
   }
 
+  private void assignFollowUpBy(
+      QuoteFollowUp record, QuoteOrder order, SysUser operator, Long followUpById) {
+    Long assigneeId = followUpById != null ? followUpById : operator.getId();
+    SysUser assignee =
+        userRepository
+            .findById(assigneeId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "跟进人不存在"));
+    record.setFollowUpBy(assignee.getId());
+    record.setFollowUpByName(assignee.getRealName());
+    order.setFollowUpBy(assignee.getId());
+    order.setFollowUpByName(assignee.getRealName());
+  }
+
   private void validateRequest(QuoteFollowUpSaveRequest request) {
-    if (request.followStatus() == null || request.followStatus().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "跟进状态不能为空");
-    }
     if (request.content() == null || request.content().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "跟进内容不能为空");
     }

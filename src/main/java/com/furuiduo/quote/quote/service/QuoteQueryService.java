@@ -110,8 +110,7 @@ public class QuoteQueryService {
   public PageResult<com.furuiduo.quote.sys.dto.OperationLogResponse> listOperationLogs(
       SysUser user, Long quoteId, int page, int pageSize) {
     quoteAccessService.requireReadable(user, quoteId);
-    return operationLogService.list(
-        page, pageSize, "quote", null, null, String.valueOf(quoteId), null, null);
+    return operationLogService.listForQuote(quoteId, page, pageSize);
   }
 
   private QuoteTransportMode parseTransportMode(String value) {

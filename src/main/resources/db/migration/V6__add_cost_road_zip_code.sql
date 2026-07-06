@@ -1,0 +1,1 @@
+ALTER TABLE cost_road ADD COLUMN IF NOT EXISTS zip_code VARCHAR(32);

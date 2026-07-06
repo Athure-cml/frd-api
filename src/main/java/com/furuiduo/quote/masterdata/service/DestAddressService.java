@@ -44,14 +44,17 @@ public class DestAddressService {
   private final MdUsStateRepository stateRepository;
   private final MdDestCityRepository cityRepository;
   private final MdDestZipRepository zipRepository;
+  private final UsZipImportService usZipImportService;
 
   public DestAddressService(
       MdUsStateRepository stateRepository,
       MdDestCityRepository cityRepository,
-      MdDestZipRepository zipRepository) {
+      MdDestZipRepository zipRepository,
+      UsZipImportService usZipImportService) {
     this.stateRepository = stateRepository;
     this.cityRepository = cityRepository;
     this.zipRepository = zipRepository;
+    this.usZipImportService = usZipImportService;
   }
 
   @Transactional(readOnly = true)
@@ -289,6 +292,11 @@ public class DestAddressService {
         this::mapImportRow,
         this::validateImportRow,
         (rowNum, row) -> upsertImportRow(row));
+  }
+
+  @Transactional
+  public CostImportResult importGeonames(MultipartFile file) throws IOException {
+    return usZipImportService.importGeonamesFile(file);
   }
 
   @Transactional(readOnly = true)

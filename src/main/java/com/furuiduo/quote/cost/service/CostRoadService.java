@@ -31,20 +31,21 @@ import com.furuiduo.quote.cost.support.CostExcelSupport;
 public class CostRoadService {
 
   private static final String[] EXPORT_HEADERS = {
-    "*VALID DATE",
-    "*SUPPLIER",
+    "VALID DATE",
+    "SUPPLIER",
     "LOG YARD NAME &ADDRESS",
-    "*City",
-    "*State",
-    "*POR",
-    "*POL",
-    "*BASE FREIGHT",
+    "Zip code",
+    "City",
+    "State",
+    "POR",
+    "POL",
+    "BASE FREIGHT",
     "FSC",
     "CHASSIS",
     "OW/TRI-AXCEL",
     "SPLIT",
     "STOP OFF",
-    "*ALL IN",
+    "ALL IN",
     "ALL IN (NON OAK)",
     "ALL IN (OAK)",
     "WAITING FEE",
@@ -64,7 +65,13 @@ public class CostRoadService {
   }
 
   public PageResult<RoadCostResponse> list(
-      int page, int pageSize, String supplier, String city, String state, String pol) {
+      int page,
+      int pageSize,
+      String supplier,
+      String city,
+      String state,
+      String pol,
+      String zipCode) {
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
 
@@ -74,6 +81,7 @@ public class CostRoadService {
             .filter(item -> contains(item.getCity(), city))
             .filter(item -> contains(item.getState(), state))
             .filter(item -> contains(item.getPol(), pol))
+            .filter(item -> contains(item.getZipCode(), zipCode))
             .sorted(Comparator.comparing(CostRoad::getId).reversed())
             .toList();
 
@@ -160,13 +168,19 @@ public class CostRoadService {
   }
 
   public byte[] exportExcel(
-      String supplier, String city, String state, String pol, Long templateId) {
+      String supplier,
+      String city,
+      String state,
+      String pol,
+      String zipCode,
+      Long templateId) {
     List<CostRoad> items =
         repository.findAll().stream()
             .filter(item -> contains(item.getSupplier(), supplier))
             .filter(item -> contains(item.getCity(), city))
             .filter(item -> contains(item.getState(), state))
             .filter(item -> contains(item.getPol(), pol))
+            .filter(item -> contains(item.getZipCode(), zipCode))
             .sorted(Comparator.comparing(CostRoad::getId))
             .toList();
 
@@ -188,29 +202,30 @@ public class CostRoadService {
 
   private CostRoad mapImportRow(Row row) {
     var headers = CostExcelSupport.readHeaderMap(row.getSheet().getRow(0));
-    String supplier = CostExcelSupport.readByHeader(row, headers, "SUPPLIER");
-    if (supplier.isBlank()) {
-      return null;
-    }
     CostRoad entity = new CostRoad();
-    entity.setValidDate(CostExcelSupport.readByHeader(row, headers, "VALID DATE"));
-    entity.setSupplier(supplier);
+    entity.setValidDate(CostExcelSupport.readByHeader(row, headers, "VALID DATE", "*VALID DATE"));
+    entity.setSupplier(CostExcelSupport.readByHeader(row, headers, "SUPPLIER", "*SUPPLIER"));
     entity.setLogYardNameAddress(
         CostExcelSupport.readByHeader(
             row, headers, "LOG YARD NAME &ADDRESS", "LOG YARD NAME", "LOG YARD", "LOC YARD"));
-    entity.setCity(CostExcelSupport.readByHeader(row, headers, "City", "CITY"));
-    entity.setState(CostExcelSupport.readByHeader(row, headers, "State", "STATE"));
-    entity.setPor(CostExcelSupport.readByHeader(row, headers, "POR"));
-    entity.setPol(CostExcelSupport.readByHeader(row, headers, "POL"));
+    entity.setZipCode(
+        CostExcelSupport.readByHeader(
+            row, headers, "Zip code", "ZIP CODE", "ZIPCODE", "Zip Code"));
+    entity.setCity(CostExcelSupport.readByHeader(row, headers, "City", "CITY", "*City"));
+    entity.setState(CostExcelSupport.readByHeader(row, headers, "State", "STATE", "*State"));
+    entity.setPor(CostExcelSupport.readByHeader(row, headers, "POR", "*POR"));
+    entity.setPol(CostExcelSupport.readByHeader(row, headers, "POL", "*POL"));
     entity.setBaseFreight(
-        CostExcelSupport.readDecimalByHeader(row, headers, "BASE FREIGHT", "BASE FRE"));
+        CostExcelSupport.readDecimalByHeader(
+            row, headers, "BASE FREIGHT", "BASE FRE", "*BASE FREIGHT"));
     entity.setFsc(CostExcelSupport.readDecimalByHeader(row, headers, "FSC"));
     entity.setChassis(CostExcelSupport.readDecimalByHeader(row, headers, "CHASSIS"));
     entity.setOwTriAxle(
         CostExcelSupport.readDecimalByHeader(row, headers, "OW/TRI-AXCEL", "OW/TRI-A", "OW/TRI"));
     entity.setSplit(CostExcelSupport.readDecimalByHeader(row, headers, "SPLIT"));
     entity.setStopOff(CostExcelSupport.readDecimalByHeader(row, headers, "STOP OFF"));
-    entity.setAllIn(CostExcelSupport.readDecimalByHeader(row, headers, "ALL IN"));
+    entity.setAllIn(
+        CostExcelSupport.readDecimalByHeader(row, headers, "ALL IN", "*ALL IN"));
     entity.setAllInNonOak(
         CostExcelSupport.readDecimalByHeader(row, headers, "ALL IN (NON OAK)", "NON OAK"));
     entity.setAllInOak(
@@ -223,26 +238,52 @@ public class CostRoadService {
     entity.setPrepull(CostExcelSupport.readDecimalByHeader(row, headers, "PREPULL"));
     entity.setNsLift(CostExcelSupport.readDecimalByHeader(row, headers, "NS LIFT"));
     entity.setRemark(CostExcelSupport.readByHeader(row, headers, "REMARK"));
+    if (isImportRowEmpty(entity)) {
+      return null;
+    }
     return entity;
   }
 
+  private boolean isImportRowEmpty(CostRoad entity) {
+    return isBlank(entity.getValidDate())
+        && isBlank(entity.getSupplier())
+        && isBlank(entity.getLogYardNameAddress())
+        && isBlank(entity.getZipCode())
+        && isBlank(entity.getCity())
+        && isBlank(entity.getState())
+        && isBlank(entity.getPor())
+        && isBlank(entity.getPol())
+        && entity.getBaseFreight() == null
+        && entity.getFsc() == null
+        && entity.getChassis() == null
+        && entity.getOwTriAxle() == null
+        && entity.getSplit() == null
+        && entity.getStopOff() == null
+        && entity.getAllIn() == null
+        && entity.getAllInNonOak() == null
+        && entity.getAllInOak() == null
+        && entity.getWaitingFee() == null
+        && entity.getRedelivery() == null
+        && entity.getPrepull() == null
+        && entity.getNsLift() == null
+        && isBlank(entity.getRemark());
+  }
+
+  private boolean isBlank(String value) {
+    return value == null || value.isBlank();
+  }
+
   private String validateImportRow(CostRoad entity) {
-    if (entity.getSupplier() == null || entity.getSupplier().isBlank()) {
-      return "供应商不能为空";
-    }
     return null;
   }
 
-  private void validateSave(RoadCostSaveRequest request) {
-    if (request.supplier() == null || request.supplier().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "供应商不能为空");
-    }
-  }
+  private void validateSave(RoadCostSaveRequest request) {}
 
   private void applySave(CostRoad entity, RoadCostSaveRequest request) {
     entity.setValidDate(request.validDate());
     entity.setSupplier(request.supplier());
     entity.setLogYardNameAddress(request.logYardNameAddress());
+    entity.setZipCode(request.zipCode());
     entity.setCity(request.city());
     entity.setState(request.state());
     entity.setPor(request.por());

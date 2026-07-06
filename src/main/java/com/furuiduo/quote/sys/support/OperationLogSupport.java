@@ -108,6 +108,12 @@ public class OperationLogSupport {
       return null;
     }
     String path = requestUri.split("\\?")[0];
+    if (path.startsWith("/quotes/")) {
+      String quoteId = extractSegmentAfter(path, "quotes");
+      if (quoteId != null) {
+        return quoteId;
+      }
+    }
     String[] segments = path.split("/");
     for (int i = segments.length - 1; i >= 0; i--) {
       String segment = segments[i];
@@ -130,6 +136,9 @@ public class OperationLogSupport {
     String path = normalizePath(requestUri);
     if (path.endsWith("/set-default") && "cost:template".equals(module)) {
       return buildTemplateApplySummary(resourceId, resultNode);
+    }
+    if ("quote".equals(module) && path.contains("/follow-ups")) {
+      return buildQuoteFollowUpSummary(action, bodyNode);
     }
     if (path.endsWith("/batch-delete") && module.startsWith("cost:")) {
       return "批量删除" + moduleLabel(module);
@@ -209,6 +218,34 @@ public class OperationLogSupport {
       }
       return text.substring(0, MAX_BODY_LENGTH) + "…";
     }
+  }
+
+  private String buildQuoteFollowUpSummary(OperationAction action, JsonNode bodyNode) {
+    String actionLabel =
+        switch (action) {
+          case CREATE -> "新增";
+          case UPDATE -> "更新";
+          case DELETE -> "删除";
+        };
+    StringBuilder summary = new StringBuilder(actionLabel).append("跟进记录");
+    String content = text(bodyNode, "content");
+    if (content != null) {
+      summary.append('：').append(truncate(content, 80));
+    }
+    return truncate(summary.toString(), MAX_SUMMARY_LENGTH);
+  }
+
+  private String extractSegmentAfter(String path, String marker) {
+    String[] segments = path.split("/");
+    for (int i = 0; i < segments.length - 1; i++) {
+      if (marker.equals(segments[i])) {
+        String next = segments[i + 1];
+        if (next != null && !next.isBlank() && next.matches("\\d+")) {
+          return next;
+        }
+      }
+    }
+    return null;
   }
 
   private void appendQuoteSummary(

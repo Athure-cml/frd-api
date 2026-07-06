@@ -90,6 +90,7 @@ public final class CostDataExcelExporter {
       case "validDate" -> item.getValidDate();
       case "supplier" -> item.getSupplier();
       case "logYardNameAddress" -> item.getLogYardNameAddress();
+      case "zipCode" -> item.getZipCode();
       case "city" -> item.getCity();
       case "state" -> item.getState();
       case "por" -> item.getPor();

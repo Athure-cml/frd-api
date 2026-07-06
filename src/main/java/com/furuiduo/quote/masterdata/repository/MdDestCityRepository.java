@@ -36,4 +36,12 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
   Optional<MdDestCity> findByStateIdAndNameIgnoreCase(Long stateId, String name);
 
   boolean existsByStateId(Long stateId);
+
+  @Query(
+      """
+      SELECT s.code, LOWER(c.name), c.id
+      FROM MdDestCity c, MdUsState s
+      WHERE s.id = c.stateId
+      """)
+  List<Object[]> findExistingCityKeys();
 }
