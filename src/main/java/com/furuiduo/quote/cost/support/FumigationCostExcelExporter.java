@@ -2,7 +2,6 @@ package com.furuiduo.quote.cost.support;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.apache.poi.ss.usermodel.Cell;
@@ -21,9 +20,6 @@ import com.furuiduo.quote.cost.entity.CostFumigation;
 
 public final class FumigationCostExcelExporter {
 
-  private static final DateTimeFormatter UPDATED_AT_FORMATTER =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
   private static final byte[] HEADER_BLUE = new byte[] {(byte) 0x1D, (byte) 0x4E, (byte) 0x7B};
   private static final byte[] HEADER_YELLOW = new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0x00};
 
@@ -37,22 +33,17 @@ public final class FumigationCostExcelExporter {
       for (CostFumigation item : items) {
         Row row = sheet.createRow(rowIndex++);
         int col = 0;
-        setText(row, col++, item.getPort());
+        setText(row, col++, item.getRegion());
         setText(row, col++, item.getStation());
-        setDecimal(row, col++, item.getNonOakOutdoor());
-        setDecimal(row, col++, item.getNonOakIndoor());
-        setText(row, col++, item.getNonOakQuoteSummer());
-        setText(row, col++, item.getNonOakQuoteWinter());
-        setDecimal(row, col++, item.getOakOutdoor());
-        setDecimal(row, col++, item.getOakIndoor());
-        setText(row, col++, item.getOakQuoteSummer());
-        setText(row, col++, item.getOakQuoteWinter());
-        setText(row, col++, item.getRemark());
-        if (item.getUpdatedAt() != null) {
-          setText(row, col, UPDATED_AT_FORMATTER.format(item.getUpdatedAt()));
-        }
+        setDecimal(row, col++, item.getOutdoorNonOak());
+        setDecimal(row, col++, item.getOutdoorOak());
+        setText(row, col++, item.getOutdoorValidity());
+        setDecimal(row, col++, item.getIndoorNonOak());
+        setDecimal(row, col++, item.getIndoorOak());
+        setText(row, col++, item.getIndoorValidity());
+        setText(row, col, item.getAddress());
       }
-      for (int i = 0; i < 12; i++) {
+      for (int i = 0; i < 9; i++) {
         sheet.autoSizeColumn(i);
       }
       return CostExcelSupport.writeWorkbook(workbook);
@@ -69,20 +60,15 @@ public final class FumigationCostExcelExporter {
     Row row0 = sheet.createRow(0);
     Row row1 = sheet.createRow(1);
 
-    createMergedHeader(sheet, row0, 0, 0, 1, 0, "PORT", blueStyle);
+    createMergedHeader(sheet, row0, 0, 0, 1, 0, "REGION", blueStyle);
     createMergedHeader(sheet, row0, 1, 1, 1, 1, "STATION", blueStyle);
-    createMergedHeader(sheet, row0, 2, 5, 0, 2, "NON-OAK", blueStyle);
-    createMergedHeader(sheet, row0, 6, 9, 0, 6, "OAK", blueStyle);
-    createMergedHeader(sheet, row0, 10, 10, 0, 10, "备注", blueStyle);
-    createMergedHeader(sheet, row0, 11, 11, 0, 11, "更新时间", blueStyle);
+    createMergedHeader(sheet, row0, 2, 4, 0, 2, "FM-OUTDOOR", blueStyle);
+    createMergedHeader(sheet, row0, 5, 7, 0, 5, "FM-INDOOR", blueStyle);
+    createMergedHeader(sheet, row0, 8, 8, 1, 8, "ADDRESS", blueStyle);
 
-    String[] subHeaders = {
-      "OUTDOOR", "IN DOOR", "报价(夏季)", "报价(冬季)",
-      "OUTDOOR", "IN DOOR", "报价(夏季)", "报价(冬季)"
-    };
+    String[] subHeaders = {"NON OAK", "OAK", "VALIDITY", "NON OAK", "OAK", "VALIDITY"};
     CellStyle[] subStyles = {
-      blueStyle, blueStyle, yellowStyle, yellowStyle,
-      blueStyle, blueStyle, yellowStyle, yellowStyle
+      blueStyle, blueStyle, yellowStyle, blueStyle, blueStyle, yellowStyle
     };
     for (int i = 0; i < subHeaders.length; i++) {
       Cell cell = row1.createCell(2 + i);
@@ -96,15 +82,22 @@ public final class FumigationCostExcelExporter {
       Row row,
       int firstCol,
       int lastCol,
-      int firstRow,
+      int otherRow,
       int col,
       String title,
       CellStyle style) {
     Cell cell = row.createCell(col);
     cell.setCellValue(title);
     cell.setCellStyle(style);
-    if (firstCol != lastCol || firstRow != row.getRowNum()) {
-      sheet.addMergedRegion(new CellRangeAddress(firstRow, row.getRowNum(), firstCol, lastCol));
+    int rowNum = row.getRowNum();
+    // POI 要求 firstRow <= lastRow；原先把「跨到第 1 行」写成 (1,0) 会直接抛错 → 导出 500
+    if (firstCol != lastCol || otherRow != rowNum) {
+      sheet.addMergedRegion(
+          new CellRangeAddress(
+              Math.min(rowNum, otherRow),
+              Math.max(rowNum, otherRow),
+              firstCol,
+              lastCol));
     }
   }
 

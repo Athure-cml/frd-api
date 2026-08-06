@@ -1,7 +1,9 @@
 package com.furuiduo.quote.cost.support;
 
 import java.util.List;
+import java.util.Map;
 
+import com.furuiduo.quote.cost.dto.CostTableFieldOverride;
 import com.furuiduo.quote.cost.dto.CostTableTemplateGroup;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 
@@ -9,102 +11,186 @@ public final class CostTemplateLayouts {
 
   private CostTemplateLayouts() {}
 
-  /** 海运标准列：Excel 七列 + 备注、有效期、状态 */
+  /** 海运标准列：对齐业务 Excel 表头 */
   public static final List<String> SEA_STANDARD_FIELDS =
       List.of(
-          "origin",
-          "destination",
-          "unitPrice",
+          "por",
+          "pol",
+          "pod",
+          "cnShortName",
+          "enProductName",
+          "containerType",
+          "freight",
+          "freightValidDate",
           "buc",
-          "surchargeValidDate",
+          "bucValidDate",
+          "ebs",
+          "ebsValidDate",
+          "gri",
+          "griValidDate",
+          "others",
+          "othersValidDate",
           "allIn",
-          "carrier",
-          "remark",
-          "validDate",
-          "status");
+          "ssl",
+          "agent",
+          "remark");
 
   public static CostTableTemplateLayout roadDefault() {
+    List<String> fieldOrder =
+        List.of(
+            "zipCode",
+            "city",
+            "state",
+            "por",
+            "pol",
+            "supplier",
+            "baseFreight",
+            "fsc",
+            "chassis",
+            "triTandemAxle",
+            "split",
+            "stopOff",
+            "allInNoFm",
+            "allInFmOneWay",
+            "allInFmRound",
+            "waitingFee",
+            "redelivery",
+            "prepull",
+            "nsLift",
+            "otherFee",
+            "remark",
+            "validDate",
+            "logYardNameAddress");
+    Map<String, CostTableFieldOverride> fieldOverrides =
+        Map.of(
+            "zipCode", requiredOverride(),
+            "city", requiredOverride(),
+            "state", requiredOverride(),
+            "por", requiredOverride(),
+            "pol", requiredOverride(),
+            "supplier", requiredOverride(),
+            "allInNoFm", requiredOverride(),
+            "allInFmOneWay", requiredOverride(),
+            "allInFmRound", requiredOverride());
     return new CostTableTemplateLayout(
         List.of(
             new CostTableTemplateGroup(
-                "basic",
-                "page.costLibrary.roadGroups.basic",
-                "road-header-green",
+                "route",
+                "page.costLibrary.roadGroups.route",
+                "road-header-route",
                 List.of(
-                    "validDate",
-                    "supplier",
-                    "logYardNameAddress",
                     "zipCode",
                     "city",
                     "state",
                     "por",
-                    "pol")),
+                    "pol",
+                    "supplier",
+                    "baseFreight",
+                    "fsc",
+                    "chassis",
+                    "triTandemAxle",
+                    "split",
+                    "stopOff")),
             new CostTableTemplateGroup(
                 "freight",
                 "page.costLibrary.roadGroups.freight",
                 "road-header-freight",
-                List.of(
-                    "baseFreight",
-                    "fsc",
-                    "chassis",
-                    "owTriAxle",
-                    "split",
-                    "stopOff",
-                    "allIn",
-                    "allInNonOak",
-                    "allInOak")),
+                List.of("allInNoFm", "allInFmOneWay", "allInFmRound")),
             new CostTableTemplateGroup(
-                "surcharge",
-                "page.costLibrary.roadGroups.surcharge",
-                "road-header-green",
-                List.of("waitingFee", "redelivery", "prepull", "nsLift", "remark"))),
-        null,
-        null,
-        null,
+                "extra",
+                "page.costLibrary.roadGroups.extra",
+                "road-header-extra",
+                List.of(
+                    "waitingFee",
+                    "redelivery",
+                    "prepull",
+                    "nsLift",
+                    "otherFee",
+                    "remark")),
+            new CostTableTemplateGroup(
+                "meta",
+                "page.costLibrary.roadGroups.meta",
+                "road-header-meta",
+                List.of("validDate", "logYardNameAddress"))),
+        fieldOrder,
+        fieldOverrides,
+        fieldOrder,
         null);
   }
 
+  private static CostTableFieldOverride requiredOverride() {
+    return new CostTableFieldOverride(null, null, null, null, null, true, null);
+  }
+
   public static CostTableTemplateLayout seaDefault() {
-    return flatFreightLayout(SEA_STANDARD_FIELDS);
+    List<String> fieldOrder = SEA_STANDARD_FIELDS;
+    Map<String, CostTableFieldOverride> fieldOverrides =
+        Map.of(
+            "por", requiredOverride(),
+            "pol", requiredOverride(),
+            "pod", requiredOverride(),
+            "enProductName", requiredOverride(),
+            "containerType", requiredOverride(),
+            "freight", requiredOverride(),
+            "freightValidDate", requiredOverride());
+    return new CostTableTemplateLayout(
+        List.of(
+            new CostTableTemplateGroup(
+                "surcharge",
+                "page.costLibrary.seaGroups.surcharge",
+                "sea-header-surcharge",
+                List.of(
+                    "buc",
+                    "bucValidDate",
+                    "ebs",
+                    "ebsValidDate",
+                    "gri",
+                    "griValidDate",
+                    "others",
+                    "othersValidDate"))),
+        fieldOrder,
+        fieldOverrides,
+        fieldOrder,
+        null);
   }
 
   public static CostTableTemplateLayout fumigationDefault() {
     List<String> fieldOrder =
         List.of(
-            "port",
+            "region",
             "station",
-            "nonOakOutdoor",
-            "nonOakIndoor",
-            "nonOakQuoteSummer",
-            "nonOakQuoteWinter",
-            "oakOutdoor",
-            "oakIndoor",
-            "oakQuoteSummer",
-            "oakQuoteWinter",
-            "remark",
-            "updatedAt");
+            "outdoorNonOak",
+            "outdoorOak",
+            "outdoorValidity",
+            "indoorNonOak",
+            "indoorOak",
+            "indoorValidity",
+            "address");
+    Map<String, CostTableFieldOverride> fieldOverrides =
+        Map.of(
+            "region", requiredOverride(),
+            "station", requiredOverride(),
+            "outdoorNonOak", requiredOverride(),
+            "outdoorOak", requiredOverride(),
+            "outdoorValidity", requiredOverride(),
+            "indoorNonOak", requiredOverride(),
+            "indoorOak", requiredOverride(),
+            "indoorValidity", requiredOverride(),
+            "address", requiredOverride());
     return new CostTableTemplateLayout(
         List.of(
             new CostTableTemplateGroup(
-                "nonOak",
-                "page.costLibrary.fumigationGroups.nonOak",
+                "outdoor",
+                "page.costLibrary.fumigationGroups.outdoor",
                 "fumigation-header-primary",
-                List.of(
-                    "nonOakOutdoor",
-                    "nonOakIndoor",
-                    "nonOakQuoteSummer",
-                    "nonOakQuoteWinter")),
+                List.of("outdoorNonOak", "outdoorOak", "outdoorValidity")),
             new CostTableTemplateGroup(
-                "oak",
-                "page.costLibrary.fumigationGroups.oak",
+                "indoor",
+                "page.costLibrary.fumigationGroups.indoor",
                 "fumigation-header-primary",
-                List.of(
-                    "oakOutdoor",
-                    "oakIndoor",
-                    "oakQuoteSummer",
-                    "oakQuoteWinter"))),
+                List.of("indoorNonOak", "indoorOak", "indoorValidity"))),
         fieldOrder,
-        null,
+        fieldOverrides,
         fieldOrder,
         null);
   }

@@ -6,6 +6,9 @@ spring:
     name: quote-api
   profiles:
     active: postgres
+  # 本地密钥：复制 application-secrets.yml.example → application-secrets.yml 后填写
+  config:
+    import: optional:file:./application-secrets.yml,optional:classpath:application-secrets.yml
   jpa:
     hibernate:
       ddl-auto: none
@@ -25,8 +28,19 @@ quote:
   upload-dir: ./uploads
   cost:
     reset: ${QUOTE_COST_RESET:false}
+    # 生产默认关闭：空成本库不再自动灌测试数据。本地需要样例时设 QUOTE_COST_SEED_IF_EMPTY=true
+    seed-if-empty: ${QUOTE_COST_SEED_IF_EMPTY:false}
   cors:
-    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+    # 开发机可用局域网 IP 打开前端（如 http://192.168.x.x:5666）；生产请收紧
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*,http://172.*:*}
+  # AI 助手（阿里云通义千问 DashScope OpenAI 兼容）。密钥必须用环境变量，禁止写入仓库。
+  ai:
+    enabled: ${QUOTE_AI_ENABLED:true}
+    base-url: ${QUOTE_AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    api-key: ${QUOTE_AI_API_KEY:}
+    model: ${QUOTE_AI_MODEL:qwen-plus}
+    max-tool-rounds: ${QUOTE_AI_MAX_TOOL_ROUNDS:3}
+    rate-limit-per-minute: ${QUOTE_AI_RATE_LIMIT_PER_MINUTE:20}
   masterdata:
     us-zip:
       enabled: true

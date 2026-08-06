@@ -21,56 +21,64 @@ public final class CostTemplateExcelSupport {
 
   private static final Map<String, String> ROAD_LABELS =
       Map.ofEntries(
-          Map.entry("validDate", "VALID DATE"),
-          Map.entry("supplier", "SUPPLIER"),
-          Map.entry("logYardNameAddress", "LOG YARD NAME &ADDRESS"),
-          Map.entry("zipCode", "Zip code"),
+          Map.entry("zipCode", "ZIP CODE"),
           Map.entry("city", "City"),
           Map.entry("state", "State"),
           Map.entry("por", "POR"),
           Map.entry("pol", "POL"),
+          Map.entry("supplier", "SUPPLIER"),
           Map.entry("baseFreight", "BASE FREIGHT"),
-          Map.entry("fsc", "FSC"),
+          Map.entry("fsc", "FSC (%)"),
           Map.entry("chassis", "CHASSIS"),
-          Map.entry("owTriAxle", "OW/TRI-AXCEL"),
+          Map.entry("triTandemAxle", "OW/TRI-AXCEL"),
           Map.entry("split", "SPLIT"),
           Map.entry("stopOff", "STOP OFF"),
-          Map.entry("allIn", "ALL IN"),
-          Map.entry("allInNonOak", "ALL IN (NON OAK)"),
-          Map.entry("allInOak", "ALL IN (OAK)"),
+          Map.entry("allInNoFm", "ALL IN - NO FM"),
+          Map.entry("allInFmOneWay", "ALL IN - FM (NON OAK)"),
+          Map.entry("allInFmRound", "ALL IN - FM (OAK)"),
           Map.entry("waitingFee", "WAITING FEE"),
-          Map.entry("redelivery", "REDILEVEY"),
+          Map.entry("redelivery", "REDELIVERY"),
           Map.entry("prepull", "PREPULL"),
           Map.entry("nsLift", "NS LIFT"),
-          Map.entry("remark", "REMARK"));
+          Map.entry("otherFee", "OTHER FEE"),
+          Map.entry("remark", "REMARK"),
+          Map.entry("validDate", "有效期"),
+          Map.entry("logYardNameAddress", "LOG YARD NAME & ADDRESS"));
 
   private static final Map<String, String> SEA_LABELS =
       Map.ofEntries(
-          Map.entry("origin", "POL"),
-          Map.entry("destination", "POD"),
-          Map.entry("unitPrice", "O/F RATE (USD)"),
+          Map.entry("por", "POR"),
+          Map.entry("pol", "POL"),
+          Map.entry("pod", "POD"),
+          Map.entry("cnShortName", "中文简称"),
+          Map.entry("enProductName", "英文品名"),
+          Map.entry("containerType", "箱型"),
+          Map.entry("freight", "运费"),
+          Map.entry("freightValidDate", "有效期"),
           Map.entry("buc", "BUC"),
-          Map.entry("surchargeValidDate", "附加费有效期"),
-          Map.entry("allIn", "ALL IN"),
-          Map.entry("carrier", "SSL"),
-          Map.entry("remark", "备注"),
-          Map.entry("validDate", "有效期"),
-          Map.entry("status", "状态"));
+          Map.entry("bucValidDate", "BUC有效期"),
+          Map.entry("ebs", "EBS"),
+          Map.entry("ebsValidDate", "EBS有效期"),
+          Map.entry("gri", "GRI"),
+          Map.entry("griValidDate", "GRI有效期"),
+          Map.entry("others", "OTHERS"),
+          Map.entry("othersValidDate", "OTHERS有效期"),
+          Map.entry("allIn", "ALL IN (小计)"),
+          Map.entry("ssl", "SSL (船公司)"),
+          Map.entry("agent", "AGENT (代理)"),
+          Map.entry("remark", "REMARK 备注"));
 
   private static final Map<String, String> FUMIGATION_LABELS =
       Map.ofEntries(
-          Map.entry("port", "PORT"),
+          Map.entry("region", "REGION"),
           Map.entry("station", "STATION"),
-          Map.entry("nonOakOutdoor", "NON-OAK OUTDOOR"),
-          Map.entry("nonOakIndoor", "NON-OAK IN DOOR"),
-          Map.entry("nonOakQuoteSummer", "NON-OAK 报价(夏季)"),
-          Map.entry("nonOakQuoteWinter", "NON-OAK 报价(冬季)"),
-          Map.entry("oakOutdoor", "OAK OUTDOOR"),
-          Map.entry("oakIndoor", "OAK IN DOOR"),
-          Map.entry("oakQuoteSummer", "OAK 报价(夏季)"),
-          Map.entry("oakQuoteWinter", "OAK 报价(冬季)"),
-          Map.entry("remark", "备注"),
-          Map.entry("updatedAt", "更新时间"));
+          Map.entry("outdoorNonOak", "FM-OUTDOOR NON OAK"),
+          Map.entry("outdoorOak", "FM-OUTDOOR OAK"),
+          Map.entry("outdoorValidity", "有效期"),
+          Map.entry("indoorNonOak", "FM-INDOOR NON OAK"),
+          Map.entry("indoorOak", "FM-INDOOR OAK"),
+          Map.entry("indoorValidity", "有效期"),
+          Map.entry("address", "ADDRESS"));
 
   private static final Map<String, String> RAIL_LABELS = copyRailLabels();
 
@@ -83,6 +91,14 @@ public final class CostTemplateExcelSupport {
 
   public static byte[] buildWorkbook(
       String mode, String code, String name, CostTableTemplateLayout layout) {
+    // 与成本库列表页导出表头保持一致：熏蒸/海运为双行合并表头
+    if ("fumigation".equals(mode)) {
+      return FumigationCostExcelExporter.export(List.of());
+    }
+    if ("sea".equals(mode)) {
+      return SeaCostExcelExporter.export(List.of());
+    }
+
     List<CostExportColumn> columns = resolveVisibleExportColumns(mode, layout);
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet(sanitizeSheetName(code, name));
@@ -105,8 +121,23 @@ public final class CostTemplateExcelSupport {
   }
 
   public static String buildFilename(String code, String mode) {
-    String safeCode = code == null || code.isBlank() ? mode : code.trim();
-    return safeCode + "-template.xlsx";
+    return modeTemplateLabel(mode) + ".xlsx";
+  }
+
+  public static String buildPreviewFilename(String mode) {
+    return modeTemplateLabel(mode) + "预览.xlsx";
+  }
+
+  private static String modeTemplateLabel(String mode) {
+    if (mode == null) {
+      return "成本模板";
+    }
+    return switch (mode) {
+      case "road" -> "卡车成本模板";
+      case "sea" -> "海运成本模板";
+      case "fumigation" -> "熏蒸成本模板";
+      default -> mode + "成本模板";
+    };
   }
 
   private static List<CostExportColumn> resolveVisibleExportColumns(
@@ -190,10 +221,19 @@ public final class CostTemplateExcelSupport {
   }
 
   private static Map<String, String> copyRailLabels() {
-    Map<String, String> labels = new LinkedHashMap<>(SEA_LABELS);
+    Map<String, String> labels = new LinkedHashMap<>();
     labels.put("origin", "发站");
     labels.put("destination", "到站");
+    labels.put("carrier", "承运商");
+    labels.put("spec", "箱型");
+    labels.put("unit", "单位");
     labels.put("unitPrice", "铁路运费");
+    labels.put("currency", "币种");
+    labels.put("validFrom", "有效期起");
+    labels.put("validTo", "有效期止");
+    labels.put("status", "状态");
+    labels.put("remark", "备注");
+    labels.put("updatedAt", "更新时间");
     return Map.copyOf(labels);
   }
 }

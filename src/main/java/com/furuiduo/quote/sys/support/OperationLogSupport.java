@@ -65,6 +65,15 @@ public class OperationLogSupport {
     if (path.startsWith("/customers")) {
       return "customer";
     }
+    if (path.startsWith("/suppliers")) {
+      return "supplier";
+    }
+    if (path.startsWith("/shipping-lines")) {
+      return "shipping_line";
+    }
+    if (path.startsWith("/agents")) {
+      return "agent";
+    }
     if (path.startsWith("/quotes")) {
       return "quote";
     }
@@ -88,6 +97,21 @@ public class OperationLogSupport {
     }
     if (path.startsWith("/exchange-rates")) {
       return "exchange_rate";
+    }
+    if (path.startsWith("/container-types")) {
+      return "md_container_type";
+    }
+    if (path.startsWith("/dest-addresses")) {
+      return "md_dest_address";
+    }
+    if (path.startsWith("/global-ports")) {
+      return "md_global_port";
+    }
+    if (path.startsWith("/inland-pors")) {
+      return "md_inland_por";
+    }
+    if (path.startsWith("/us-states")) {
+      return "md_us_state";
     }
     return "unknown";
   }
@@ -166,7 +190,10 @@ public class OperationLogSupport {
       appendQuoteSummary(summary, resourceId, bodyNode, resultNode);
       return truncate(summary.toString(), MAX_SUMMARY_LENGTH);
     }
-    if ("customer".equals(module)) {
+    if ("customer".equals(module)
+        || "supplier".equals(module)
+        || "shipping_line".equals(module)
+        || "agent".equals(module)) {
       appendNamedSummary(summary, resourceId, bodyNode, resultNode, "name", "code");
       return truncate(summary.toString(), MAX_SUMMARY_LENGTH);
     }
@@ -182,7 +209,7 @@ public class OperationLogSupport {
       appendNamedSummary(summary, resourceId, bodyNode, resultNode, "name", "code");
       return truncate(summary.toString(), MAX_SUMMARY_LENGTH);
     }
-    if ("currency".equals(module)) {
+    if ("currency".equals(module) || "md_container_type".equals(module)) {
       appendNamedSummary(summary, resourceId, bodyNode, resultNode, "name", "code");
       return truncate(summary.toString(), MAX_SUMMARY_LENGTH);
     }
@@ -378,6 +405,9 @@ public class OperationLogSupport {
       case "sys:user" -> "用户";
       case "sys:role" -> "角色";
       case "customer" -> "客户";
+      case "supplier" -> "供应商";
+      case "shipping_line" -> "船公司";
+      case "agent" -> "代理商";
       case "quote" -> "报价单";
       case "cost:road" -> "卡车成本";
       case "cost:sea" -> "海运成本";
@@ -386,6 +416,11 @@ public class OperationLogSupport {
       case "cost:template" -> "表格模板";
       case "currency" -> "币种";
       case "exchange_rate" -> "汇率";
+      case "md_container_type" -> "箱型";
+      case "md_dest_address" -> "美国州邮政编码";
+      case "md_global_port" -> "全球港口";
+      case "md_inland_por" -> "内陆 POR";
+      case "md_us_state" -> "美国州";
       default -> "数据";
     };
   }

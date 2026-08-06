@@ -10,6 +10,8 @@ import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -28,37 +30,35 @@ public class CostFumigation {
   private Long id;
 
   @Column(length = 64)
-  private String port;
+  private String region;
 
   @Column(length = 64)
   private String station;
 
-  @Column(name = "non_oak_outdoor", precision = 14, scale = 2)
-  private BigDecimal nonOakOutdoor;
+  @Column(name = "outdoor_non_oak", precision = 14, scale = 2)
+  private BigDecimal outdoorNonOak;
 
-  @Column(name = "non_oak_indoor", precision = 14, scale = 2)
-  private BigDecimal nonOakIndoor;
+  @Column(name = "outdoor_oak", precision = 14, scale = 2)
+  private BigDecimal outdoorOak;
 
-  @Column(name = "non_oak_quote_summer", length = 128)
-  private String nonOakQuoteSummer;
+  @Column(name = "outdoor_validity", length = 128)
+  private String outdoorValidity;
 
-  @Column(name = "non_oak_quote_winter", length = 128)
-  private String nonOakQuoteWinter;
+  @Column(name = "indoor_non_oak", precision = 14, scale = 2)
+  private BigDecimal indoorNonOak;
 
-  @Column(name = "oak_outdoor", precision = 14, scale = 2)
-  private BigDecimal oakOutdoor;
+  @Column(name = "indoor_oak", precision = 14, scale = 2)
+  private BigDecimal indoorOak;
 
-  @Column(name = "oak_indoor", precision = 14, scale = 2)
-  private BigDecimal oakIndoor;
-
-  @Column(name = "oak_quote_summer", length = 128)
-  private String oakQuoteSummer;
-
-  @Column(name = "oak_quote_winter", length = 128)
-  private String oakQuoteWinter;
+  @Column(name = "indoor_validity", length = 128)
+  private String indoorValidity;
 
   @Column(length = 512)
-  private String remark;
+  private String address;
+
+  @Enumerated(EnumType.STRING)
+  @Column(length = 16)
+  private CostStatus status = CostStatus.active;
 
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "extra_fields")

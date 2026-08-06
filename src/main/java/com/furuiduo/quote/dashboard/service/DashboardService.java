@@ -293,7 +293,7 @@ public class DashboardService {
   private String resolveLiveVersion(QuoteCostType type, Long refId) {
     return switch (type) {
       case ROAD -> costRoadRepository.findById(refId).map(CostRoad::getValidDate).orElse(null);
-      case SEA -> costSeaRepository.findById(refId).map(CostSea::getValidDate).orElse(null);
+      case SEA -> costSeaRepository.findById(refId).map(CostSea::getFreightValidDate).orElse(null);
       case FUMIGATION ->
           costFumigationRepository
               .findById(refId)

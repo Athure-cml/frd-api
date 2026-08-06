@@ -39,6 +39,26 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
 
   @Query(
       """
+      SELECT c.name FROM MdDestCity c
+      WHERE (
+          :keyword = ''
+          OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
+        )
+      GROUP BY c.name
+      ORDER BY
+        CASE
+          WHEN :keyword <> '' AND UPPER(c.name) = UPPER(:keyword) THEN 0
+          WHEN :keyword <> '' AND UPPER(c.name) LIKE UPPER(CONCAT(:keyword, '%')) THEN 1
+          WHEN :keyword <> '' AND UPPER(c.name) LIKE UPPER(CONCAT('% ', :keyword, '%')) THEN 2
+          ELSE 3
+        END,
+        c.name ASC
+      """)
+  org.springframework.data.domain.Page<String> searchDistinctNames(
+      @Param("keyword") String keyword, org.springframework.data.domain.Pageable pageable);
+
+  @Query(
+      """
       SELECT s.code, LOWER(c.name), c.id
       FROM MdDestCity c, MdUsState s
       WHERE s.id = c.stateId

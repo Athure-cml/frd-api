@@ -21,6 +21,7 @@ quote:
     reset: ${QUOTE_DB_RESET:false}
   cost:
     reset: ${QUOTE_COST_RESET:false}
+    seed-if-empty: ${QUOTE_COST_SEED_IF_EMPTY:false}
   upload-dir: /tmp/uploads
   masterdata:
     us-zip:

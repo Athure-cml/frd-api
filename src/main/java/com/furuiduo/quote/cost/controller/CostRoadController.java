@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
@@ -67,14 +68,16 @@ public class CostRoadController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int pageSize,
-      @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) String zipCode,
       @RequestParam(required = false) String city,
       @RequestParam(required = false) String state,
+      @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
-      @RequestParam(required = false) String zipCode) {
+      @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
     return ApiResponse.ok(
-        costRoadService.list(page, pageSize, supplier, city, state, pol, zipCode));
+        costRoadService.list(page, pageSize, zipCode, city, state, por, pol, supplier, status));
   }
 
   @Operation(
@@ -165,17 +168,29 @@ public class CostRoadController {
   @GetMapping("/export")
   public ResponseEntity<byte[]> exportExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) String zipCode,
       @RequestParam(required = false) String city,
       @RequestParam(required = false) String state,
+      @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
-      @RequestParam(required = false) String zipCode,
-      @RequestParam(required = false) Long templateId) {
+      @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
     byte[] bytes =
-        costRoadService.exportExcel(supplier, city, state, pol, zipCode, templateId);
+        costRoadService.exportExcel(
+            zipCode,
+            city,
+            state,
+            por,
+            pol,
+            supplier,
+            status,
+            templateId,
+            RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("road-cost.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("卡车运输成本.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)

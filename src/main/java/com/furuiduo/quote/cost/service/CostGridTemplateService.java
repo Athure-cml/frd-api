@@ -176,7 +176,8 @@ public class CostGridTemplateService {
 
   public TemplateExcelFile exportById(Long id) {
     CostGridTemplate entity = requireEntity(id);
-    return buildExport(entity.getMode(), entity.getCode(), entity.getName(), entity.getLayout());
+    return buildExport(
+        entity.getMode(), entity.getCode(), entity.getName(), entity.getLayout(), false);
   }
 
   public TemplateExcelFile exportPreview(CostTableTemplateSaveRequest request) {
@@ -184,13 +185,20 @@ public class CostGridTemplateService {
     String code = resolvePreviewCode(mode, request.code());
     String name = normalizeName(request.name());
     CostTableTemplateLayout layout = normalizeLayout(mode, request.layout());
-    return buildExport(mode, code, name, layout);
+    return buildExport(mode, code, name, layout, true);
   }
 
   private TemplateExcelFile buildExport(
-      String mode, String code, String name, CostTableTemplateLayout layout) {
+      String mode,
+      String code,
+      String name,
+      CostTableTemplateLayout layout,
+      boolean preview) {
     byte[] content = CostTemplateExcelSupport.buildWorkbook(mode, code, name, layout);
-    String filename = CostTemplateExcelSupport.buildFilename(code, mode);
+    String filename =
+        preview
+            ? CostTemplateExcelSupport.buildPreviewFilename(mode)
+            : CostTemplateExcelSupport.buildFilename(code, mode);
     return new TemplateExcelFile(filename, content);
   }
 

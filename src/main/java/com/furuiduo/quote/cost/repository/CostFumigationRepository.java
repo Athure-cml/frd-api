@@ -13,7 +13,7 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
   @Query(
       """
       SELECT f FROM CostFumigation f WHERE
-      (:pod = '' OR UPPER(TRIM(f.port)) = UPPER(:pod))
+      (:pod = '' OR UPPER(TRIM(f.region)) = UPPER(:pod))
       ORDER BY f.updatedAt DESC
       """)
   List<CostFumigation> matchByPort(@Param("pod") String pod);

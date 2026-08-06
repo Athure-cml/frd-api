@@ -1,5 +1,7 @@
 package com.furuiduo.quote.quote.controller;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.springframework.http.HttpHeaders;
@@ -277,7 +279,10 @@ public class QuoteController {
     requireExport(user);
     byte[] bytes = quoteExportService.exportByIds(user, request.ids());
     return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=quotes-export.xlsx")
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename*=UTF-8''"
+                + URLEncoder.encode("报价单.xlsx", StandardCharsets.UTF_8).replace("+", "%20"))
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
         .body(bytes);
   }

@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.masterdata.dto.InlandPorResponse;
@@ -136,11 +137,12 @@ public class InlandPorController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam(required = false) String name,
       @RequestParam(required = false) String region,
-      @RequestParam(required = false) Long polId) {
+      @RequestParam(required = false) Long polId,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
-    byte[] bytes = inlandPorService.exportExcel(name, region, polId);
+    byte[] bytes = inlandPorService.exportExcel(name, region, polId, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("inland-por.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("内陆提货点POR.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)

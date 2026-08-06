@@ -11,9 +11,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.furuiduo.quote.cost.entity.CostFumigation;
-import com.furuiduo.quote.cost.entity.CostRoad;
-import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
@@ -28,16 +25,19 @@ public class CostDataSeeder implements ApplicationRunner {
   private final CostSeaRepository seaRepository;
   private final CostFumigationRepository fumigationRepository;
   private final boolean resetCostData;
+  private final boolean seedIfEmpty;
 
   public CostDataSeeder(
       CostRoadRepository roadRepository,
       CostSeaRepository seaRepository,
       CostFumigationRepository fumigationRepository,
-      @Value("${quote.cost.reset:false}") boolean resetCostData) {
+      @Value("${quote.cost.reset:false}") boolean resetCostData,
+      @Value("${quote.cost.seed-if-empty:false}") boolean seedIfEmpty) {
     this.roadRepository = roadRepository;
     this.seaRepository = seaRepository;
     this.fumigationRepository = fumigationRepository;
     this.resetCostData = resetCostData;
+    this.seedIfEmpty = seedIfEmpty;
   }
 
   @Override
@@ -50,6 +50,13 @@ public class CostDataSeeder implements ApplicationRunner {
           "QUOTE_COST_RESET=true：三个成本库已清空并各写入 {} 条测试数据。"
               + "请立即删除该环境变量并重新部署，避免每次启动都清库",
           CostSampleData.SAMPLE_SIZE);
+      return;
+    }
+
+    if (!seedIfEmpty) {
+      log.info(
+          "已跳过成本库空表灌测试数据（quote.cost.seed-if-empty=false）。"
+              + "本地需要样例数据时设置 QUOTE_COST_SEED_IF_EMPTY=true");
       return;
     }
 

@@ -1,7 +1,6 @@
 package com.furuiduo.quote.cost.entity;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,47 +30,65 @@ public class CostSea {
   private Long id;
 
   @Column(length = 128)
-  private String origin;
+  private String por;
 
   @Column(length = 128)
-  private String destination;
+  private String pol;
 
   @Column(length = 128)
-  private String carrier;
+  private String pod;
 
-  @Column(length = 32)
-  private String spec;
+  @Column(name = "cn_short_name", length = 128)
+  private String cnShortName;
 
-  @Column(length = 16)
-  private String unit;
+  @Column(name = "en_product_name", length = 256)
+  private String enProductName;
 
-  @Column(name = "unit_price", precision = 14, scale = 2)
-  private BigDecimal unitPrice;
+  @Column(name = "container_type", length = 64)
+  private String containerType;
+
+  @Column(precision = 14, scale = 2)
+  private BigDecimal freight;
+
+  @Column(name = "freight_valid_date", length = 64)
+  private String freightValidDate;
 
   @Column(precision = 14, scale = 2)
   private BigDecimal buc;
 
-  @Column(name = "surcharge_valid_date")
-  private LocalDate surchargeValidDate;
+  @Column(name = "buc_valid_date", length = 128)
+  private String bucValidDate;
+
+  @Column(precision = 14, scale = 2)
+  private BigDecimal ebs;
+
+  @Column(name = "ebs_valid_date", length = 128)
+  private String ebsValidDate;
+
+  @Column(precision = 14, scale = 2)
+  private BigDecimal gri;
+
+  @Column(name = "gri_valid_date", length = 128)
+  private String griValidDate;
+
+  @Column(precision = 14, scale = 2)
+  private BigDecimal others;
+
+  @Column(name = "others_valid_date", length = 128)
+  private String othersValidDate;
 
   @Column(name = "all_in", precision = 14, scale = 2)
   private BigDecimal allIn;
 
-  @Column(name = "valid_date", length = 64)
-  private String validDate;
+  @Column(length = 128)
+  private String ssl;
 
-  @Column(length = 8)
-  private String currency;
-
-  @Column(name = "valid_from")
-  private LocalDate validFrom;
-
-  @Column(name = "valid_to")
-  private LocalDate validTo;
+  @Column(length = 128)
+  private String agent;
 
   @Enumerated(EnumType.STRING)
   @Column(length = 16)
-  private CostStatus status = CostStatus.draft;
+  private CostStatus status = CostStatus.active;
 
   @Column(length = 512)
   private String remark;

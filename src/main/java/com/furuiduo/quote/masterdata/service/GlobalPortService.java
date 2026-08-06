@@ -1,7 +1,10 @@
 package com.furuiduo.quote.masterdata.service;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -15,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
@@ -85,6 +89,27 @@ public class GlobalPortService {
     return GlobalPortResponse.from(requireEntity(id));
   }
 
+  /** 录入下拉：按关键词搜索港口（编码 / 英文 / 中文），限制返回条数。 */
+  @Transactional(readOnly = true)
+  public List<GlobalPortResponse> listOptions(
+      String keyword, Collection<PortType> portTypes, int limit) {
+    int safeLimit = Math.min(Math.max(limit, 1), 100);
+    String normalizedKeyword = SearchText.orEmpty(keyword);
+    Collection<PortType> types =
+        (portTypes == null || portTypes.isEmpty())
+            ? List.of(PortType.values())
+            : portTypes;
+    return repository
+        .searchOptions(
+            normalizedKeyword,
+            types,
+            false,
+            org.springframework.data.domain.PageRequest.of(0, safeLimit))
+        .stream()
+        .map(GlobalPortResponse::from)
+        .toList();
+  }
+
   @Transactional
   public GlobalPortResponse create(GlobalPortSaveRequest request) {
     validateSave(request, null);
@@ -112,11 +137,21 @@ public class GlobalPortService {
 
   @Transactional
   public CostImportResult importExcel(MultipartFile file) throws IOException {
+    Set<String> seenCodes = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        this::validateImportRow,
+        (entity) -> {
+          String error = validateImportRow(entity);
+          if (error != null) {
+            return error;
+          }
+          if (!seenCodes.add(entity.getCode())) {
+            return "港口代码与文件中其他行重复：" + entity.getCode();
+          }
+          return null;
+        },
         (rowNum, entity) -> {
           repository
               .findByCode(entity.getCode())
@@ -136,15 +171,24 @@ public class GlobalPortService {
       String nameZh,
       String route,
       String countryRegion,
-      PortType portType) {
-    List<MdGlobalPort> items =
-        repository.search(
-            SearchText.orEmpty(code),
-            SearchText.orEmpty(nameEn),
-            SearchText.orEmpty(nameZh),
-            SearchText.orEmpty(route),
-            SearchText.orEmpty(countryRegion),
-            portType);
+      PortType portType,
+      List<Long> ids) {
+    List<MdGlobalPort> items;
+    if (RequestIds.present(ids)) {
+      items =
+          repository.findAllById(ids).stream()
+              .sorted(java.util.Comparator.comparing(MdGlobalPort::getId))
+              .toList();
+    } else {
+      items =
+          repository.search(
+              SearchText.orEmpty(code),
+              SearchText.orEmpty(nameEn),
+              SearchText.orEmpty(nameZh),
+              SearchText.orEmpty(route),
+              SearchText.orEmpty(countryRegion),
+              portType);
+    }
 
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Global Port");
@@ -212,10 +256,10 @@ public class GlobalPortService {
 
   private String validateImportRow(MdGlobalPort entity) {
     if (entity.getCode() == null || entity.getCode().isBlank()) {
-      return "Port Code is required";
+      return "港口代码不能为空";
     }
     if (entity.getNameEn() == null || entity.getNameEn().isBlank()) {
-      return "Name EN is required";
+      return "英文名称不能为空";
     }
     return null;
   }

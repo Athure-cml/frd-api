@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
@@ -72,6 +73,18 @@ public class DestAddressController {
       @RequestParam(required = false) String keyword) {
     requireView(authService.requireUser(authorization));
     return ApiResponse.ok(destAddressService.list(page, pageSize, stateCode, keyword));
+  }
+
+  @Operation(
+      summary = "城市名下拉（去重，供熏蒸 REGION 等选用）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/cities/options")
+  public ApiResponse<List<String>> cityNameOptions(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(defaultValue = "50") int limit) {
+    requireSelect(authService.requireUser(authorization));
+    return ApiResponse.ok(destAddressService.listCityNameOptions(keyword, limit));
   }
 
   @Operation(
@@ -219,11 +232,15 @@ public class DestAddressController {
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @GetMapping("/export")
   public ResponseEntity<byte[]> exportExcel(
-      @RequestHeader(value = "Authorization", required = false) String authorization) {
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String stateCode,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
-    byte[] bytes = destAddressService.exportExcel();
+    byte[] bytes =
+        destAddressService.exportExcel(stateCode, keyword, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("us-state-zip.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("美国州邮政编码.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
@@ -237,6 +254,16 @@ public class DestAddressController {
     if (!permissionService.hasPermission(user, PermissionCodes.MD_DEST_ADDRESS_VIEW)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
+  }
+
+  /** 主数据查看，或熏蒸/卡车成本查看（录入下拉） */
+  private void requireSelect(SysUser user) {
+    if (permissionService.hasPermission(user, PermissionCodes.MD_DEST_ADDRESS_VIEW)
+        || permissionService.hasPermission(user, PermissionCodes.COST_FUMIGATION_VIEW)
+        || permissionService.hasPermission(user, PermissionCodes.COST_ROAD_VIEW)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
   }
 
   private void requireManage(SysUser user) {

@@ -11,11 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.entity.CostGridTemplate;
 import com.furuiduo.quote.cost.repository.CostGridTemplateRepository;
-import com.furuiduo.quote.cost.support.CostFieldCatalog;
 import com.furuiduo.quote.cost.support.CostTemplateLayoutTools;
 import com.furuiduo.quote.cost.support.CostTemplateLayouts;
 
-/** 同步内置默认模板列顺序，并清除历史 layout 中的必填标记。 */
+/** 同步内置默认模板列顺序与必填配置。 */
 @Component
 @Order(17)
 public class CostTemplateLayoutMigrator implements ApplicationRunner {
@@ -62,7 +61,6 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
     if (current == null) {
       return true;
     }
-    return !Objects.equals(
-        CostFieldCatalog.resolveFieldKeys(current), CostFieldCatalog.resolveFieldKeys(target));
+    return !Objects.equals(current, target);
   }
 }

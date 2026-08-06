@@ -86,6 +86,10 @@
 | POST | `/cost-library/templates/{id}/set-default` | 设为默认模板 |
 | GET | `/cost-library/templates/{id}/export` | 导出模板 Excel |
 | POST | `/cost-library/templates/export` | 按当前布局预览导出 Excel |
+| POST | `/ai/chat` | AI 对话（`ai:use`，密钥仅服务端） |
+| POST | `/ai/chat/stream` | AI 对话 SSE |
+| POST | `/ai/parse` | 解析粘贴文本/邮件为结构化预览 |
+| POST | `/ai/parse/file` | 上传 Excel/PDF/文本解析（multipart `file`） |
 
 ## 统一响应
 

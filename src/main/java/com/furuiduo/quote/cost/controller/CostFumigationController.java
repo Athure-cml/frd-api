@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
@@ -61,10 +62,15 @@ public class CostFumigationController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int pageSize,
+      @RequestParam(required = false) String region,
       @RequestParam(required = false) String port,
-      @RequestParam(required = false) String station) {
+      @RequestParam(required = false) String station,
+      @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
-    return ApiResponse.ok(costFumigationService.list(page, pageSize, port, station));
+    String regionFilter =
+        region != null && !region.isBlank() ? region : port;
+    return ApiResponse.ok(
+        costFumigationService.list(page, pageSize, regionFilter, station, status));
   }
 
   @GetMapping("/{id}")
@@ -130,13 +136,20 @@ public class CostFumigationController {
   @GetMapping("/export")
   public ResponseEntity<byte[]> exportExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String region,
       @RequestParam(required = false) String port,
       @RequestParam(required = false) String station,
-      @RequestParam(required = false) Long templateId) {
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
-    byte[] bytes = costFumigationService.exportExcel(port, station, templateId);
+    String regionFilter =
+        region != null && !region.isBlank() ? region : port;
+    byte[] bytes =
+        costFumigationService.exportExcel(
+            regionFilter, station, status, templateId, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("fumigation-cost.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("熏蒸成本.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)

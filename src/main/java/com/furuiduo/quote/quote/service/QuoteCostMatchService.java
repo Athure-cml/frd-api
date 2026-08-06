@@ -62,10 +62,12 @@ public class QuoteCostMatchService {
 
     List<CostRoad> roads =
         costRoadRepository.matchByRoute(
+            SearchText.orEmpty(request.zipCode()),
             SearchText.orEmpty(request.city()),
             SearchText.orEmpty(request.state()),
-            SearchText.orEmpty(request.por()),
-            SearchText.orEmpty(request.pol()));
+            SearchText.orEmpty(roadPor(request)),
+            SearchText.orEmpty(request.pol()),
+            SearchText.orEmpty(roadSupplier(request)));
     if (!roads.isEmpty()) {
       matches.add(QuoteCostSnapshotMapper.fromRoad(roads.getFirst(), keys));
     }
@@ -74,7 +76,7 @@ public class QuoteCostMatchService {
         costSeaRepository.matchByRoute(
             SearchText.orEmpty(request.pol()),
             SearchText.orEmpty(request.pod()),
-            SearchText.orEmpty(request.ssl()));
+            SearchText.orEmpty(seaSsl(request)));
     if (!seas.isEmpty()) {
       matches.add(QuoteCostSnapshotMapper.fromSea(seas.getFirst(), keys));
     }
@@ -99,10 +101,12 @@ public class QuoteCostMatchService {
           case ROAD -> {
             List<CostRoad> roads =
                 costRoadRepository.matchByRoute(
+                    SearchText.orEmpty(request.zipCode()),
                     SearchText.orEmpty(request.city()),
                     SearchText.orEmpty(request.state()),
-                    SearchText.orEmpty(request.por()),
-                    SearchText.orEmpty(request.pol()));
+                    SearchText.orEmpty(roadPor(request)),
+                    SearchText.orEmpty(request.pol()),
+                    SearchText.orEmpty(roadSupplier(request)));
             if (roads.isEmpty()) {
               yield null;
             }
@@ -113,7 +117,7 @@ public class QuoteCostMatchService {
                 costSeaRepository.matchByRoute(
                     SearchText.orEmpty(request.pol()),
                     SearchText.orEmpty(request.pod()),
-                    SearchText.orEmpty(request.ssl()));
+                    SearchText.orEmpty(seaSsl(request)));
             if (seas.isEmpty()) {
               yield null;
             }
@@ -197,7 +201,10 @@ public class QuoteCostMatchService {
         if (rate != null && !String.valueOf(rate).isBlank()) {
           ofUsd = String.valueOf(rate);
         }
-        Object carrier = snap.get("ssl");
+        Object carrier = snap.get("supplier");
+        if (carrier == null || String.valueOf(carrier).isBlank()) {
+          carrier = snap.get("ssl");
+        }
         if (carrier == null || String.valueOf(carrier).isBlank()) {
           carrier = snap.get("carrier");
         }
@@ -206,14 +213,8 @@ public class QuoteCostMatchService {
         }
       }
       if ("ROAD".equals(item.costType())) {
-        truckingNonOak = toBigDecimal(snap.get("allInNonOak"));
-        truckingOak = toBigDecimal(snap.get("allInOak"));
-        BigDecimal fsc = toBigDecimal(snap.get("fscFreight"));
-        if (fsc == null) {
-          fsc = toBigDecimal(snap.get("fsc"));
-        }
-        fmNonOak = fsc;
-        fmOak = fsc;
+        truckingNonOak = toBigDecimal(snap.get("allInNoFm"));
+        truckingOak = toBigDecimal(snap.get("allInFmOneWay"));
       }
     }
 
@@ -230,12 +231,13 @@ public class QuoteCostMatchService {
   }
 
   private boolean hasAnyKey(QuoteMatchCostsRequest request) {
-    return isNotBlank(request.zipCode())
-        || isNotBlank(request.city())
-        || isNotBlank(request.state())
-        || isNotBlank(request.por())
+    return isNotBlank(request.por())
         || isNotBlank(request.pol())
         || isNotBlank(request.pod())
+        || isNotBlank(request.supplier())
+        || isNotBlank(request.city())
+        || isNotBlank(request.state())
+        || isNotBlank(request.zipCode())
         || isNotBlank(request.ssl());
   }
 
@@ -244,11 +246,36 @@ public class QuoteCostMatchService {
     putIfPresent(keys, "zipCode", request.zipCode());
     putIfPresent(keys, "city", request.city());
     putIfPresent(keys, "state", request.state());
-    putIfPresent(keys, "por", request.por());
-    putIfPresent(keys, "pol", request.pol());
     putIfPresent(keys, "pod", request.pod());
-    putIfPresent(keys, "ssl", request.ssl());
+    putIfPresent(keys, "pol", request.pol());
+    putIfPresent(keys, "supplier", roadSupplier(request));
+    putIfPresent(keys, "por", request.por());
+    putIfPresent(keys, "ssl", seaSsl(request));
     return keys;
+  }
+
+  /** 卡车 POR=接货城市；兼容旧入参 city */
+  private String roadPor(QuoteMatchCostsRequest request) {
+    if (isNotBlank(request.por())) {
+      return request.por();
+    }
+    return request.city();
+  }
+
+  /** 卡车成本库按 supplier 匹配；兼容旧入参 por/zipCode */
+  private String roadSupplier(QuoteMatchCostsRequest request) {
+    if (isNotBlank(request.supplier())) {
+      return request.supplier();
+    }
+    return null;
+  }
+
+  /** 海运成本库按 SSL 匹配；兼容旧入参 supplier */
+  private String seaSsl(QuoteMatchCostsRequest request) {
+    if (isNotBlank(request.ssl())) {
+      return request.ssl();
+    }
+    return request.supplier();
   }
 
   private void putIfPresent(Map<String, Object> map, String key, String value) {
@@ -281,23 +308,15 @@ public class QuoteCostMatchService {
   private String formatOfRateFromSnapshot(Map<String, Object> snap) {
     Object priceObj = snap.get("allIn");
     if (priceObj == null) {
+      priceObj = snap.get("baseFreight");
+    }
+    if (priceObj == null) {
       priceObj = snap.get("unitPrice");
     }
     if (priceObj == null) {
       return "";
     }
     String price = String.valueOf(priceObj);
-    if (price.isBlank()) {
-      return "";
-    }
-    Object spec = snap.get("spec");
-    Object unit = snap.get("unit");
-    String denom =
-        spec != null && !String.valueOf(spec).isBlank()
-            ? String.valueOf(spec).trim()
-            : unit != null && !String.valueOf(unit).isBlank()
-                ? String.valueOf(unit).trim()
-                : "";
-    return denom.isBlank() ? price : price + "/" + denom;
+    return price.isBlank() ? "" : price;
   }
 }

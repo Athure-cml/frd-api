@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -20,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
@@ -79,6 +82,15 @@ public class DestAddressService {
     int size = Math.min(Math.max(limit, 1), 50);
     return zipRepository
         .searchRowsByZipPrefix(normalized, PageRequest.of(0, size))
+        .getContent();
+  }
+
+  /** 熏蒸 REGION 等下拉：按关键词搜索去重后的城市名。 */
+  @Transactional(readOnly = true)
+  public List<String> listCityNameOptions(String keyword, int limit) {
+    int size = Math.min(Math.max(limit, 1), 100);
+    return cityRepository
+        .searchDistinctNames(SearchText.orEmpty(keyword), PageRequest.of(0, size))
         .getContent();
   }
 
@@ -286,11 +298,27 @@ public class DestAddressService {
 
   @Transactional
   public CostImportResult importExcel(MultipartFile file) throws IOException {
+    Set<String> seenKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        this::validateImportRow,
+        (row) -> {
+          String error = validateImportRow(row);
+          if (error != null) {
+            return error;
+          }
+          String key =
+              row.state().trim().toUpperCase()
+                  + "|"
+                  + row.city().trim().toLowerCase()
+                  + "|"
+                  + row.zipCode().trim().toLowerCase();
+          if (!seenKeys.add(key)) {
+            return "文件内重复：" + row.state().trim() + " / " + row.city().trim() + " / " + row.zipCode().trim();
+          }
+          return null;
+        },
         (rowNum, row) -> upsertImportRow(row));
   }
 
@@ -300,40 +328,29 @@ public class DestAddressService {
   }
 
   @Transactional(readOnly = true)
-  public byte[] exportExcel() {
-    List<MdUsState> states = stateRepository.findAll();
-    Map<Long, MdUsState> stateMap = new HashMap<>();
-    for (MdUsState state : states) {
-      stateMap.put(state.getId(), state);
+  public byte[] exportExcel(String stateCode, String keyword, List<Long> ids) {
+    List<DestAddressRowResponse> items;
+    if (RequestIds.present(ids)) {
+      items = zipRepository.findExportRowsByIds(ids);
+    } else {
+      items =
+          zipRepository
+              .searchRows(
+                  SearchText.orEmpty(stateCode),
+                  SearchText.orEmpty(keyword),
+                  org.springframework.data.domain.Pageable.unpaged())
+              .getContent();
     }
-
-    List<ExportRow> rows = new ArrayList<>();
-    for (MdDestCity city : cityRepository.findAllByOrderByStateIdAscNameAsc()) {
-      MdUsState state = stateMap.get(city.getStateId());
-      String stateCode = state != null ? state.getCode() : "";
-      List<MdDestZip> zips = zipRepository.findByCityIdOrderByZipCodeAsc(city.getId());
-      if (zips.isEmpty()) {
-        rows.add(new ExportRow(stateCode, city.getName(), ""));
-      } else {
-        for (MdDestZip zip : zips) {
-          rows.add(new ExportRow(stateCode, city.getName(), zip.getZipCode()));
-        }
-      }
-    }
-    rows.sort(
-        Comparator.comparing(ExportRow::state)
-            .thenComparing(ExportRow::city)
-            .thenComparing(ExportRow::zipCode));
 
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Dest Address");
       CostExcelSupport.writeHeaderRow(sheet, EXPORT_HEADERS);
       int rowIndex = 1;
-      for (ExportRow item : rows) {
+      for (DestAddressRowResponse item : items) {
         Row row = sheet.createRow(rowIndex++);
-        row.createCell(0).setCellValue(item.state());
-        row.createCell(1).setCellValue(item.city());
-        row.createCell(2).setCellValue(item.zipCode());
+        row.createCell(0).setCellValue(nullToEmpty(item.stateCode()));
+        row.createCell(1).setCellValue(nullToEmpty(item.city()));
+        row.createCell(2).setCellValue(nullToEmpty(item.zipCode()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
@@ -460,7 +477,9 @@ public class DestAddressService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "邮编不存在"));
   }
 
-  private record ImportRow(String state, String city, String zipCode) {}
+  private static String nullToEmpty(String value) {
+    return value == null ? "" : value;
+  }
 
-  private record ExportRow(String state, String city, String zipCode) {}
+  private record ImportRow(String state, String city, String zipCode) {}
 }

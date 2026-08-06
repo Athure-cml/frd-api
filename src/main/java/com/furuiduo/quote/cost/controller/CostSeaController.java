@@ -26,20 +26,17 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
-import com.furuiduo.quote.config.OpenApiConfig;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
-import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.service.CostSeaService;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "成本库-海运", description = "海运成本")
@@ -65,13 +62,20 @@ public class CostSeaController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int pageSize,
+      @RequestParam(required = false) String por,
+      @RequestParam(required = false) String pol,
       @RequestParam(required = false) String origin,
+      @RequestParam(required = false) String pod,
       @RequestParam(required = false) String destination,
+      @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String carrier,
-      @RequestParam(required = false) CostStatus status) {
+      @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
+    String polFilter = firstNonBlank(pol, origin);
+    String podFilter = firstNonBlank(pod, destination);
+    String sslFilter = firstNonBlank(ssl, carrier);
     return ApiResponse.ok(
-        costSeaService.list(page, pageSize, origin, destination, carrier, status));
+        costSeaService.list(page, pageSize, por, polFilter, podFilter, sslFilter, status));
   }
 
   @GetMapping("/{id}")
@@ -137,16 +141,25 @@ public class CostSeaController {
   @GetMapping("/export")
   public ResponseEntity<byte[]> exportExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String por,
+      @RequestParam(required = false) String pol,
       @RequestParam(required = false) String origin,
+      @RequestParam(required = false) String pod,
       @RequestParam(required = false) String destination,
+      @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String carrier,
-      @RequestParam(required = false) CostStatus status,
-      @RequestParam(required = false) Long templateId) {
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
+    String polFilter = firstNonBlank(pol, origin);
+    String podFilter = firstNonBlank(pod, destination);
+    String sslFilter = firstNonBlank(ssl, carrier);
     byte[] bytes =
-        costSeaService.exportExcel(origin, destination, carrier, status, templateId);
+        costSeaService.exportExcel(
+            por, polFilter, podFilter, sslFilter, status, templateId, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("sea-cost.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("海运成本.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
@@ -154,6 +167,13 @@ public class CostSeaController {
             MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(bytes);
+  }
+
+  private String firstNonBlank(String primary, String fallback) {
+    if (primary != null && !primary.isBlank()) {
+      return primary;
+    }
+    return fallback;
   }
 
   private void requireView(SysUser user) {

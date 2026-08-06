@@ -1,5 +1,6 @@
 package com.furuiduo.quote.masterdata.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -92,6 +93,18 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
   void deleteByCityId(Long cityId);
 
   boolean existsByCityId(Long cityId);
+
+  @Query(
+      """
+      SELECT new com.furuiduo.quote.masterdata.dto.DestAddressRowResponse(
+        z.id, s.code, s.id, c.name, c.id, z.zipCode)
+      FROM MdDestZip z, MdDestCity c, MdUsState s
+      WHERE c.id = z.cityId
+        AND s.id = c.stateId
+        AND z.id IN :ids
+      ORDER BY s.code ASC, c.name ASC, z.zipCode ASC
+      """)
+  List<DestAddressRowResponse> findExportRowsByIds(@Param("ids") Collection<Long> ids);
 
   @Query("SELECT z.cityId, LOWER(z.zipCode) FROM MdDestZip z")
   List<Object[]> findExistingZipKeys();

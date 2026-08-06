@@ -22,4 +22,18 @@ public interface MdInlandPorRepository extends JpaRepository<MdInlandPor, Long> 
       @Param("name") String name, @Param("region") String region, @Param("polId") Long polId);
 
   boolean existsByPolId(Long polId);
+
+  java.util.Optional<MdInlandPor> findFirstByPolIdAndNameIgnoreCase(Long polId, String name);
+
+  @Query(
+      """
+      SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM MdInlandPor p
+      WHERE p.polId = :polId
+        AND LOWER(TRIM(p.name)) = LOWER(TRIM(:name))
+        AND (:excludeId IS NULL OR p.id <> :excludeId)
+      """)
+  boolean existsByPolIdAndNameNormalized(
+      @Param("polId") Long polId,
+      @Param("name") String name,
+      @Param("excludeId") Long excludeId);
 }

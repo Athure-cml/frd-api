@@ -16,6 +16,20 @@ mvn spring-boot:run
 服务地址 `http://localhost:8080`，健康检查 `GET /hello`。  
 首次启动会自动执行 Flyway 迁移并初始化演示账号（工号 `vben`，密码 `123456`）。
 
+### AI 助手（通义千问）
+
+密钥**只**通过环境变量注入，禁止写入仓库：
+
+```bash
+# 参考 .env.example
+set QUOTE_AI_API_KEY=<你的DashScope_Key>
+# 可选
+set QUOTE_AI_MODEL=qwen-plus
+set QUOTE_AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+接口：`POST /ai/chat`、`POST /ai/chat/stream`、`POST /ai/parse`、`POST /ai/parse/file`，权限码 `ai:use`。
+
 ### 其他 profile
 
 | Profile | 说明 |

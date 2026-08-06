@@ -87,28 +87,29 @@ public final class CostDataExcelExporter {
       return readExtraField(item.getExtraFields(), field);
     }
     return switch (field) {
-      case "validDate" -> item.getValidDate();
-      case "supplier" -> item.getSupplier();
-      case "logYardNameAddress" -> item.getLogYardNameAddress();
       case "zipCode" -> item.getZipCode();
       case "city" -> item.getCity();
       case "state" -> item.getState();
       case "por" -> item.getPor();
       case "pol" -> item.getPol();
+      case "supplier" -> item.getSupplier();
       case "baseFreight" -> item.getBaseFreight();
       case "fsc" -> item.getFsc();
       case "chassis" -> item.getChassis();
-      case "owTriAxle" -> item.getOwTriAxle();
+      case "triTandemAxle" -> item.getTriTandemAxle();
       case "split" -> item.getSplit();
       case "stopOff" -> item.getStopOff();
-      case "allIn" -> item.getAllIn();
-      case "allInNonOak" -> item.getAllInNonOak();
-      case "allInOak" -> item.getAllInOak();
+      case "allInNoFm" -> item.getAllInNoFm();
+      case "allInFmOneWay" -> item.getAllInFmOneWay();
+      case "allInFmRound" -> item.getAllInFmRound();
       case "waitingFee" -> item.getWaitingFee();
       case "redelivery" -> item.getRedelivery();
       case "prepull" -> item.getPrepull();
       case "nsLift" -> item.getNsLift();
+      case "otherFee" -> item.getOtherFee();
       case "remark" -> item.getRemark();
+      case "validDate" -> item.getValidDate();
+      case "logYardNameAddress" -> item.getLogYardNameAddress();
       default -> null;
     };
   }
@@ -118,21 +119,25 @@ public final class CostDataExcelExporter {
       return readExtraField(item.getExtraFields(), field);
     }
     return switch (field) {
-      case "origin" -> item.getOrigin();
-      case "destination" -> item.getDestination();
-      case "carrier" -> item.getCarrier();
-      case "spec" -> item.getSpec();
-      case "unit" -> item.getUnit();
-      case "unitPrice" -> item.getUnitPrice();
+      case "por" -> item.getPor();
+      case "pol" -> item.getPol();
+      case "pod" -> item.getPod();
+      case "cnShortName" -> item.getCnShortName();
+      case "enProductName" -> item.getEnProductName();
+      case "containerType" -> item.getContainerType();
+      case "freight" -> item.getFreight();
+      case "freightValidDate" -> item.getFreightValidDate();
       case "buc" -> item.getBuc();
-      case "surchargeValidDate" ->
-          item.getSurchargeValidDate() == null ? null : item.getSurchargeValidDate().toString();
+      case "bucValidDate" -> item.getBucValidDate();
+      case "ebs" -> item.getEbs();
+      case "ebsValidDate" -> item.getEbsValidDate();
+      case "gri" -> item.getGri();
+      case "griValidDate" -> item.getGriValidDate();
+      case "others" -> item.getOthers();
+      case "othersValidDate" -> item.getOthersValidDate();
       case "allIn" -> item.getAllIn();
-      case "validDate" -> item.getValidDate();
-      case "currency" -> item.getCurrency();
-      case "validFrom" -> item.getValidFrom() == null ? null : item.getValidFrom().toString();
-      case "validTo" -> item.getValidTo() == null ? null : item.getValidTo().toString();
-      case "status" -> item.getStatus() == null ? null : item.getStatus().name();
+      case "ssl" -> item.getSsl();
+      case "agent" -> item.getAgent();
       case "remark" -> item.getRemark();
       case "updatedAt" ->
           item.getUpdatedAt() == null ? null : item.getUpdatedAt().format(UPDATED_AT_FORMATTER);

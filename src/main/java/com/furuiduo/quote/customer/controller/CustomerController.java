@@ -1,6 +1,13 @@
 package com.furuiduo.quote.customer.controller;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,12 +18,15 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
+import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.customer.dto.CustomerResponse;
 import com.furuiduo.quote.customer.dto.CustomerSaveRequest;
 import com.furuiduo.quote.customer.service.CustomerCommandService;
@@ -110,6 +120,43 @@ public class CustomerController {
     requireDelete(authService.requireUser(authorization));
     customerCommandService.delete(id);
     return ApiResponse.ok(null);
+  }
+
+  @Operation(
+      summary = "导入客户",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ApiResponse<CostImportResult> importExcel(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam("file") MultipartFile file)
+      throws IOException {
+    SysUser user = authService.requireUser(authorization);
+    requireCreate(user);
+    return ApiResponse.ok(customerCommandService.importExcel(user, file));
+  }
+
+  @Operation(
+      summary = "导出客户",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/export")
+  public ResponseEntity<byte[]> exportExcel(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String code,
+      @RequestParam(required = false) String name,
+      @RequestParam(required = false) Integer status,
+      @RequestParam(required = false) String ids) {
+    requireView(authService.requireUser(authorization));
+    byte[] bytes =
+        customerCommandService.exportExcel(code, name, status, RequestIds.parse(ids));
+    String filename =
+        URLEncoder.encode("客户.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+        .contentType(
+            MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(bytes);
   }
 
   private void requireView(SysUser user) {

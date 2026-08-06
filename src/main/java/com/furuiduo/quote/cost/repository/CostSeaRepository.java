@@ -13,11 +13,13 @@ public interface CostSeaRepository extends JpaRepository<CostSea, Long> {
   @Query(
       """
       SELECT s FROM CostSea s WHERE
-      (:pol = '' OR UPPER(TRIM(s.origin)) = UPPER(:pol))
-      AND (:pod = '' OR UPPER(TRIM(s.destination)) = UPPER(:pod))
-      AND (:ssl = '' OR UPPER(TRIM(s.carrier)) = UPPER(:ssl))
+      (:pol = '' OR UPPER(TRIM(s.pol)) = UPPER(:pol))
+      AND (:pod = '' OR UPPER(TRIM(s.pod)) = UPPER(:pod))
+      AND (:ssl = '' OR UPPER(TRIM(s.ssl)) = UPPER(:ssl))
       ORDER BY s.updatedAt DESC
       """)
   List<CostSea> matchByRoute(
-      @Param("pol") String pol, @Param("pod") String pod, @Param("ssl") String ssl);
+      @Param("pol") String pol,
+      @Param("pod") String pod,
+      @Param("ssl") String ssl);
 }

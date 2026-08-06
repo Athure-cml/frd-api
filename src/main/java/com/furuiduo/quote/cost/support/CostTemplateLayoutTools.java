@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.furuiduo.quote.cost.dto.CostTableCustomFieldDef;
 import com.furuiduo.quote.cost.dto.CostTableFieldOverride;
 import com.furuiduo.quote.cost.dto.CostTableTemplateGroup;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
@@ -19,66 +18,7 @@ public final class CostTemplateLayoutTools {
     if (layout == null) {
       return null;
     }
-    CostTableTemplateLayout result = clearRequiredFlags(stripAsteriskTitles(layout));
-    if ("road".equals(mode)) {
-      result = insertZipCodeIfMissing(result);
-    }
-    return result;
-  }
-
-  public static CostTableTemplateLayout clearRequiredFlags(CostTableTemplateLayout layout) {
-    Map<String, CostTableFieldOverride> overrides = layout.fieldOverrides();
-    boolean overrideNeedsClear =
-        overrides != null
-            && overrides.values().stream()
-                .anyMatch(item -> item != null && Boolean.TRUE.equals(item.required()));
-
-    boolean customNeedsClear =
-        layout.customFields() != null
-            && layout.customFields().stream()
-                .anyMatch(item -> item != null && Boolean.TRUE.equals(item.required()));
-
-    if (!overrideNeedsClear && !customNeedsClear) {
-      return layout;
-    }
-
-    Map<String, CostTableFieldOverride> clearedOverrides = overrides;
-    if (overrideNeedsClear && overrides != null) {
-      clearedOverrides = new LinkedHashMap<>();
-      for (Map.Entry<String, CostTableFieldOverride> entry : overrides.entrySet()) {
-        CostTableFieldOverride override = entry.getValue();
-        if (override == null) {
-          continue;
-        }
-        clearedOverrides.put(
-            entry.getKey(),
-            new CostTableFieldOverride(
-                override.visible(),
-                override.width(),
-                override.minWidth(),
-                override.fixed(),
-                override.title(),
-                Boolean.FALSE,
-                override.align()));
-      }
-    }
-
-    List<CostTableCustomFieldDef> clearedCustomFields = layout.customFields();
-    if (customNeedsClear && layout.customFields() != null) {
-      clearedCustomFields = new ArrayList<>();
-      for (CostTableCustomFieldDef custom : layout.customFields()) {
-        clearedCustomFields.add(
-            new CostTableCustomFieldDef(
-                custom.field(), custom.title(), Boolean.FALSE, custom.dataType()));
-      }
-    }
-
-    return new CostTableTemplateLayout(
-        layout.groups(),
-        layout.fields(),
-        clearedOverrides,
-        layout.fieldOrder(),
-        clearedCustomFields);
+    return stripAsteriskTitles(layout);
   }
 
   public static CostTableTemplateLayout stripAsteriskTitles(CostTableTemplateLayout layout) {

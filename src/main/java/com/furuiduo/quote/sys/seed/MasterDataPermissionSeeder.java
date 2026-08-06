@@ -34,7 +34,9 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
           new PermDef(PermissionCodes.MD_GLOBAL_PORT_VIEW, "全球港口-查看", 57),
           new PermDef(PermissionCodes.MD_GLOBAL_PORT_MANAGE, "全球港口-管理", 58),
           new PermDef(PermissionCodes.MD_INLAND_POR_VIEW, "内陆POR-查看", 59),
-          new PermDef(PermissionCodes.MD_INLAND_POR_MANAGE, "内陆POR-管理", 60));
+          new PermDef(PermissionCodes.MD_INLAND_POR_MANAGE, "内陆POR-管理", 60),
+          new PermDef(PermissionCodes.MD_CONTAINER_TYPE_VIEW, "箱型-查看", 61),
+          new PermDef(PermissionCodes.MD_CONTAINER_TYPE_MANAGE, "箱型-管理", 62));
 
   private static final Set<String> ROLES_WITH_VIEW =
       Set.of(
@@ -110,6 +112,7 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
       addIfPresent(permissions, PermissionCodes.MD_DEST_ADDRESS_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_GLOBAL_PORT_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_INLAND_POR_VIEW, grants);
+      addIfPresent(permissions, PermissionCodes.MD_CONTAINER_TYPE_VIEW, grants);
     }
 
     if (grants.isEmpty()) {

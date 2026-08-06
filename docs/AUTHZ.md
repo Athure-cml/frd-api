@@ -202,6 +202,12 @@ effective_scope = max(role.data_scope for role in user.roles)
 | `report:view` | 查看报表 |
 | `report:export` | 导出报表 |
 
+### 6.6 AI 助手
+
+| 权限码 | 说明 |
+|--------|------|
+| `ai:use` | 使用全局 AI 助手（对话 / 成本查询工具 / 文档解析） |
+
 ---
 
 ## 7. 角色 ↔ 权限 矩阵（首期）

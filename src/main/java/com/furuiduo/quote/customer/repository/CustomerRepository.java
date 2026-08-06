@@ -1,5 +1,7 @@
 package com.furuiduo.quote.customer.repository;
 
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +13,24 @@ import com.furuiduo.quote.customer.entity.Customer;
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
   boolean existsByCode(String code);
+
+  Optional<Customer> findByCode(String code);
+
+  @Query(
+      """
+      SELECT c FROM Customer c
+      WHERE LOWER(TRIM(c.name)) = LOWER(TRIM(:name))
+      """)
+  Optional<Customer> findByNameNormalized(@Param("name") String name);
+
+  @Query(
+      """
+      SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Customer c
+      WHERE LOWER(TRIM(c.name)) = LOWER(TRIM(:name))
+      AND (:excludeId IS NULL OR c.id <> :excludeId)
+      """)
+  boolean existsByNameNormalized(
+      @Param("name") String name, @Param("excludeId") Long excludeId);
 
   @Query(
       """

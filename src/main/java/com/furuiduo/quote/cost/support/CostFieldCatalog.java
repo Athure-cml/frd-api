@@ -15,56 +15,64 @@ public final class CostFieldCatalog {
 
   private static final Set<String> ROAD_FIELDS =
       Set.of(
-          "validDate",
-          "supplier",
-          "logYardNameAddress",
           "zipCode",
           "city",
           "state",
           "por",
           "pol",
+          "supplier",
           "baseFreight",
           "fsc",
           "chassis",
-          "owTriAxle",
+          "triTandemAxle",
           "split",
           "stopOff",
-          "allIn",
-          "allInNonOak",
-          "allInOak",
+          "allInNoFm",
+          "allInFmOneWay",
+          "allInFmRound",
           "waitingFee",
           "redelivery",
           "prepull",
           "nsLift",
-          "remark");
+          "otherFee",
+          "remark",
+          "validDate",
+          "logYardNameAddress");
 
   private static final Set<String> SEA_FIELDS =
       Set.of(
-          "origin",
-          "destination",
-          "unitPrice",
+          "por",
+          "pol",
+          "pod",
+          "cnShortName",
+          "enProductName",
+          "containerType",
+          "freight",
+          "freightValidDate",
           "buc",
-          "surchargeValidDate",
+          "bucValidDate",
+          "ebs",
+          "ebsValidDate",
+          "gri",
+          "griValidDate",
+          "others",
+          "othersValidDate",
           "allIn",
-          "carrier",
-          "remark",
-          "validDate",
-          "status");
+          "ssl",
+          "agent",
+          "remark");
 
   private static final Set<String> FUMIGATION_FIELDS =
       Set.of(
-          "port",
+          "region",
           "station",
-          "nonOakOutdoor",
-          "nonOakIndoor",
-          "nonOakQuoteSummer",
-          "nonOakQuoteWinter",
-          "oakOutdoor",
-          "oakIndoor",
-          "oakQuoteSummer",
-          "oakQuoteWinter",
-          "remark",
-          "updatedAt");
+          "outdoorNonOak",
+          "outdoorOak",
+          "outdoorValidity",
+          "indoorNonOak",
+          "indoorOak",
+          "indoorValidity",
+          "address");
 
   private static final Set<String> RAIL_FIELDS =
       Set.of(

@@ -27,34 +27,48 @@ public final class CostExcelSupport {
   private CostExcelSupport() {}
 
   public static String cellString(Cell cell) {
-    if (cell == null) {
+    if (cell == null || cell.getCellType() == CellType.BLANK) {
       return "";
     }
-    if (cell.getCellType() == CellType.NUMERIC) {
-      double value = cell.getNumericCellValue();
-      if (value == Math.floor(value)) {
-        return String.valueOf((long) value);
-      }
-      return String.valueOf(value);
+    CellType type = cell.getCellType();
+    if (type == CellType.FORMULA) {
+      type = cell.getCachedFormulaResultType();
     }
-    if (cell.getCellType() == CellType.BOOLEAN) {
-      return String.valueOf(cell.getBooleanCellValue());
-    }
-    return cell.getStringCellValue().trim();
+    return switch (type) {
+      case NUMERIC -> formatNumeric(cell.getNumericCellValue());
+      case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+      case STRING -> cell.getStringCellValue() == null ? "" : cell.getStringCellValue().trim();
+      case BLANK, _NONE, ERROR -> "";
+      case FORMULA -> ""; // unreachable after unwrap
+    };
   }
 
   public static BigDecimal cellDecimal(Cell cell) {
     if (cell == null || cell.getCellType() == CellType.BLANK) {
       return null;
     }
-    if (cell.getCellType() == CellType.NUMERIC) {
+    CellType type = cell.getCellType();
+    if (type == CellType.FORMULA) {
+      type = cell.getCachedFormulaResultType();
+    }
+    if (type == CellType.NUMERIC) {
       return BigDecimal.valueOf(cell.getNumericCellValue());
+    }
+    if (type == CellType.BOOLEAN) {
+      return cell.getBooleanCellValue() ? BigDecimal.ONE : BigDecimal.ZERO;
     }
     String text = cellString(cell);
     if (text.isBlank()) {
       return null;
     }
     return new BigDecimal(text.replace(",", ""));
+  }
+
+  private static String formatNumeric(double value) {
+    if (value == Math.floor(value) && !Double.isInfinite(value)) {
+      return String.valueOf((long) value);
+    }
+    return String.valueOf(value);
   }
 
   public static Map<String, Integer> readHeaderMap(Row headerRow) {
@@ -153,20 +167,16 @@ public final class CostExcelSupport {
       if (sheet == null) {
         return new CostImportResult(0, 0, List.of("Excel 工作表为空"));
       }
-      int startRow = 0;
-      Row first = sheet.getRow(0);
-      Map<String, Integer> headerMap = readHeaderMap(first);
-      if (headerMap.isEmpty()) {
-        startRow = 0;
-      } else {
-        startRow = 1;
-      }
+      int headerRows = detectHeaderRowCount(sheet);
+      int startRow = headerRows;
 
       for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
         Row row = sheet.getRow(i);
         if (row == null) {
           continue;
         }
+        // 数据行号从 1 起，不含表头
+        int dataRowNo = i - startRow + 1;
         try {
           T mapped = rowMapper.apply(row);
           if (mapped == null) {
@@ -175,14 +185,14 @@ public final class CostExcelSupport {
           String validationError = validator.apply(mapped);
           if (validationError != null && !validationError.isBlank()) {
             failed++;
-            errors.add("第 " + (i + 1) + " 行: " + validationError);
+            errors.add("第 " + dataRowNo + " 行: " + validationError);
             continue;
           }
-          saver.accept(i + 1, mapped);
+          saver.accept(dataRowNo, mapped);
           imported++;
         } catch (Exception ex) {
           failed++;
-          errors.add("第 " + (i + 1) + " 行: " + ex.getMessage());
+          errors.add("第 " + dataRowNo + " 行: " + ex.getMessage());
         }
       }
     }
@@ -192,6 +202,49 @@ public final class CostExcelSupport {
       errors.add("...");
     }
     return new CostImportResult(imported, failed, errors);
+  }
+
+  /**
+   * Detect how many leading header rows to skip. Supports single-row headers and nested
+   * sea/fumigation two-row headers.
+   */
+  public static int detectHeaderRowCount(Sheet sheet) {
+    Row row0 = sheet.getRow(0);
+    if (row0 == null) {
+      return 0;
+    }
+    Map<String, Integer> headers = readHeaderMap(row0);
+    if (headers.isEmpty()) {
+      return 0;
+    }
+    if (headers.containsKey(normalizeHeader("FM-OUTDOOR"))
+        || headers.containsKey(normalizeHeader("FM-INDOOR"))
+        || headers.containsKey(normalizeHeader("附加费"))) {
+      return 2;
+    }
+    Row row1 = sheet.getRow(1);
+    if (row1 == null) {
+      return 1;
+    }
+    int headerLike = 0;
+    int lastCell = Math.max(row1.getLastCellNum(), 0);
+    for (int i = 0; i < lastCell; i++) {
+      String text = cellString(row1.getCell(i)).trim().toUpperCase(Locale.ROOT);
+      if (text.isBlank()) {
+        continue;
+      }
+      if (text.equals("NON OAK")
+          || text.equals("OAK")
+          || text.equals("VALIDITY")
+          || text.equals("BUC")
+          || text.equals("EBS")
+          || text.equals("GRI")
+          || text.equals("OTHERS")
+          || text.equals("有效期")) {
+        headerLike++;
+      }
+    }
+    return headerLike >= 2 ? 2 : 1;
   }
 
   public static void writeHeaderRow(Sheet sheet, String[] headers) {

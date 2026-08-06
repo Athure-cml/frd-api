@@ -3,6 +3,7 @@ package com.furuiduo.quote.masterdata.controller;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.masterdata.dto.GlobalPortResponse;
@@ -83,6 +85,19 @@ public class GlobalPortController {
     return ApiResponse.ok(
         globalPortService.list(
             page, pageSize, code, nameEn, nameZh, route, countryRegion, portType));
+  }
+
+  @Operation(
+      summary = "港口下拉选项（支持关键词搜索）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/options")
+  public ApiResponse<List<GlobalPortResponse>> options(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) List<PortType> portTypes,
+      @RequestParam(defaultValue = "50") int limit) {
+    requireSelect(authService.requireUser(authorization));
+    return ApiResponse.ok(globalPortService.listOptions(keyword, portTypes, limit));
   }
 
   @Operation(
@@ -154,12 +169,14 @@ public class GlobalPortController {
       @RequestParam(required = false) String nameZh,
       @RequestParam(required = false) String route,
       @RequestParam(required = false) String countryRegion,
-      @RequestParam(required = false) PortType portType) {
+      @RequestParam(required = false) PortType portType,
+      @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
     byte[] bytes =
-        globalPortService.exportExcel(code, nameEn, nameZh, route, countryRegion, portType);
+        globalPortService.exportExcel(
+            code, nameEn, nameZh, route, countryRegion, portType, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("global-port.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode("全球港口档案.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
@@ -206,6 +223,15 @@ public class GlobalPortController {
     if (!permissionService.hasPermission(user, PermissionCodes.MD_GLOBAL_PORT_VIEW)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
+  }
+
+  /** 主数据查看，或海运成本查看（录入下拉） */
+  private void requireSelect(SysUser user) {
+    if (permissionService.hasPermission(user, PermissionCodes.MD_GLOBAL_PORT_VIEW)
+        || permissionService.hasPermission(user, PermissionCodes.COST_SEA_VIEW)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
   }
 
   private void requireManage(SysUser user) {

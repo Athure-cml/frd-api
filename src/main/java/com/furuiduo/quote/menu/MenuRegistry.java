@@ -12,21 +12,22 @@ public final class MenuRegistry {
 
   public static List<MenuRouteDto> all() {
     return List.of(
-        dashboard(),
+        workspace(),
         quote(),
         costLibrary(),
-        templateManage(),
         customer(),
         masterData(),
         system());
   }
 
-  private static MenuRouteDto dashboard() {
+  /** 一级：工作台（仅工作台页；报价分析已迁至报价管理） */
+  private static MenuRouteDto workspace() {
     return MenuRouteDto.of("Dashboard", "/dashboard")
         .redirect("/workspace")
         .meta("icon", "lucide:layout-dashboard")
         .meta("order", -1)
         .meta("title", "page.dashboard.title")
+        .meta("hideChildrenInMenu", true)
         .requirePermission(PermissionCodes.DASHBOARD_VIEW)
         .child(
             MenuRouteDto.of("Workspace", "/workspace")
@@ -34,13 +35,29 @@ public final class MenuRegistry {
                 .meta("affixTab", true)
                 .meta("icon", "carbon:workspace")
                 .meta("title", "page.dashboard.workspace")
-                .requirePermission(PermissionCodes.DASHBOARD_VIEW))
+                .requirePermission(PermissionCodes.DASHBOARD_VIEW));
+  }
+
+  private static MenuRouteDto quote() {
+    return MenuRouteDto.of("Quote", "/quotes")
+        .redirect("/quotes/list")
+        .meta("icon", "lucide:file-text")
+        .meta("order", 2)
+        .meta("title", "page.quote.title")
+        .requireAnyPermission(
+            PermissionCodes.QUOTE_VIEW, PermissionCodes.DASHBOARD_VIEW)
         .child(
             MenuRouteDto.of("Analytics", "/analytics")
                 .component("/dashboard/analytics/index")
                 .meta("icon", "lucide:area-chart")
                 .meta("title", "page.dashboard.analytics")
-                .requirePermission(PermissionCodes.DASHBOARD_VIEW));
+                .requirePermission(PermissionCodes.DASHBOARD_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteList", "/quotes/list")
+                .component("/quote/list/index")
+                .meta("icon", "lucide:list")
+                .meta("title", "page.quote.list")
+                .requirePermission(PermissionCodes.QUOTE_VIEW));
   }
 
   private static MenuRouteDto costLibrary() {
@@ -66,15 +83,20 @@ public final class MenuRegistry {
                 .component("/cost-library/fumigation/index")
                 .meta("icon", "lucide:flame")
                 .meta("title", "page.costLibrary.fumigation")
-                .requirePermission(PermissionCodes.COST_FUMIGATION_VIEW));
+                .requirePermission(PermissionCodes.COST_FUMIGATION_VIEW))
+        .child(viewTemplates());
   }
 
-  private static MenuRouteDto templateManage() {
+  /** 成本库下的「视图模板」子菜单 */
+  private static MenuRouteDto viewTemplates() {
     return MenuRouteDto.of("CostTemplateManage", "/cost-library/templates")
         .redirect("/cost-library/templates/road")
         .meta("icon", "lucide:columns-3")
-        .meta("order", 4)
         .meta("title", "page.costLibrary.template.menuTitle")
+        .requireAnyPermission(
+            CostTemplatePermissionCodes.ROAD_VIEW,
+            CostTemplatePermissionCodes.SEA_VIEW,
+            CostTemplatePermissionCodes.FUMIGATION_VIEW)
         .child(
             MenuRouteDto.of("CostTemplateRoad", "/cost-library/templates/road")
                 .component("/cost-library/templates/index")
@@ -104,13 +126,35 @@ public final class MenuRegistry {
         .meta("icon", "lucide:contact")
         .meta("order", 5)
         .meta("title", "page.customer.title")
-        .requirePermission(PermissionCodes.CUSTOMER_VIEW)
+        .requireAnyPermission(
+            PermissionCodes.CUSTOMER_VIEW,
+            PermissionCodes.SUPPLIER_VIEW,
+            PermissionCodes.SHIPPING_LINE_VIEW,
+            PermissionCodes.AGENT_VIEW)
         .child(
             MenuRouteDto.of("CustomerList", "/customers/list")
                 .component("/customer/list/index")
                 .meta("icon", "lucide:users")
                 .meta("title", "page.customer.list")
-                .requirePermission(PermissionCodes.CUSTOMER_VIEW));
+                .requirePermission(PermissionCodes.CUSTOMER_VIEW))
+        .child(
+            MenuRouteDto.of("SupplierList", "/customers/suppliers")
+                .component("/supplier/list/index")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.supplier.list")
+                .requirePermission(PermissionCodes.SUPPLIER_VIEW))
+        .child(
+            MenuRouteDto.of("ShippingLineList", "/customers/shipping-lines")
+                .component("/shipping-line/list/index")
+                .meta("icon", "lucide:ship")
+                .meta("title", "page.shippingLine.list")
+                .requirePermission(PermissionCodes.SHIPPING_LINE_VIEW))
+        .child(
+            MenuRouteDto.of("AgentList", "/customers/agents")
+                .component("/agent/list/index")
+                .meta("icon", "lucide:handshake")
+                .meta("title", "page.agent.list")
+                .requirePermission(PermissionCodes.AGENT_VIEW));
   }
 
   private static MenuRouteDto masterData() {
@@ -143,22 +187,13 @@ public final class MenuRegistry {
                 .component("/master-data/global-port/index")
                 .meta("icon", "lucide:anchor")
                 .meta("title", "page.masterData.globalPort")
-                .requirePermission(PermissionCodes.MD_GLOBAL_PORT_VIEW));
-  }
-
-  private static MenuRouteDto quote() {
-    return MenuRouteDto.of("Quote", "/quotes")
-        .redirect("/quotes/list")
-        .meta("icon", "lucide:file-text")
-        .meta("order", 2)
-        .meta("title", "page.quote.title")
-        .requirePermission(PermissionCodes.QUOTE_VIEW)
+                .requirePermission(PermissionCodes.MD_GLOBAL_PORT_VIEW))
         .child(
-            MenuRouteDto.of("QuoteList", "/quotes/list")
-                .component("/quote/list/index")
-                .meta("icon", "lucide:list")
-                .meta("title", "page.quote.list")
-                .requirePermission(PermissionCodes.QUOTE_VIEW));
+            MenuRouteDto.of("MasterDataContainerType", "/master-data/container-type")
+                .component("/master-data/container-type/index")
+                .meta("icon", "lucide:box")
+                .meta("title", "page.masterData.containerType")
+                .requirePermission(PermissionCodes.MD_CONTAINER_TYPE_VIEW));
   }
 
   private static MenuRouteDto system() {

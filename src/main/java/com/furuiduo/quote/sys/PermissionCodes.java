@@ -58,6 +58,21 @@ public final class PermissionCodes {
   public static final String CUSTOMER_EDIT = "customer:edit";
   public static final String CUSTOMER_DELETE = "customer:delete";
 
+  public static final String SUPPLIER_VIEW = "supplier:view";
+  public static final String SUPPLIER_CREATE = "supplier:create";
+  public static final String SUPPLIER_EDIT = "supplier:edit";
+  public static final String SUPPLIER_DELETE = "supplier:delete";
+
+  public static final String SHIPPING_LINE_VIEW = "shipping_line:view";
+  public static final String SHIPPING_LINE_CREATE = "shipping_line:create";
+  public static final String SHIPPING_LINE_EDIT = "shipping_line:edit";
+  public static final String SHIPPING_LINE_DELETE = "shipping_line:delete";
+
+  public static final String AGENT_VIEW = "agent:view";
+  public static final String AGENT_CREATE = "agent:create";
+  public static final String AGENT_EDIT = "agent:edit";
+  public static final String AGENT_DELETE = "agent:delete";
+
   public static final String CURRENCY_VIEW = "currency:view";
   public static final String CURRENCY_MANAGE = "currency:manage";
   public static final String EXCHANGE_RATE_VIEW = "exchange_rate:view";
@@ -71,8 +86,12 @@ public final class PermissionCodes {
   public static final String MD_GLOBAL_PORT_MANAGE = "md_global_port:manage";
   public static final String MD_INLAND_POR_VIEW = "md_inland_por:view";
   public static final String MD_INLAND_POR_MANAGE = "md_inland_por:manage";
+  public static final String MD_CONTAINER_TYPE_VIEW = "md_container_type:view";
+  public static final String MD_CONTAINER_TYPE_MANAGE = "md_container_type:manage";
 
   public static final String SYS_OPERATION_LOG_VIEW = "sys:operation_log:view";
+
+  public static final String AI_USE = "ai:use";
 
   public static final String REPORT_VIEW = "report:view";
   public static final String REPORT_EXPORT = "report:export";
@@ -112,6 +131,18 @@ public final class PermissionCodes {
       CUSTOMER_CREATE,
       CUSTOMER_EDIT,
       CUSTOMER_DELETE,
+      SUPPLIER_VIEW,
+      SUPPLIER_CREATE,
+      SUPPLIER_EDIT,
+      SUPPLIER_DELETE,
+      SHIPPING_LINE_VIEW,
+      SHIPPING_LINE_CREATE,
+      SHIPPING_LINE_EDIT,
+      SHIPPING_LINE_DELETE,
+      AGENT_VIEW,
+      AGENT_CREATE,
+      AGENT_EDIT,
+      AGENT_DELETE,
       CURRENCY_VIEW,
       CURRENCY_MANAGE,
       EXCHANGE_RATE_VIEW,
@@ -124,7 +155,10 @@ public final class PermissionCodes {
       MD_GLOBAL_PORT_MANAGE,
       MD_INLAND_POR_VIEW,
       MD_INLAND_POR_MANAGE,
+      MD_CONTAINER_TYPE_VIEW,
+      MD_CONTAINER_TYPE_MANAGE,
       SYS_OPERATION_LOG_VIEW,
+      AI_USE,
       REPORT_VIEW,
       REPORT_EXPORT
     };

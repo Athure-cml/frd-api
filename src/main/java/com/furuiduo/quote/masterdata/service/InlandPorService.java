@@ -2,8 +2,10 @@ package com.furuiduo.quote.masterdata.service;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -16,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
@@ -61,7 +64,7 @@ public class InlandPorService {
 
   @Transactional
   public InlandPorResponse create(InlandPorSaveRequest request) {
-    validateSave(request);
+    validateSave(request, null);
     MdInlandPor entity = new MdInlandPor();
     apply(entity, request);
     return toResponse(repository.save(entity));
@@ -70,7 +73,7 @@ public class InlandPorService {
   @Transactional
   public InlandPorResponse update(Long id, InlandPorSaveRequest request) {
     MdInlandPor entity = requireEntity(id);
-    validateSave(request);
+    validateSave(request, id);
     apply(entity, request);
     return toResponse(repository.save(entity));
   }
@@ -82,11 +85,23 @@ public class InlandPorService {
 
   @Transactional
   public CostImportResult importExcel(MultipartFile file) throws IOException {
+    Set<String> seenKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        this::validateImportRow,
+        (row) -> {
+          String error = validateImportRow(row);
+          if (error != null) {
+            return error;
+          }
+          String key =
+              row.polCode().trim().toUpperCase() + "|" + row.por().trim().toLowerCase();
+          if (!seenKeys.add(key)) {
+            return "文件内重复：" + row.por().trim() + " / " + row.polCode().trim();
+          }
+          return null;
+        },
         (rowNum, row) -> {
           MdGlobalPort pol =
               globalPortRepository
@@ -95,8 +110,12 @@ public class InlandPorService {
                       () ->
                           new ResponseStatusException(
                               HttpStatus.BAD_REQUEST, "POL 不存在：" + row.polCode()));
-          MdInlandPor entity = new MdInlandPor();
-          entity.setName(row.por().trim());
+          String porName = row.por().trim();
+          MdInlandPor entity =
+              repository
+                  .findFirstByPolIdAndNameIgnoreCase(pol.getId(), porName)
+                  .orElseGet(MdInlandPor::new);
+          entity.setName(porName);
           entity.setPolId(pol.getId());
           entity.setRegion(trimToNull(row.region()));
           repository.save(entity);
@@ -104,9 +123,16 @@ public class InlandPorService {
   }
 
   @Transactional(readOnly = true)
-  public byte[] exportExcel(String name, String region, Long polId) {
-    List<MdInlandPor> items =
-        repository.search(SearchText.orEmpty(name), SearchText.orEmpty(region), polId);
+  public byte[] exportExcel(String name, String region, Long polId, List<Long> ids) {
+    List<MdInlandPor> items;
+    if (RequestIds.present(ids)) {
+      items =
+          repository.findAllById(ids).stream()
+              .sorted(java.util.Comparator.comparing(MdInlandPor::getId))
+              .toList();
+    } else {
+      items = repository.search(SearchText.orEmpty(name), SearchText.orEmpty(region), polId);
+    }
     Map<Long, MdGlobalPort> portMap = loadPortMap(items);
 
     try (Workbook workbook = new XSSFWorkbook()) {
@@ -170,15 +196,15 @@ public class InlandPorService {
 
   private String validateImportRow(ImportRow row) {
     if (row.por() == null || row.por().isBlank()) {
-      return "POR is required";
+      return "POR 不能为空";
     }
     if (row.polCode() == null || row.polCode().isBlank()) {
-      return "POL is required";
+      return "POL 不能为空";
     }
     return null;
   }
 
-  private void validateSave(InlandPorSaveRequest request) {
+  private void validateSave(InlandPorSaveRequest request, Long excludeId) {
     if (request.name() == null || request.name().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "POR 名称不能为空");
     }
@@ -188,6 +214,11 @@ public class InlandPorService {
     globalPortRepository
         .findById(request.polId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "POL 不存在"));
+    if (repository.existsByPolIdAndNameNormalized(
+        request.polId(), request.name().trim(), excludeId)) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "同一 POL 下 POR 名称已存在：" + request.name().trim());
+    }
   }
 
   private void apply(MdInlandPor entity, InlandPorSaveRequest request) {

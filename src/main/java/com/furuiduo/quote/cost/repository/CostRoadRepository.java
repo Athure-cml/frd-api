@@ -13,15 +13,19 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
   @Query(
       """
       SELECT r FROM CostRoad r WHERE
-      (:city = '' OR UPPER(TRIM(r.city)) = UPPER(:city))
+      (:zipCode = '' OR UPPER(TRIM(r.zipCode)) = UPPER(:zipCode))
+      AND (:city = '' OR UPPER(TRIM(r.city)) = UPPER(:city))
       AND (:state = '' OR UPPER(TRIM(r.state)) = UPPER(:state))
       AND (:por = '' OR UPPER(TRIM(r.por)) = UPPER(:por))
       AND (:pol = '' OR UPPER(TRIM(r.pol)) = UPPER(:pol))
+      AND (:supplier = '' OR UPPER(TRIM(r.supplier)) = UPPER(:supplier))
       ORDER BY r.updatedAt DESC
       """)
   List<CostRoad> matchByRoute(
+      @Param("zipCode") String zipCode,
       @Param("city") String city,
       @Param("state") String state,
       @Param("por") String por,
-      @Param("pol") String pol);
+      @Param("pol") String pol,
+      @Param("supplier") String supplier);
 }
