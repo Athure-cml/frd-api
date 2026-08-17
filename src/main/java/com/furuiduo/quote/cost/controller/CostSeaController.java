@@ -30,6 +30,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
+import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
 import com.furuiduo.quote.cost.service.CostSeaService;
@@ -69,13 +70,28 @@ public class CostSeaController {
       @RequestParam(required = false) String destination,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String carrier,
+      @RequestParam(required = false) String containerType,
+      @RequestParam(required = false) String agent,
+      @RequestParam(required = false) String freightValidDate,
+      @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
     return ApiResponse.ok(
-        costSeaService.list(page, pageSize, por, polFilter, podFilter, sslFilter, status));
+        costSeaService.list(
+            page,
+            pageSize,
+            por,
+            polFilter,
+            podFilter,
+            sslFilter,
+            containerType,
+            agent,
+            freightValidDate,
+            freightEffDate,
+            status));
   }
 
   @GetMapping("/{id}")
@@ -129,13 +145,23 @@ public class CostSeaController {
     return ApiResponse.ok(Map.of("updated", costSeaService.batchUpdate(request)));
   }
 
+  @PostMapping("/batch-copy")
+  public ApiResponse<Map<String, Integer>> batchCopy(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody CostSeaBatchCopyRequest request) {
+    requireEdit(authService.requireUser(authorization));
+    return ApiResponse.ok(Map.of("created", costSeaService.batchCopy(request)));
+  }
+
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(costSeaService.importExcel(file));
+    return ApiResponse.ok(costSeaService.importExcel(file, templateId, dryRun));
   }
 
   @GetMapping("/export")
@@ -148,6 +174,10 @@ public class CostSeaController {
       @RequestParam(required = false) String destination,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String carrier,
+      @RequestParam(required = false) String containerType,
+      @RequestParam(required = false) String agent,
+      @RequestParam(required = false) String freightValidDate,
+      @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long templateId,
       @RequestParam(required = false) String ids) {
@@ -157,7 +187,17 @@ public class CostSeaController {
     String sslFilter = firstNonBlank(ssl, carrier);
     byte[] bytes =
         costSeaService.exportExcel(
-            por, polFilter, podFilter, sslFilter, status, templateId, RequestIds.parse(ids));
+            por,
+            polFilter,
+            podFilter,
+            sslFilter,
+            containerType,
+            agent,
+            freightValidDate,
+            freightEffDate,
+            status,
+            templateId,
+            RequestIds.parse(ids));
     String filename =
         URLEncoder.encode("海运成本.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()

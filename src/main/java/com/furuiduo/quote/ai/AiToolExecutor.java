@@ -111,6 +111,8 @@ public class AiToolExecutor {
             text(args, "por"),
             text(args, "pol"),
             text(args, "supplier"),
+            null,
+            null,
             text(args, "status"));
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
@@ -151,6 +153,10 @@ public class AiToolExecutor {
             text(args, "pol"),
             text(args, "pod"),
             text(args, "ssl"),
+            null,
+            null,
+            null,
+            null,
             text(args, "status"));
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
@@ -182,7 +188,7 @@ public class AiToolExecutor {
     require(user, PermissionCodes.COST_FUMIGATION_VIEW, "缺少熏蒸成本查看权限");
     PageResult<FumigationCostResponse> page =
         costFumigationService.list(
-            1, 8, text(args, "region"), text(args, "station"), text(args, "status"));
+            1, 8, text(args, "region"), text(args, "station"), null, null, text(args, "status"));
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
     for (FumigationCostResponse row : page.items()) {
@@ -281,8 +287,12 @@ public class AiToolExecutor {
               PermissionCodes.COST_FUMIGATION_VIEW);
       case "customer_list", "customers", "客户", "客户列表" ->
           new PageTarget("customer_list", "CustomerList", "客户列表", PermissionCodes.CUSTOMER_VIEW);
-      case "supplier_list", "suppliers", "供应商", "供应商列表" ->
-          new PageTarget("supplier_list", "SupplierList", "供应商列表", PermissionCodes.SUPPLIER_VIEW);
+      case "supplier_list", "suppliers", "供应商", "供应商列表", "卡车供应商" ->
+          new PageTarget(
+              "supplier_list",
+              "SupplierTruckList",
+              "卡车供应商列表",
+              PermissionCodes.SUPPLIER_TRUCK_VIEW);
       default -> null;
     };
   }

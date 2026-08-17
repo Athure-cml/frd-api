@@ -152,8 +152,9 @@ public final class CostFieldCatalog {
     }
     if (def.dataType() != null
         && !def.dataType().equals("text")
-        && !def.dataType().equals("number")) {
-      throw new IllegalArgumentException("custom field dataType must be text or number");
+        && !def.dataType().equals("number")
+        && !def.dataType().equals("date")) {
+      throw new IllegalArgumentException("custom field dataType must be text, number or date");
     }
   }
 

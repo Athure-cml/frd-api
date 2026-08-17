@@ -1,6 +1,7 @@
 package com.furuiduo.quote.quote.service;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.poi.ss.usermodel.Row;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
@@ -45,24 +47,69 @@ public class QuoteExportService {
 
   private final QuoteOrderRepository quoteOrderRepository;
   private final QuoteAccessService quoteAccessService;
+  private final QuoteQueryService quoteQueryService;
 
   public QuoteExportService(
-      QuoteOrderRepository quoteOrderRepository, QuoteAccessService quoteAccessService) {
+      QuoteOrderRepository quoteOrderRepository,
+      QuoteAccessService quoteAccessService,
+      QuoteQueryService quoteQueryService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteAccessService = quoteAccessService;
+    this.quoteQueryService = quoteQueryService;
   }
 
-  public byte[] exportByIds(SysUser user, List<Long> ids) {
-    if (ids == null || ids.isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要导出的报价单");
+  /** 勾选优先；否则按搜索条件；无条件则导出权限范围内全部。 */
+  public byte[] export(
+      SysUser user,
+      List<Long> ids,
+      String quoteNo,
+      String customerName,
+      String transportMode,
+      String status,
+      String zipCode,
+      String city,
+      String state,
+      String por,
+      String pol,
+      String pod,
+      String ssl,
+      String followUpByName) {
+    List<QuoteOrder> orders;
+    if (RequestIds.present(ids)) {
+      orders =
+          quoteOrderRepository.findAllById(ids).stream()
+              .peek(order -> quoteAccessService.assertReadable(user, order))
+              .sorted(Comparator.comparing(QuoteOrder::getId))
+              .toList();
+    } else {
+      orders =
+          quoteQueryService.findOrdersForExport(
+              user,
+              quoteNo,
+              customerName,
+              transportMode,
+              status,
+              zipCode,
+              city,
+              state,
+              por,
+              pol,
+              pod,
+              ssl,
+              followUpByName);
     }
-    List<QuoteOrder> orders =
-        quoteOrderRepository.findAllById(ids).stream()
-            .peek(order -> quoteAccessService.assertReadable(user, order))
-            .toList();
     if (orders.isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到可导出的报价单");
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "没有可导出的报价单");
     }
+    return writeWorkbook(orders);
+  }
+
+  /** @deprecated 请使用 {@link #export} */
+  public byte[] exportByIds(SysUser user, List<Long> ids) {
+    return export(user, ids, null, null, null, null, null, null, null, null, null, null, null, null);
+  }
+
+  private byte[] writeWorkbook(List<QuoteOrder> orders) {
     try (var workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Quotes");
       CostExcelSupport.writeHeaderRow(sheet, HEADERS);
@@ -90,7 +137,8 @@ public class QuoteExportService {
         row.createCell(col++).setCellValue(nullToEmpty(order.getCurrency()));
         row.createCell(col++)
             .setCellValue(order.getValidUntil() != null ? order.getValidUntil().toString() : "");
-        row.createCell(col++).setCellValue(order.getStatus().name());
+        row.createCell(col++)
+            .setCellValue(order.getStatus() == null ? "" : order.getStatus().name());
         row.createCell(col++).setCellValue(nullToEmpty(order.getFollowUpByName()));
         row.createCell(col).setCellValue(nullToEmpty(order.getQuoteNo()));
       }

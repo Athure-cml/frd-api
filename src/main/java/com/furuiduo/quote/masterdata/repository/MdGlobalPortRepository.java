@@ -19,6 +19,33 @@ public interface MdGlobalPortRepository extends JpaRepository<MdGlobalPort, Long
 
   Optional<MdGlobalPort> findByCode(String code);
 
+  @Query(
+      """
+      SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
+      FROM MdGlobalPort p
+      WHERE UPPER(TRIM(p.nameEn)) = UPPER(TRIM(:nameEn))
+        AND (:restrictTypes = false OR p.portType IN :portTypes)
+      """)
+  boolean existsByNameEnIgnoreCase(
+      @Param("nameEn") String nameEn,
+      @Param("portTypes") Collection<PortType> portTypes,
+      @Param("restrictTypes") boolean restrictTypes);
+
+  @Query(
+      """
+      SELECT p FROM MdGlobalPort p
+      WHERE UPPER(p.nameEn) = UPPER(:nameEn)
+        AND (
+          (:countryRegion = '' AND (p.countryRegion IS NULL OR TRIM(p.countryRegion) = ''))
+          OR UPPER(COALESCE(p.countryRegion, '')) = UPPER(:countryRegion)
+        )
+        AND p.portType = :portType
+      """)
+  Optional<MdGlobalPort> findByBusinessKey(
+      @Param("nameEn") String nameEn,
+      @Param("countryRegion") String countryRegion,
+      @Param("portType") PortType portType);
+
   List<MdGlobalPort> findByCodeIn(Collection<String> codes);
 
   @Query("SELECT UPPER(p.code) FROM MdGlobalPort p")

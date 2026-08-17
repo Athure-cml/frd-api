@@ -18,6 +18,17 @@ public interface MdUsStateRepository extends JpaRepository<MdUsState, Long> {
   @Query(
       """
       SELECT s FROM MdUsState s
+      WHERE UPPER(TRIM(s.code)) = UPPER(TRIM(:code))
+      """)
+  Optional<MdUsState> findByCodeNormalized(@Param("code") String code);
+
+  default boolean existsByCodeIgnoreCase(String code) {
+    return findByCodeNormalized(code).isPresent();
+  }
+
+  @Query(
+      """
+      SELECT s FROM MdUsState s
       WHERE (:code = '' OR UPPER(s.code) LIKE UPPER(CONCAT('%', :code, '%')))
         AND (:nameZh = '' OR s.nameZh LIKE CONCAT('%', :nameZh, '%'))
       ORDER BY s.code ASC

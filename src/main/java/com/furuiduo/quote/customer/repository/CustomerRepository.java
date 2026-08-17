@@ -1,5 +1,6 @@
 package com.furuiduo.quote.customer.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -36,7 +37,11 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
       """
       SELECT c FROM Customer c WHERE
       (:code = '' OR UPPER(c.code) LIKE UPPER(CONCAT('%', :code, '%')))
-      AND (:name = '' OR UPPER(c.name) LIKE UPPER(CONCAT('%', :name, '%')))
+      AND (
+        :name = ''
+        OR UPPER(c.name) LIKE UPPER(CONCAT('%', :name, '%'))
+        OR (c.shortName IS NOT NULL AND UPPER(c.shortName) LIKE UPPER(CONCAT('%', :name, '%')))
+      )
       AND (:status IS NULL OR c.status = :status)
       """)
   Page<Customer> search(
@@ -48,4 +53,14 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
   @Query("SELECT c.code FROM Customer c WHERE c.code LIKE :prefix ORDER BY c.code DESC")
   org.springframework.data.domain.Page<String> findCustomerCodesByPrefix(
       @Param("prefix") String prefix, Pageable pageable);
+
+  @Query(
+      "SELECT c FROM Customer c WHERE (:pinned = true AND c.pinnedAt IS NOT NULL) OR (:pinned = false AND c.pinnedAt IS NULL) ORDER BY c.sortOrder ASC, c.updatedAt DESC")
+  List<Customer> findAllByPinned(@Param("pinned") boolean pinned);
+
+  @Query("SELECT COALESCE(MIN(c.sortOrder), 0) FROM Customer c WHERE c.pinnedAt IS NOT NULL")
+  Integer minPinnedSortOrder();
+
+  @Query("SELECT COALESCE(MAX(c.sortOrder), 0) FROM Customer c WHERE c.pinnedAt IS NULL")
+  Integer maxUnpinnedSortOrder();
 }

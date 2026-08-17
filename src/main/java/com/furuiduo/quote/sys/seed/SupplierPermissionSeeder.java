@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.sys.PermissionCodes;
+import com.furuiduo.quote.sys.SupplierPermissionCodes;
 import com.furuiduo.quote.sys.entity.PermissionType;
 import com.furuiduo.quote.sys.entity.SysPermission;
 import com.furuiduo.quote.sys.entity.SysRole;
@@ -28,10 +29,22 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
 
   private static final List<PermDef> SUPPLIER_PERMISSIONS =
       List.of(
-          new PermDef(PermissionCodes.SUPPLIER_VIEW, "供应商-查看", 63),
-          new PermDef(PermissionCodes.SUPPLIER_CREATE, "供应商-新建", 64),
-          new PermDef(PermissionCodes.SUPPLIER_EDIT, "供应商-编辑", 65),
-          new PermDef(PermissionCodes.SUPPLIER_DELETE, "供应商-删除", 66));
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_VIEW, "卡车供应商-查看", 63),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_CREATE, "卡车供应商-新建", 64),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_EDIT, "卡车供应商-编辑", 65),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_DELETE, "卡车供应商-删除", 66),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_VIEW, "熏蒸供应商-查看", 67),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_CREATE, "熏蒸供应商-新建", 68),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_EDIT, "熏蒸供应商-编辑", 69),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_DELETE, "熏蒸供应商-删除", 70),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_VIEW, "仓库堆场-查看", 71),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_CREATE, "仓库堆场-新建", 72),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_EDIT, "仓库堆场-编辑", 73),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_DELETE, "仓库堆场-删除", 74),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_VIEW, "其他供应商-查看", 75),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_CREATE, "其他供应商-新建", 76),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_EDIT, "其他供应商-编辑", 77),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_DELETE, "其他供应商-删除", 78));
 
   private static final Set<String> ROLES_WITH_ALL =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -108,12 +121,34 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
     }
 
     if (ROLES_WITH_VIEW_ONLY.contains(code)) {
-      addIfPresent(permissions, PermissionCodes.SUPPLIER_VIEW, grants);
+      for (String category : SupplierPermissionCodes.CATEGORIES) {
+        addIfPresent(permissions, SupplierPermissionCodes.view(category), grants);
+      }
       return grants;
     }
 
     Set<String> roleCodes =
         role.getPermissions().stream().map(SysPermission::getCode).collect(Collectors.toSet());
+
+    // 旧版扁平权限 → 四类同动作
+    for (String legacy :
+        List.of(
+            PermissionCodes.SUPPLIER_VIEW,
+            PermissionCodes.SUPPLIER_CREATE,
+            PermissionCodes.SUPPLIER_EDIT,
+            PermissionCodes.SUPPLIER_DELETE)) {
+      if (!roleCodes.contains(legacy)) {
+        continue;
+      }
+      String action = SupplierPermissionCodes.legacyAction(legacy);
+      if (action == null) {
+        continue;
+      }
+      for (String category : SupplierPermissionCodes.CATEGORIES) {
+        addIfPresent(permissions, SupplierPermissionCodes.of(category, action), grants);
+      }
+    }
+
     if (roleCodes.contains(PermissionCodes.QUOTE_CREATE)
         || roleCodes.contains(PermissionCodes.QUOTE_EDIT)
         || roleCodes.contains(PermissionCodes.COST_ROAD_EDIT)
@@ -122,7 +157,9 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
     } else if (roleCodes.contains(PermissionCodes.QUOTE_VIEW)
         || roleCodes.contains(PermissionCodes.COST_ROAD_VIEW)
         || roleCodes.contains(PermissionCodes.COST_FUMIGATION_VIEW)) {
-      addIfPresent(permissions, PermissionCodes.SUPPLIER_VIEW, grants);
+      for (String category : SupplierPermissionCodes.CATEGORIES) {
+        addIfPresent(permissions, SupplierPermissionCodes.view(category), grants);
+      }
     }
 
     return grants;

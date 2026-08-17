@@ -22,28 +22,29 @@ public final class CostTemplateExcelSupport {
   private static final Map<String, String> ROAD_LABELS =
       Map.ofEntries(
           Map.entry("zipCode", "ZIP CODE"),
-          Map.entry("city", "City"),
-          Map.entry("state", "State"),
+          Map.entry("city", "CITY"),
+          Map.entry("state", "STATE"),
           Map.entry("por", "POR"),
           Map.entry("pol", "POL"),
           Map.entry("supplier", "SUPPLIER"),
-          Map.entry("baseFreight", "BASE FREIGHT"),
-          Map.entry("fsc", "FSC (%)"),
+          Map.entry("baseFreight", "BASE"),
+          Map.entry("fsc", "FSC"),
           Map.entry("chassis", "CHASSIS"),
-          Map.entry("triTandemAxle", "OW/TRI-AXCEL"),
+          Map.entry("triTandemAxle", "OW"),
           Map.entry("split", "SPLIT"),
           Map.entry("stopOff", "STOP OFF"),
-          Map.entry("allInNoFm", "ALL IN - NO FM"),
-          Map.entry("allInFmOneWay", "ALL IN - FM (NON OAK)"),
-          Map.entry("allInFmRound", "ALL IN - FM (OAK)"),
-          Map.entry("waitingFee", "WAITING FEE"),
+          Map.entry("allInNoFm", "ALL IN"),
+          Map.entry("allInFmOneWay", "ALL IN FM NON OAK"),
+          Map.entry("allInFmRound", "ALL IN FM OAK"),
+          Map.entry("waitingFee", "WAITING"),
           Map.entry("redelivery", "REDELIVERY"),
           Map.entry("prepull", "PREPULL"),
-          Map.entry("nsLift", "NS LIFT"),
-          Map.entry("otherFee", "OTHER FEE"),
+          Map.entry("nsLift", "LIFT"),
+          Map.entry("otherFee", "OTHERS"),
           Map.entry("remark", "REMARK"),
-          Map.entry("validDate", "有效期"),
-          Map.entry("logYardNameAddress", "LOG YARD NAME & ADDRESS"));
+          Map.entry("validDate", "VALID TIME"),
+          Map.entry("logYardNameAddress", "PICK UP ADDRESS"),
+          Map.entry("status", "STATUS"));
 
   private static final Map<String, String> SEA_LABELS =
       Map.ofEntries(
@@ -55,18 +56,19 @@ public final class CostTemplateExcelSupport {
           Map.entry("containerType", "箱型"),
           Map.entry("freight", "运费"),
           Map.entry("freightValidDate", "有效期"),
-          Map.entry("buc", "BUC"),
-          Map.entry("bucValidDate", "BUC有效期"),
+          Map.entry("buc", "燃油附加费"),
+          Map.entry("bucValidDate", "有效期"),
           Map.entry("ebs", "EBS"),
           Map.entry("ebsValidDate", "EBS有效期"),
           Map.entry("gri", "GRI"),
           Map.entry("griValidDate", "GRI有效期"),
           Map.entry("others", "OTHERS"),
-          Map.entry("othersValidDate", "OTHERS有效期"),
+          Map.entry("othersValidDate", "有效期"),
           Map.entry("allIn", "ALL IN (小计)"),
           Map.entry("ssl", "SSL (船公司)"),
           Map.entry("agent", "AGENT (代理)"),
-          Map.entry("remark", "REMARK 备注"));
+          Map.entry("remark", "REMARK 备注"),
+          Map.entry("status", "状态"));
 
   private static final Map<String, String> FUMIGATION_LABELS =
       Map.ofEntries(
@@ -78,7 +80,8 @@ public final class CostTemplateExcelSupport {
           Map.entry("indoorNonOak", "FM-INDOOR NON OAK"),
           Map.entry("indoorOak", "FM-INDOOR OAK"),
           Map.entry("indoorValidity", "有效期"),
-          Map.entry("address", "ADDRESS"));
+          Map.entry("address", "ADDRESS"),
+          Map.entry("status", "状态"));
 
   private static final Map<String, String> RAIL_LABELS = copyRailLabels();
 
@@ -91,14 +94,6 @@ public final class CostTemplateExcelSupport {
 
   public static byte[] buildWorkbook(
       String mode, String code, String name, CostTableTemplateLayout layout) {
-    // 与成本库列表页导出表头保持一致：熏蒸/海运为双行合并表头
-    if ("fumigation".equals(mode)) {
-      return FumigationCostExcelExporter.export(List.of());
-    }
-    if ("sea".equals(mode)) {
-      return SeaCostExcelExporter.export(List.of());
-    }
-
     List<CostExportColumn> columns = resolveVisibleExportColumns(mode, layout);
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet(sanitizeSheetName(code, name));
@@ -155,12 +150,12 @@ public final class CostTemplateExcelSupport {
     return columns;
   }
 
-  private static boolean isFieldVisible(CostTableTemplateLayout layout, String field) {
+  public static boolean isFieldVisible(CostTableTemplateLayout layout, String field) {
     CostTableFieldOverride override = fieldOverride(layout, field);
     return override == null || override.visible() == null || Boolean.TRUE.equals(override.visible());
   }
 
-  private static boolean isFieldRequired(CostTableTemplateLayout layout, String field) {
+  public static boolean isFieldRequired(CostTableTemplateLayout layout, String field) {
     CostTableCustomFieldDef custom = findCustomDef(layout, field);
     if (custom != null && Boolean.TRUE.equals(custom.required())) {
       return true;
@@ -169,7 +164,7 @@ public final class CostTemplateExcelSupport {
     return override != null && Boolean.TRUE.equals(override.required());
   }
 
-  private static String resolveFieldTitle(
+  public static String resolveFieldTitle(
       String mode, String field, CostTableTemplateLayout layout) {
     CostTableCustomFieldDef custom = findCustomDef(layout, field);
     if (custom != null && custom.title() != null && !custom.title().isBlank()) {

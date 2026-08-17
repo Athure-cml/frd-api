@@ -107,7 +107,12 @@ public final class CostExcelSupport {
     }
     for (String candidate : candidates) {
       String key = normalizeHeader(candidate);
+      boolean lookingForUnit = isLikelyUnitHeader(key);
       for (Map.Entry<String, Integer> entry : headers.entrySet()) {
+        // 模糊匹配时跳过「WAITING UNIT」等，避免费用列误读到单位列
+        if (!lookingForUnit && isLikelyUnitHeader(entry.getKey())) {
+          continue;
+        }
         if (entry.getKey().contains(key)) {
           return entry.getValue();
         }
@@ -115,14 +120,29 @@ public final class CostExcelSupport {
     }
     for (String candidate : candidates) {
       String key = normalizeHeader(candidate);
+      boolean lookingForUnit = isLikelyUnitHeader(key);
       for (Map.Entry<String, Integer> entry : headers.entrySet()) {
         String header = entry.getKey();
+        if (!lookingForUnit && isLikelyUnitHeader(header)) {
+          continue;
+        }
         if (header.length() >= 4 && key.contains(header)) {
           return entry.getValue();
         }
       }
     }
     return -1;
+  }
+
+  /** 费用旁的单位列表头（如 WAITING UNIT），不可被 WAITING 等短名模糊命中 */
+  public static boolean isLikelyUnitHeader(String normalizedHeader) {
+    if (normalizedHeader == null || normalizedHeader.isBlank()) {
+      return false;
+    }
+    return normalizedHeader.equals("UNIT")
+        || normalizedHeader.equals("单位")
+        || normalizedHeader.endsWith(" UNIT")
+        || normalizedHeader.endsWith("单位");
   }
 
   public static String readByHeader(Row row, Map<String, Integer> headers, String... candidates) {
@@ -158,8 +178,25 @@ public final class CostExcelSupport {
       Function<T, String> validator,
       BiConsumer<Integer, T> saver)
       throws IOException {
+    return importRows(file, headerRow, rowMapper, validator, saver, false);
+  }
+
+  /**
+   * 导入：先全量映射+校验，任一行失败则不落库；全部通过后再写入。
+   *
+   * @param dryRun true 时只校验不写入；成功时 {@code imported} 表示可导入行数
+   */
+  public static <T> CostImportResult importRows(
+      MultipartFile file,
+      String[] headerRow,
+      Function<Row, T> rowMapper,
+      Function<T, String> validator,
+      BiConsumer<Integer, T> saver,
+      boolean dryRun)
+      throws IOException {
     List<String> errors = new ArrayList<>();
-    int imported = 0;
+    List<Integer> failedRowNumbers = new ArrayList<>();
+    List<PendingRow<T>> pending = new ArrayList<>();
     int failed = 0;
 
     try (InputStream in = file.getInputStream(); Workbook workbook = new XSSFWorkbook(in)) {
@@ -185,24 +222,44 @@ public final class CostExcelSupport {
           String validationError = validator.apply(mapped);
           if (validationError != null && !validationError.isBlank()) {
             failed++;
+            failedRowNumbers.add(dataRowNo);
             errors.add("第 " + dataRowNo + " 行: " + validationError);
             continue;
           }
-          saver.accept(dataRowNo, mapped);
-          imported++;
+          pending.add(new PendingRow<>(dataRowNo, mapped));
         } catch (Exception ex) {
           failed++;
-          errors.add("第 " + dataRowNo + " 行: " + ex.getMessage());
+          failedRowNumbers.add(dataRowNo);
+          String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+          errors.add("第 " + dataRowNo + " 行: " + message);
         }
       }
     }
 
-    if (errors.size() > 20) {
-      errors = new ArrayList<>(errors.subList(0, 20));
-      errors.add("...");
+    if (failed > 0) {
+      return new CostImportResult(0, failed, truncateErrors(errors), failedRowNumbers);
     }
-    return new CostImportResult(imported, failed, errors);
+
+    if (dryRun) {
+      return new CostImportResult(pending.size(), 0, List.of(), List.of());
+    }
+
+    for (PendingRow<T> item : pending) {
+      saver.accept(item.rowNo(), item.entity());
+    }
+    return new CostImportResult(pending.size(), 0, List.of(), List.of());
   }
+
+  private static List<String> truncateErrors(List<String> errors) {
+    if (errors.size() <= 50) {
+      return errors;
+    }
+    List<String> truncated = new ArrayList<>(errors.subList(0, 50));
+    truncated.add("…共 " + errors.size() + " 条错误，其余请下载问题数据查看");
+    return truncated;
+  }
+
+  private record PendingRow<T>(int rowNo, T entity) {}
 
   /**
    * Detect how many leading header rows to skip. Supports single-row headers and nested
@@ -227,6 +284,7 @@ public final class CostExcelSupport {
       return 1;
     }
     int headerLike = 0;
+    int englishRoadLike = 0;
     int lastCell = Math.max(row1.getLastCellNum(), 0);
     for (int i = 0; i < lastCell; i++) {
       String text = cellString(row1.getCell(i)).trim().toUpperCase(Locale.ROOT);
@@ -240,9 +298,40 @@ public final class CostExcelSupport {
           || text.equals("EBS")
           || text.equals("GRI")
           || text.equals("OTHERS")
-          || text.equals("有效期")) {
+          || text.equals("有效期")
+          || text.equals("生效期")
+          || text.equals("EFF")
+          || text.equals("EFFECTIVE")) {
         headerLike++;
       }
+      if (text.equals("ZIP CODE")
+          || text.equals("CITY")
+          || text.equals("STATE")
+          || text.equals("POR")
+          || text.equals("SUPPLIER")
+          || text.equals("BASE")
+          || text.equals("FSC")
+          || text.equals("CHASSIS")
+          || text.equals("OW")
+          || text.equals("SPLIT")
+          || text.startsWith("STOP OFF")
+          || text.equals("ALL IN")
+          || text.startsWith("ALL IN FM")
+          || text.equals("WAITING")
+          || text.equals("REDELIVERY")
+          || text.equals("YARD STORAGE")
+          || text.equals("EXTRA CHASSIS")
+          || text.equals("PREPULL")
+          || text.equals("LIFT")
+          || text.equals("REMARK")
+          || text.equals("EFFECTIVE TIME")
+          || text.equals("VALID TIME")
+          || text.startsWith("PICK UP")) {
+        englishRoadLike++;
+      }
+    }
+    if (englishRoadLike >= 4) {
+      return 2;
     }
     return headerLike >= 2 ? 2 : 1;
   }

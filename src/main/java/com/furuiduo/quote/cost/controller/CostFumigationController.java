@@ -65,12 +65,21 @@ public class CostFumigationController {
       @RequestParam(required = false) String region,
       @RequestParam(required = false) String port,
       @RequestParam(required = false) String station,
+      @RequestParam(required = false) String outdoorValidity,
+      @RequestParam(required = false) String indoorValidity,
       @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
     String regionFilter =
         region != null && !region.isBlank() ? region : port;
     return ApiResponse.ok(
-        costFumigationService.list(page, pageSize, regionFilter, station, status));
+        costFumigationService.list(
+            page,
+            pageSize,
+            regionFilter,
+            station,
+            outdoorValidity,
+            indoorValidity,
+            status));
   }
 
   @GetMapping("/{id}")
@@ -127,10 +136,12 @@ public class CostFumigationController {
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(costFumigationService.importExcel(file));
+    return ApiResponse.ok(costFumigationService.importExcel(file, templateId, dryRun));
   }
 
   @GetMapping("/export")
@@ -139,6 +150,8 @@ public class CostFumigationController {
       @RequestParam(required = false) String region,
       @RequestParam(required = false) String port,
       @RequestParam(required = false) String station,
+      @RequestParam(required = false) String outdoorValidity,
+      @RequestParam(required = false) String indoorValidity,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long templateId,
       @RequestParam(required = false) String ids) {
@@ -147,7 +160,13 @@ public class CostFumigationController {
         region != null && !region.isBlank() ? region : port;
     byte[] bytes =
         costFumigationService.exportExcel(
-            regionFilter, station, status, templateId, RequestIds.parse(ids));
+            regionFilter,
+            station,
+            outdoorValidity,
+            indoorValidity,
+            status,
+            templateId,
+            RequestIds.parse(ids));
     String filename =
         URLEncoder.encode("熏蒸成本.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()

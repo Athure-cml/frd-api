@@ -2,6 +2,8 @@ package com.furuiduo.quote.customer.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.Formula;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -26,6 +28,9 @@ public class Customer {
 
   @Column(nullable = false, length = 128)
   private String name;
+
+  @Column(name = "short_name", length = 64)
+  private String shortName;
 
   @Column(name = "contact_name", length = 64)
   private String contactName;
@@ -59,4 +64,14 @@ public class Customer {
 
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt = LocalDateTime.now();
+
+  @Column(name = "pinned_at")
+  private LocalDateTime pinnedAt;
+
+  @Column(name = "sort_order", nullable = false)
+  private Integer sortOrder = 0;
+
+  /** 0=置顶，1=非置顶；仅用于排序，不落库 */
+  @Formula("CASE WHEN pinned_at IS NULL THEN 1 ELSE 0 END")
+  private int pinRank;
 }

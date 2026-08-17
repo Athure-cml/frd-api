@@ -58,10 +58,31 @@ public final class PermissionCodes {
   public static final String CUSTOMER_EDIT = "customer:edit";
   public static final String CUSTOMER_DELETE = "customer:delete";
 
+  /** @deprecated 已拆分为 supplier:{category}:view，仅用于迁移 */
   public static final String SUPPLIER_VIEW = "supplier:view";
+  /** @deprecated 已拆分为 supplier:{category}:create，仅用于迁移 */
   public static final String SUPPLIER_CREATE = "supplier:create";
+  /** @deprecated 已拆分为 supplier:{category}:edit，仅用于迁移 */
   public static final String SUPPLIER_EDIT = "supplier:edit";
+  /** @deprecated 已拆分为 supplier:{category}:delete，仅用于迁移 */
   public static final String SUPPLIER_DELETE = "supplier:delete";
+
+  public static final String SUPPLIER_TRUCK_VIEW = "supplier:truck:view";
+  public static final String SUPPLIER_TRUCK_CREATE = "supplier:truck:create";
+  public static final String SUPPLIER_TRUCK_EDIT = "supplier:truck:edit";
+  public static final String SUPPLIER_TRUCK_DELETE = "supplier:truck:delete";
+  public static final String SUPPLIER_FUMIGATION_VIEW = "supplier:fumigation:view";
+  public static final String SUPPLIER_FUMIGATION_CREATE = "supplier:fumigation:create";
+  public static final String SUPPLIER_FUMIGATION_EDIT = "supplier:fumigation:edit";
+  public static final String SUPPLIER_FUMIGATION_DELETE = "supplier:fumigation:delete";
+  public static final String SUPPLIER_YARD_VIEW = "supplier:yard:view";
+  public static final String SUPPLIER_YARD_CREATE = "supplier:yard:create";
+  public static final String SUPPLIER_YARD_EDIT = "supplier:yard:edit";
+  public static final String SUPPLIER_YARD_DELETE = "supplier:yard:delete";
+  public static final String SUPPLIER_OTHER_VIEW = "supplier:other:view";
+  public static final String SUPPLIER_OTHER_CREATE = "supplier:other:create";
+  public static final String SUPPLIER_OTHER_EDIT = "supplier:other:edit";
+  public static final String SUPPLIER_OTHER_DELETE = "supplier:other:delete";
 
   public static final String SHIPPING_LINE_VIEW = "shipping_line:view";
   public static final String SHIPPING_LINE_CREATE = "shipping_line:create";
@@ -77,6 +98,8 @@ public final class PermissionCodes {
   public static final String CURRENCY_MANAGE = "currency:manage";
   public static final String EXCHANGE_RATE_VIEW = "exchange_rate:view";
   public static final String EXCHANGE_RATE_MANAGE = "exchange_rate:manage";
+  public static final String UNIT_VIEW = "unit:view";
+  public static final String UNIT_MANAGE = "unit:manage";
 
   public static final String MD_US_STATE_VIEW = "md_us_state:view";
   public static final String MD_US_STATE_MANAGE = "md_us_state:manage";
@@ -131,10 +154,22 @@ public final class PermissionCodes {
       CUSTOMER_CREATE,
       CUSTOMER_EDIT,
       CUSTOMER_DELETE,
-      SUPPLIER_VIEW,
-      SUPPLIER_CREATE,
-      SUPPLIER_EDIT,
-      SUPPLIER_DELETE,
+      SUPPLIER_TRUCK_VIEW,
+      SUPPLIER_TRUCK_CREATE,
+      SUPPLIER_TRUCK_EDIT,
+      SUPPLIER_TRUCK_DELETE,
+      SUPPLIER_FUMIGATION_VIEW,
+      SUPPLIER_FUMIGATION_CREATE,
+      SUPPLIER_FUMIGATION_EDIT,
+      SUPPLIER_FUMIGATION_DELETE,
+      SUPPLIER_YARD_VIEW,
+      SUPPLIER_YARD_CREATE,
+      SUPPLIER_YARD_EDIT,
+      SUPPLIER_YARD_DELETE,
+      SUPPLIER_OTHER_VIEW,
+      SUPPLIER_OTHER_CREATE,
+      SUPPLIER_OTHER_EDIT,
+      SUPPLIER_OTHER_DELETE,
       SHIPPING_LINE_VIEW,
       SHIPPING_LINE_CREATE,
       SHIPPING_LINE_EDIT,
@@ -147,6 +182,8 @@ public final class PermissionCodes {
       CURRENCY_MANAGE,
       EXCHANGE_RATE_VIEW,
       EXCHANGE_RATE_MANAGE,
+      UNIT_VIEW,
+      UNIT_MANAGE,
       MD_US_STATE_VIEW,
       MD_US_STATE_MANAGE,
       MD_DEST_ADDRESS_VIEW,

@@ -14,7 +14,11 @@ import com.furuiduo.quote.cost.repository.CostGridTemplateRepository;
 import com.furuiduo.quote.cost.support.CostTemplateLayoutTools;
 import com.furuiduo.quote.cost.support.CostTemplateLayouts;
 
-/** 同步内置默认模板列顺序与必填配置。 */
+/**
+ * 启动时规范化模板 layout。
+ *
+ * <p>内置默认模板仅在 layout 为空时回填代码默认；已有配置一律保留，避免重启冲掉用户修改。
+ */
 @Component
 @Order(17)
 public class CostTemplateLayoutMigrator implements ApplicationRunner {
@@ -28,9 +32,10 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    migrateBuiltin("road", "road_default", CostTemplateLayouts.roadDefault());
-    migrateBuiltin("sea", "sea_default", CostTemplateLayouts.seaDefault());
-    migrateBuiltin("fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
+    fillBuiltinIfEmpty("road", "road_default", CostTemplateLayouts.roadDefault());
+    fillBuiltinIfEmpty("sea", "sea_default", CostTemplateLayouts.seaDefault());
+    fillBuiltinIfEmpty(
+        "fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
 
     for (CostGridTemplate template : repository.findAll()) {
       CostTableTemplateLayout current = template.getLayout();
@@ -44,23 +49,15 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
     }
   }
 
-  private void migrateBuiltin(String mode, String code, CostTableTemplateLayout target) {
+  private void fillBuiltinIfEmpty(String mode, String code, CostTableTemplateLayout target) {
     repository
         .findByModeAndCode(mode, code)
-        .filter(template -> shouldUpgrade(template.getLayout(), target))
+        .filter(template -> template.getLayout() == null)
         .ifPresent(
             template -> {
               template.setLayout(target);
               template.touch();
               repository.save(template);
             });
-  }
-
-  private boolean shouldUpgrade(
-      CostTableTemplateLayout current, CostTableTemplateLayout target) {
-    if (current == null) {
-      return true;
-    }
-    return !Objects.equals(current, target);
   }
 }

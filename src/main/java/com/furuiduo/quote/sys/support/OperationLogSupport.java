@@ -98,6 +98,9 @@ public class OperationLogSupport {
     if (path.startsWith("/exchange-rates")) {
       return "exchange_rate";
     }
+    if (path.startsWith("/units")) {
+      return "unit";
+    }
     if (path.startsWith("/container-types")) {
       return "md_container_type";
     }
@@ -416,6 +419,7 @@ public class OperationLogSupport {
       case "cost:template" -> "表格模板";
       case "currency" -> "币种";
       case "exchange_rate" -> "汇率";
+      case "unit" -> "单位";
       case "md_container_type" -> "箱型";
       case "md_dest_address" -> "美国州邮政编码";
       case "md_global_port" -> "全球港口";

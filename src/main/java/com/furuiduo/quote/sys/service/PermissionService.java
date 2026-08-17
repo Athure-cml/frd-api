@@ -49,4 +49,20 @@ public class PermissionService {
     }
     return getPermissionCodes(user).contains(permissionCode);
   }
+
+  public boolean hasAnyPermission(SysUser user, String... permissionCodes) {
+    if (permissionCodes == null || permissionCodes.length == 0) {
+      return false;
+    }
+    if (getRoleCodes(user).contains("super_admin")) {
+      return true;
+    }
+    var owned = getPermissionCodes(user);
+    for (String code : permissionCodes) {
+      if (code != null && owned.contains(code)) {
+        return true;
+      }
+    }
+    return false;
+  }
 }

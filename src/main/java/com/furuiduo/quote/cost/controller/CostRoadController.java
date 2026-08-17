@@ -1,6 +1,7 @@
 package com.furuiduo.quote.cost.controller;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -31,6 +32,8 @@ import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
+import com.furuiduo.quote.cost.dto.CostRoadBatchCopyRequest;
+import com.furuiduo.quote.cost.dto.RoadCostRenewRequest;
 import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.dto.RoadCostSaveRequest;
 import com.furuiduo.quote.cost.service.CostRoadService;
@@ -74,10 +77,23 @@ public class CostRoadController {
       @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) BigDecimal redelivery,
+      @RequestParam(required = false) String validDate,
       @RequestParam(required = false) String status) {
     requireView(authService.requireUser(authorization));
     return ApiResponse.ok(
-        costRoadService.list(page, pageSize, zipCode, city, state, por, pol, supplier, status));
+        costRoadService.list(
+            page,
+            pageSize,
+            zipCode,
+            city,
+            state,
+            por,
+            pol,
+            supplier,
+            redelivery,
+            validDate,
+            status));
   }
 
   @Operation(
@@ -100,6 +116,20 @@ public class CostRoadController {
       @RequestBody RoadCostSaveRequest request) {
     requireEdit(authService.requireUser(authorization));
     return ApiResponse.ok(costRoadService.create(request));
+  }
+
+  @Operation(
+      summary = "续期卡车成本（新建新价，源行有效期=新生效期-1天）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/renew")
+  public ApiResponse<RoadCostResponse> renew(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody RoadCostRenewRequest request) {
+    requireEdit(authService.requireUser(authorization));
+    if (request == null || request.sourceId() == null || request.record() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "续期参数不完整");
+    }
+    return ApiResponse.ok(costRoadService.renew(request.sourceId(), request.record()));
   }
 
   @Operation(
@@ -151,15 +181,29 @@ public class CostRoadController {
   }
 
   @Operation(
+      summary = "批量复制卡车成本",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/batch-copy")
+  public ApiResponse<Map<String, Integer>> batchCopy(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody CostRoadBatchCopyRequest request) {
+    requireEdit(authService.requireUser(authorization));
+    int created = costRoadService.batchCopy(request);
+    return ApiResponse.ok(Map.of("created", created));
+  }
+
+  @Operation(
       summary = "导入卡车成本 Excel",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false) Long templateId,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(costRoadService.importExcel(file));
+    return ApiResponse.ok(costRoadService.importExcel(file, templateId, dryRun));
   }
 
   @Operation(
@@ -174,6 +218,8 @@ public class CostRoadController {
       @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) BigDecimal redelivery,
+      @RequestParam(required = false) String validDate,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long templateId,
       @RequestParam(required = false) String ids) {
@@ -186,6 +232,8 @@ public class CostRoadController {
             por,
             pol,
             supplier,
+            redelivery,
+            validDate,
             status,
             templateId,
             RequestIds.parse(ids));

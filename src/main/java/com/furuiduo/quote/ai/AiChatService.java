@@ -25,6 +25,7 @@ import com.furuiduo.quote.ai.dto.AiCitedCost;
 import com.furuiduo.quote.ai.dto.AiOpenPage;
 import com.furuiduo.quote.ai.dto.AiProposedCost;
 import com.furuiduo.quote.sys.PermissionCodes;
+import com.furuiduo.quote.sys.SupplierPermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
 
@@ -402,7 +403,8 @@ public class AiChatService {
     if (permissionService.hasPermission(user, PermissionCodes.CUSTOMER_VIEW)) {
       pages.add("customer_list");
     }
-    if (permissionService.hasPermission(user, PermissionCodes.SUPPLIER_VIEW)) {
+    if (permissionService.hasAnyPermission(user, SupplierPermissionCodes.allViews())
+        || permissionService.hasPermission(user, PermissionCodes.SUPPLIER_VIEW)) {
       pages.add("supplier_list");
     }
     return pages;

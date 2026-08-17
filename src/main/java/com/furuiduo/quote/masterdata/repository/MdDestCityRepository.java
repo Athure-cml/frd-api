@@ -39,6 +39,14 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
 
   @Query(
       """
+      SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END
+      FROM MdDestCity c
+      WHERE UPPER(TRIM(c.name)) = UPPER(TRIM(:name))
+      """)
+  boolean existsByNameIgnoreCase(@Param("name") String name);
+
+  @Query(
+      """
       SELECT c.name FROM MdDestCity c
       WHERE (
           :keyword = ''

@@ -12,7 +12,11 @@ public record SupplierResponse(
     @Schema(description = "ID") Long id,
     @Schema(description = "供应商编码") String code,
     @Schema(description = "供应商名称") String name,
-    @Schema(description = "类型") List<String> types,
+    @Schema(description = "简称") String shortName,
+    @Schema(description = "分类 TRUCK/FUMIGATION/YARD/OTHER") String category,
+    @Schema(description = "类型（其他供应商：类型ID）") List<String> types,
+    @Schema(description = "联系人") String contactName,
+    @Schema(description = "电话") String phone,
     @Schema(description = "邮箱") String email,
     @Schema(description = "备注") String remark,
     @Schema(description = "非熏蒸打包价公式") String nonFumigationPackageFormula,
@@ -21,14 +25,19 @@ public record SupplierResponse(
     @Schema(description = "状态") Integer status,
     @Schema(description = "创建人") String createdByName,
     @Schema(description = "创建时间") String createdAt,
-    @Schema(description = "更新时间") String updatedAt) {
+    @Schema(description = "更新时间") String updatedAt,
+    @Schema(description = "置顶时间") String pinnedAt) {
 
   public static SupplierResponse from(Supplier supplier) {
     return new SupplierResponse(
         supplier.getId(),
         supplier.getCode(),
         supplier.getName(),
+        supplier.getShortName(),
+        supplier.getCategory(),
         supplier.getTypes() == null ? List.of() : List.copyOf(supplier.getTypes()),
+        supplier.getContactName(),
+        supplier.getPhone(),
         supplier.getEmail(),
         supplier.getRemark(),
         supplier.getNonFumigationPackageFormula(),
@@ -37,6 +46,7 @@ public record SupplierResponse(
         supplier.getStatus(),
         supplier.getCreatedByName(),
         QuoteDateTimes.format(supplier.getCreatedAt()),
-        QuoteDateTimes.format(supplier.getUpdatedAt()));
+        QuoteDateTimes.format(supplier.getUpdatedAt()),
+        QuoteDateTimes.format(supplier.getPinnedAt()));
   }
 }

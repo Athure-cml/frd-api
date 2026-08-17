@@ -3,6 +3,7 @@ package com.furuiduo.quote.cost.support;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -23,6 +24,9 @@ public final class FumigationCostExcelExporter {
   private static final byte[] HEADER_BLUE = new byte[] {(byte) 0x1D, (byte) 0x4E, (byte) 0x7B};
   private static final byte[] HEADER_YELLOW = new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0x00};
 
+  private static final String CF_OUTDOOR_EFF = "cf_fum_outdoor_eff";
+  private static final String CF_INDOOR_EFF = "cf_fum_indoor_eff";
+
   private FumigationCostExcelExporter() {}
 
   public static byte[] export(List<CostFumigation> items) {
@@ -37,13 +41,15 @@ public final class FumigationCostExcelExporter {
         setText(row, col++, item.getStation());
         setDecimal(row, col++, item.getOutdoorNonOak());
         setDecimal(row, col++, item.getOutdoorOak());
+        setText(row, col++, readExtra(item, CF_OUTDOOR_EFF));
         setText(row, col++, item.getOutdoorValidity());
         setDecimal(row, col++, item.getIndoorNonOak());
         setDecimal(row, col++, item.getIndoorOak());
+        setText(row, col++, readExtra(item, CF_INDOOR_EFF));
         setText(row, col++, item.getIndoorValidity());
         setText(row, col, item.getAddress());
       }
-      for (int i = 0; i < 9; i++) {
+      for (int i = 0; i < 11; i++) {
         sheet.autoSizeColumn(i);
       }
       return CostExcelSupport.writeWorkbook(workbook);
@@ -62,13 +68,16 @@ public final class FumigationCostExcelExporter {
 
     createMergedHeader(sheet, row0, 0, 0, 1, 0, "REGION", blueStyle);
     createMergedHeader(sheet, row0, 1, 1, 1, 1, "STATION", blueStyle);
-    createMergedHeader(sheet, row0, 2, 4, 0, 2, "FM-OUTDOOR", blueStyle);
-    createMergedHeader(sheet, row0, 5, 7, 0, 5, "FM-INDOOR", blueStyle);
-    createMergedHeader(sheet, row0, 8, 8, 1, 8, "ADDRESS", blueStyle);
+    createMergedHeader(sheet, row0, 2, 5, 0, 2, "FM-OUTDOOR", blueStyle);
+    createMergedHeader(sheet, row0, 6, 9, 0, 6, "FM-INDOOR", blueStyle);
+    createMergedHeader(sheet, row0, 10, 10, 1, 10, "ADDRESS", blueStyle);
 
-    String[] subHeaders = {"NON OAK", "OAK", "VALIDITY", "NON OAK", "OAK", "VALIDITY"};
+    String[] subHeaders = {
+      "NON OAK", "OAK", "生效期", "VALIDITY", "NON OAK", "OAK", "生效期", "VALIDITY"
+    };
     CellStyle[] subStyles = {
-      blueStyle, blueStyle, yellowStyle, blueStyle, blueStyle, yellowStyle
+      blueStyle, blueStyle, yellowStyle, yellowStyle,
+      blueStyle, blueStyle, yellowStyle, yellowStyle
     };
     for (int i = 0; i < subHeaders.length; i++) {
       Cell cell = row1.createCell(2 + i);
@@ -82,36 +91,42 @@ public final class FumigationCostExcelExporter {
       Row row,
       int firstCol,
       int lastCol,
-      int otherRow,
-      int col,
+      int firstRow,
+      int lastRow,
       String title,
       CellStyle style) {
-    Cell cell = row.createCell(col);
+    Cell cell = row.createCell(firstCol);
     cell.setCellValue(title);
     cell.setCellStyle(style);
-    int rowNum = row.getRowNum();
-    // POI 要求 firstRow <= lastRow；原先把「跨到第 1 行」写成 (1,0) 会直接抛错 → 导出 500
-    if (firstCol != lastCol || otherRow != rowNum) {
-      sheet.addMergedRegion(
-          new CellRangeAddress(
-              Math.min(rowNum, otherRow),
-              Math.max(rowNum, otherRow),
-              firstCol,
-              lastCol));
+    if (firstCol != lastCol || firstRow != lastRow) {
+      sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
+    }
+    for (int c = firstCol + 1; c <= lastCol; c++) {
+      Cell filler = row.createCell(c);
+      filler.setCellStyle(style);
     }
   }
 
   private static CellStyle createHeaderStyle(
       XSSFWorkbook workbook, byte[] rgb, short fontColor) {
     CellStyle style = workbook.createCellStyle();
-    style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
     style.setFillForegroundColor(new XSSFColor(rgb, null));
+    style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
     style.setAlignment(HorizontalAlignment.CENTER);
     Font font = workbook.createFont();
     font.setBold(true);
     font.setColor(fontColor);
     style.setFont(font);
     return style;
+  }
+
+  private static String readExtra(CostFumigation item, String key) {
+    Map<String, Object> extra = item.getExtraFields();
+    if (extra == null || extra.isEmpty()) {
+      return null;
+    }
+    Object value = extra.get(key);
+    return value == null ? null : String.valueOf(value);
   }
 
   private static void setText(Row row, int col, String value) {

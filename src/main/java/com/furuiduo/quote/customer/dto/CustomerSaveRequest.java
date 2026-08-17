@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "客户保存")
 public record CustomerSaveRequest(
     @Schema(description = "客户名称") String name,
+    @Schema(description = "简称") String shortName,
     @Schema(description = "联系人") String contactName,
     @Schema(description = "电话") String phone,
     @Schema(description = "邮箱") String email,

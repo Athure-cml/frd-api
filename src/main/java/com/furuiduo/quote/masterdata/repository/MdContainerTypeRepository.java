@@ -17,6 +17,16 @@ public interface MdContainerTypeRepository extends JpaRepository<MdContainerType
 
   @Query(
       """
+      SELECT CASE WHEN COUNT(t) > 0 THEN true ELSE false END
+      FROM MdContainerType t
+      WHERE UPPER(TRIM(t.code)) = UPPER(TRIM(:code))
+        AND (:status IS NULL OR t.status = :status)
+      """)
+  boolean existsByCodeIgnoreCase(
+      @Param("code") String code, @Param("status") Integer status);
+
+  @Query(
+      """
       SELECT t FROM MdContainerType t
       WHERE (:code = '' OR UPPER(t.code) LIKE UPPER(CONCAT('%', :code, '%')))
         AND (:name = '' OR UPPER(t.name) LIKE UPPER(CONCAT('%', :name, '%')))

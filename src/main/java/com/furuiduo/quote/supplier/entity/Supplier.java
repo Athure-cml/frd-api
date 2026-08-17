@@ -32,9 +32,23 @@ public class Supplier {
   @Column(nullable = false, length = 128)
   private String name;
 
+  @Column(name = "short_name", length = 64)
+  private String shortName;
+
+  /** TRUCK / FUMIGATION / YARD / OTHER */
+  @Column(nullable = false, length = 32)
+  private String category = "TRUCK";
+
+  /** 其他供应商：类型 ID 字符串列表 */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "types", nullable = false)
   private List<String> types = new ArrayList<>();
+
+  @Column(name = "contact_name", length = 64)
+  private String contactName;
+
+  @Column(length = 64)
+  private String phone;
 
   @Column(length = 128)
   private String email;
@@ -68,4 +82,10 @@ public class Supplier {
 
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt = LocalDateTime.now();
+
+  @Column(name = "pinned_at")
+  private LocalDateTime pinnedAt;
+
+  @Column(name = "sort_order", nullable = false)
+  private Integer sortOrder = 0;
 }

@@ -32,6 +32,8 @@ import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.dto.DestAddressTreeNodeResponse;
 import com.furuiduo.quote.masterdata.dto.DestCityResponse;
 import com.furuiduo.quote.masterdata.dto.DestCitySaveRequest;
+import com.furuiduo.quote.masterdata.dto.DestZipResolveItemRequest;
+import com.furuiduo.quote.masterdata.dto.DestZipResolveItemResponse;
 import com.furuiduo.quote.masterdata.dto.DestZipResponse;
 import com.furuiduo.quote.masterdata.dto.DestZipSaveRequest;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
@@ -85,6 +87,17 @@ public class DestAddressController {
       @RequestParam(defaultValue = "50") int limit) {
     requireSelect(authService.requireUser(authorization));
     return ApiResponse.ok(destAddressService.listCityNameOptions(keyword, limit));
+  }
+
+  @Operation(
+      summary = "按 City+State 批量解析邮编（唯一匹配才返回 zip）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/resolve-zips")
+  public ApiResponse<List<DestZipResolveItemResponse>> resolveZips(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody List<DestZipResolveItemRequest> items) {
+    requireSelect(authService.requireUser(authorization));
+    return ApiResponse.ok(destAddressService.resolveZips(items));
   }
 
   @Operation(

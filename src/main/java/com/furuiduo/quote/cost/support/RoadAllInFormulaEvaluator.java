@@ -15,8 +15,14 @@ import com.furuiduo.quote.supplier.entity.Supplier;
 /** 卡车 ALL IN 公式求值：表头别名 + 四则运算与括号。 */
 public final class RoadAllInFormulaEvaluator {
 
+  private static final String ROAD_YARD_STORAGE = "cf_road_yard_storage";
+  private static final String ROAD_EXTRA_CHASSIS = "cf_road_extra_chassis";
+
   private static final List<Alias> ALIASES =
       List.of(
+              new Alias("总价 熏非橡", "allInFmOneWay"),
+              new Alias("总价 非熏蒸", "allInNoFm"),
+              new Alias("总价 熏橡", "allInFmRound"),
               new Alias("熏蒸打包价（非橡木）", "allInFmOneWay"),
               new Alias("熏蒸打包价价（非橡木）", "allInFmOneWay"),
               new Alias("ALL IN - FM (NON OAK)", "allInFmOneWay"),
@@ -29,17 +35,39 @@ public final class RoadAllInFormulaEvaluator {
               new Alias("OW/TRI-AXLE", "triTandemAxle"),
               new Alias("OW/TRI AXLE", "triTandemAxle"),
               new Alias("OW TRI AXLE", "triTandemAxle"),
+              new Alias("EXTRA CHASSIS", "extraChassis"),
+              new Alias("YARD STORAGE", "yardStorage"),
               new Alias("BASE FREIGHT", "baseFreight"),
               new Alias("WAITING FEE", "waitingFee"),
               new Alias("OTHER FEE", "otherFee"),
               new Alias("STOP OFF", "stopOff"),
               new Alias("NS LIFT", "nsLift"),
               new Alias("TO LIFT", "nsLift"),
-              new Alias("CHASSIS", "chassis"),
+              new Alias("额外车架费", "extraChassis"),
+              new Alias("后段运费", "redelivery"),
+              new Alias("上下车费", "nsLift"),
+              new Alias("待时费", "waitingFee"),
+              new Alias("堆存费", "yardStorage"),
+              new Alias("预提费", "prepull"),
+              new Alias("其他费", "otherFee"),
+              new Alias(ROAD_EXTRA_CHASSIS, "extraChassis"),
+              new Alias(ROAD_YARD_STORAGE, "yardStorage"),
               new Alias("REDELIVERY", "redelivery"),
+              new Alias("CHASSIS", "chassis"),
+              new Alias("WAITING", "waitingFee"),
               new Alias("PREPULL", "prepull"),
+              new Alias("OTHERS", "otherFee"),
               new Alias("SPLIT", "split"),
+              new Alias("BASE", "baseFreight"),
+              new Alias("LIFT", "nsLift"),
               new Alias("FSC", "fsc"),
+              new Alias("OW", "triTandemAxle"),
+              new Alias("基础", "baseFreight"),
+              new Alias("燃油", "fsc"),
+              new Alias("车架", "chassis"),
+              new Alias("超重", "triTandemAxle"),
+              new Alias("分离", "split"),
+              new Alias("停留", "stopOff"),
               new Alias("baseFreight", "baseFreight"),
               new Alias("fsc", "fsc"),
               new Alias("chassis", "chassis"),
@@ -48,6 +76,8 @@ public final class RoadAllInFormulaEvaluator {
               new Alias("stopOff", "stopOff"),
               new Alias("waitingFee", "waitingFee"),
               new Alias("redelivery", "redelivery"),
+              new Alias("yardStorage", "yardStorage"),
+              new Alias("extraChassis", "extraChassis"),
               new Alias("prepull", "prepull"),
               new Alias("nsLift", "nsLift"),
               new Alias("toLift", "nsLift"),
@@ -68,6 +98,8 @@ public final class RoadAllInFormulaEvaluator {
           "stopOff",
           "waitingFee",
           "redelivery",
+          "yardStorage",
+          "extraChassis",
           "prepull",
           "nsLift",
           "otherFee",
@@ -134,10 +166,37 @@ public final class RoadAllInFormulaEvaluator {
     values.put("stopOff", nullToZero(entity.getStopOff()));
     values.put("waitingFee", nullToZero(entity.getWaitingFee()));
     values.put("redelivery", nullToZero(entity.getRedelivery()));
+    values.put("yardStorage", extraDecimal(entity, ROAD_YARD_STORAGE));
+    values.put("extraChassis", extraDecimal(entity, ROAD_EXTRA_CHASSIS));
     values.put("prepull", nullToZero(entity.getPrepull()));
     values.put("nsLift", nullToZero(entity.getNsLift()));
     values.put("otherFee", nullToZero(entity.getOtherFee()));
     return values;
+  }
+
+  private static BigDecimal extraDecimal(CostRoad entity, String key) {
+    if (entity == null || entity.getExtraFields() == null) {
+      return BigDecimal.ZERO;
+    }
+    Object raw = entity.getExtraFields().get(key);
+    if (raw == null) {
+      return BigDecimal.ZERO;
+    }
+    if (raw instanceof BigDecimal decimal) {
+      return decimal;
+    }
+    if (raw instanceof Number number) {
+      return BigDecimal.valueOf(number.doubleValue());
+    }
+    try {
+      String text = String.valueOf(raw).trim();
+      if (text.isEmpty()) {
+        return BigDecimal.ZERO;
+      }
+      return new BigDecimal(text);
+    } catch (NumberFormatException ex) {
+      return BigDecimal.ZERO;
+    }
   }
 
   private static BigDecimal nullToZero(BigDecimal value) {

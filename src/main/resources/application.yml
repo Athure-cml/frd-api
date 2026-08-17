@@ -47,14 +47,15 @@ quote:
       file-path: ./US.txt
       skip-if-exists: true
     global-port:
-      enabled: true
+      # 已改为业务港口表（Excel 名称/类型/国家），关闭 UN/LOCODE 自动灌库与定时同步
+      enabled: false
       skip-if-exists: true
       unlocode-csv-path: ./data/unlocode/code-list.csv
       unlocode-zip-path: ./data/unlocode/loc242csv.zip
       unlocode-official-zip-url: https://service.unece.org/trade/locode/loc242csv.zip
       unlocode-csv-url: https://raw.githubusercontent.com/datasets/un-locode/main/data/code-list.csv
       sync:
-        enabled: true
+        enabled: false
         cron: "0 0 4 1 1,7 ?"
       freightutils:
         base-url: https://www.freightutils.com/api

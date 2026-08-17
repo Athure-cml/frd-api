@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +16,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.furuiduo.quote.cost.dto.CostExportColumn;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
+import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
@@ -27,7 +29,7 @@ public final class CostDataExcelExporter {
   private CostDataExcelExporter() {}
 
   public static byte[] exportRoad(List<CostRoad> items, CostTableTemplateLayout layout) {
-    List<CostExportColumn> columns = CostTemplateExcelSupport.exportColumns("road", layout);
+    List<CostExportColumn> columns = columnsWithStatus("road", layout);
     try (XSSFWorkbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("road");
       writeHeaderRow(sheet, columns);
@@ -48,12 +50,30 @@ public final class CostDataExcelExporter {
     return exportFreight("sea", items, layout, CostDataExcelExporter::readSeaValue);
   }
 
+  public static byte[] exportFumigation(
+      List<CostFumigation> items, CostTableTemplateLayout layout) {
+    return exportFreight(
+        "fumigation", items, layout, CostDataExcelExporter::readFumigationValue);
+  }
+
+  /** 模板列之外固定追加「状态」，与列表展示一致。 */
+  private static List<CostExportColumn> columnsWithStatus(
+      String mode, CostTableTemplateLayout layout) {
+    List<CostExportColumn> columns =
+        new ArrayList<>(CostTemplateExcelSupport.exportColumns(mode, layout));
+    boolean hasStatus = columns.stream().anyMatch(column -> "status".equals(column.field()));
+    if (!hasStatus) {
+      columns.add(new CostExportColumn("status", "状态"));
+    }
+    return columns;
+  }
+
   private static <T> byte[] exportFreight(
       String mode,
       List<T> items,
       CostTableTemplateLayout layout,
       FreightValueReader<T> reader) {
-    List<CostExportColumn> columns = CostTemplateExcelSupport.exportColumns(mode, layout);
+    List<CostExportColumn> columns = columnsWithStatus(mode, layout);
     try (XSSFWorkbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet(mode);
       writeHeaderRow(sheet, columns);
@@ -110,6 +130,9 @@ public final class CostDataExcelExporter {
       case "remark" -> item.getRemark();
       case "validDate" -> item.getValidDate();
       case "logYardNameAddress" -> item.getLogYardNameAddress();
+      case "status" ->
+          formatStatusLabel(
+              CostValidityStatus.resolve(item.getStatus(), item.getValidDate()));
       default -> null;
     };
   }
@@ -139,9 +162,47 @@ public final class CostDataExcelExporter {
       case "ssl" -> item.getSsl();
       case "agent" -> item.getAgent();
       case "remark" -> item.getRemark();
+      case "status" ->
+          formatStatusLabel(
+              CostValidityStatus.resolve(item.getStatus(), item.getFreightValidDate()));
       case "updatedAt" ->
           item.getUpdatedAt() == null ? null : item.getUpdatedAt().format(UPDATED_AT_FORMATTER);
       default -> null;
+    };
+  }
+
+  private static Object readFumigationValue(CostFumigation item, String field) {
+    if (isCustomField(field)) {
+      return readExtraField(item.getExtraFields(), field);
+    }
+    return switch (field) {
+      case "region" -> item.getRegion();
+      case "station" -> item.getStation();
+      case "outdoorNonOak" -> item.getOutdoorNonOak();
+      case "outdoorOak" -> item.getOutdoorOak();
+      case "outdoorValidity" -> item.getOutdoorValidity();
+      case "indoorNonOak" -> item.getIndoorNonOak();
+      case "indoorOak" -> item.getIndoorOak();
+      case "indoorValidity" -> item.getIndoorValidity();
+      case "address" -> item.getAddress();
+      case "status" ->
+          formatStatusLabel(
+              CostValidityStatus.resolve(
+                  item.getStatus(), item.getOutdoorValidity(), item.getIndoorValidity()));
+      case "updatedAt" ->
+          item.getUpdatedAt() == null ? null : item.getUpdatedAt().format(UPDATED_AT_FORMATTER);
+      default -> null;
+    };
+  }
+
+  private static String formatStatusLabel(CostStatus status) {
+    if (status == null) {
+      return null;
+    }
+    return switch (status) {
+      case active -> "生效中";
+      case draft -> "草稿";
+      case expired -> "已过期";
     };
   }
 

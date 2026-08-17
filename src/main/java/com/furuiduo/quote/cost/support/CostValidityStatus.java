@@ -79,6 +79,11 @@ public final class CostValidityStatus {
     return parseSingleDate(text);
   }
 
+  /** 解析单日或区间结束日；解析失败返回 null。 */
+  public static LocalDate tryParseDate(String raw) {
+    return parseEndDate(raw);
+  }
+
   private static LocalDate parseSingleDate(String text) {
     String normalized = text.trim().replace('.', '-');
     for (DateTimeFormatter formatter : FORMATTERS) {

@@ -38,11 +38,11 @@ public class CostRoad {
   @Column(length = 32)
   private String state;
 
-  /** 接货地（美国城市） */
+  /** 接货港（港口档案：SEAPORT/RAIL/INLAND） */
   @Column(length = 128)
   private String por;
 
-  /** 装货港 */
+  /** 装货港（港口档案） */
   @Column(length = 128)
   private String pol;
 

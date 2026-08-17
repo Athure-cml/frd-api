@@ -113,9 +113,14 @@ public class CostGridTemplateService {
     } else if (entity.isDefaultTemplate()) {
       long count = repository.countByMode(mode);
       if (count <= 1) {
+        // 唯一模板必须保持默认
         entity.setDefaultTemplate(true);
       } else {
         entity.setDefaultTemplate(false);
+        entity.touch();
+        repository.save(entity);
+        promoteAnotherDefault(entity);
+        return CostTableTemplateResponse.from(requireEntity(id));
       }
     }
 
@@ -212,6 +217,22 @@ public class CostGridTemplateService {
                 item.touch();
                 repository.save(item);
               }
+            });
+  }
+
+  /** 取消当前默认后，自动将同 mode 下另一条模板设为默认，避免零默认。 */
+  private void promoteAnotherDefault(CostGridTemplate cleared) {
+    if (repository.findFirstByModeAndDefaultTemplateTrue(cleared.getMode()).isPresent()) {
+      return;
+    }
+    repository.findByModeOrderByIdAsc(cleared.getMode()).stream()
+        .filter(item -> !item.getId().equals(cleared.getId()))
+        .findFirst()
+        .ifPresent(
+            item -> {
+              item.setDefaultTemplate(true);
+              item.touch();
+              repository.save(item);
             });
   }
 

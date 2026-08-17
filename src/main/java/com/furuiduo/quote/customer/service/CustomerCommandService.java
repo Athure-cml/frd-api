@@ -13,7 +13,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
+import com.furuiduo.quote.common.PartyReorderSupport;
+import com.furuiduo.quote.common.PartySort;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
@@ -38,7 +39,7 @@ import com.furuiduo.quote.sys.entity.SysUser;
 public class CustomerCommandService {
 
   private static final String[] EXPORT_HEADERS = {
-    "编码", "名称", "联系人", "电话", "邮箱", "地址", "备注", "状态"
+    "编码", "名称", "简称", "联系人", "电话", "邮箱", "地址", "备注", "状态"
   };
 
   private final CustomerRepository customerRepository;
@@ -90,11 +91,49 @@ public class CustomerCommandService {
     customerRepository.delete(customer);
   }
 
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
+  }
+
   public CustomerResponse getById(Long id) {
     return customerRepository
         .findById(id)
         .map(CustomerResponse::from)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "客户不存在"));
+  }
+
+  @Transactional
+  public CustomerResponse setPinned(Long id, boolean pinned) {
+    Customer customer =
+        customerRepository
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "客户不存在"));
+    if (pinned) {
+      customer.setPinnedAt(LocalDateTime.now());
+      customer.setSortOrder(customerRepository.minPinnedSortOrder() - 1);
+    } else {
+      customer.setPinnedAt(null);
+      customer.setSortOrder(customerRepository.maxUnpinnedSortOrder() + 1);
+    }
+    return CustomerResponse.from(customerRepository.save(customer));
+  }
+
+  @Transactional
+  public void reorder(List<Long> orderedIds) {
+    PartyReorderSupport.reorder(
+        orderedIds,
+        id -> customerRepository.findById(id).orElse(null),
+        Customer::getId,
+        e -> e.getPinnedAt() != null,
+        customerRepository::findAllByPinned,
+        Customer::setSortOrder,
+        customerRepository::saveAll);
   }
 
   public Customer requireEnabled(Long id) {
@@ -131,7 +170,10 @@ public class CustomerCommandService {
               .toList();
     } else {
       var pageable =
-          PageRequest.of(0, 10_000, Sort.by(Sort.Direction.DESC, "updatedAt"));
+          PageRequest.of(
+              0,
+              10_000,
+              PartySort.list());
       items =
           customerRepository
               .search(SearchText.orEmpty(code), SearchText.orEmpty(name), status, pageable)
@@ -145,12 +187,13 @@ public class CustomerCommandService {
         Row row = sheet.createRow(rowIndex++);
         row.createCell(0).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
         row.createCell(1).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getName()));
-        row.createCell(2).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContactName()));
-        row.createCell(3).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
-        row.createCell(4).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
-        row.createCell(5).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getAddress()));
-        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
-        row.createCell(7).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
+        row.createCell(2).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getShortName()));
+        row.createCell(3).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContactName()));
+        row.createCell(4).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
+        row.createCell(5).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
+        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getAddress()));
+        row.createCell(7).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
+        row.createCell(8).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
@@ -172,6 +215,7 @@ public class CustomerCommandService {
       assertNameAvailable(name, customer.getId());
     }
     customer.setName(name);
+    customer.setShortName(PartyMasterExcelSupport.trimToNull(row.shortName()));
     customer.setContactName(PartyMasterExcelSupport.trimToNull(row.contactName()));
     customer.setPhone(PartyMasterExcelSupport.trimToNull(row.phone()));
     customer.setEmail(PartyMasterExcelSupport.trimToNull(row.email()));
@@ -204,6 +248,8 @@ public class CustomerCommandService {
     Map<String, Integer> headers = CostExcelSupport.readHeaderMap(row.getSheet().getRow(0));
     String code = CostExcelSupport.readByHeader(row, headers, "编码", "Code");
     String name = CostExcelSupport.readByHeader(row, headers, "名称", "Name", "客户名称");
+    String shortName =
+        CostExcelSupport.readByHeader(row, headers, "简称", "Short Name", "ShortName");
     String contactName =
         CostExcelSupport.readByHeader(row, headers, "联系人", "Contact", "Contact Name");
     String phone = CostExcelSupport.readByHeader(row, headers, "电话", "Phone");
@@ -213,6 +259,7 @@ public class CustomerCommandService {
     String statusRaw = CostExcelSupport.readByHeader(row, headers, "状态", "Status");
     if (code.isBlank()
         && name.isBlank()
+        && shortName.isBlank()
         && contactName.isBlank()
         && phone.isBlank()
         && email.isBlank()
@@ -222,7 +269,15 @@ public class CustomerCommandService {
       return null;
     }
     return new ImportRow(
-        code, name, contactName, phone, email, address, remark, PartyMasterExcelSupport.parseStatusCell(statusRaw));
+        code,
+        name,
+        shortName,
+        contactName,
+        phone,
+        email,
+        address,
+        remark,
+        PartyMasterExcelSupport.parseStatusCell(statusRaw));
   }
 
   private String validateImportRow(ImportRow row, Set<String> seenNames) {
@@ -257,6 +312,7 @@ public class CustomerCommandService {
 
   private void apply(Customer customer, CustomerSaveRequest request) {
     customer.setName(PartyMasterExcelSupport.normalizeName(request.name()));
+    customer.setShortName(PartyMasterExcelSupport.trimToNull(request.shortName()));
     customer.setContactName(PartyMasterExcelSupport.trimToNull(request.contactName()));
     customer.setPhone(PartyMasterExcelSupport.trimToNull(request.phone()));
     customer.setEmail(PartyMasterExcelSupport.trimToNull(request.email()));
@@ -269,6 +325,7 @@ public class CustomerCommandService {
   private record ImportRow(
       String code,
       String name,
+      String shortName,
       String contactName,
       String phone,
       String email,

@@ -96,6 +96,14 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
 
   @Query(
       """
+      SELECT CASE WHEN COUNT(z) > 0 THEN true ELSE false END
+      FROM MdDestZip z
+      WHERE UPPER(TRIM(z.zipCode)) = UPPER(TRIM(:zipCode))
+      """)
+  boolean existsByZipCodeIgnoreCase(@Param("zipCode") String zipCode);
+
+  @Query(
+      """
       SELECT new com.furuiduo.quote.masterdata.dto.DestAddressRowResponse(
         z.id, s.code, s.id, c.name, c.id, z.zipCode)
       FROM MdDestZip z, MdDestCity c, MdUsState s
@@ -108,4 +116,17 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
 
   @Query("SELECT z.cityId, LOWER(z.zipCode) FROM MdDestZip z")
   List<Object[]> findExistingZipKeys();
+
+  @Query(
+      """
+      SELECT z.zipCode
+      FROM MdDestZip z, MdDestCity c, MdUsState s
+      WHERE z.cityId = c.id
+        AND c.stateId = s.id
+        AND UPPER(s.code) = UPPER(:stateCode)
+        AND UPPER(c.name) = UPPER(:cityName)
+      ORDER BY z.zipCode ASC
+      """)
+  List<String> findZipCodesByStateCodeAndCityName(
+      @Param("stateCode") String stateCode, @Param("cityName") String cityName);
 }

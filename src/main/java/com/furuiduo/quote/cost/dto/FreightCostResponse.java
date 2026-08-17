@@ -65,7 +65,31 @@ public record FreightCostResponse(
         entity.getAgent(),
         entity.getRemark(),
         status,
-        entity.getExtraFields(),
+        migrateSeaExtraFields(entity.getExtraFields()),
         entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER));
+  }
+
+  private static Map<String, Object> migrateSeaExtraFields(Map<String, Object> extraFields) {
+    if (extraFields == null || extraFields.isEmpty()) {
+      return extraFields;
+    }
+    Map<String, Object> next = new java.util.LinkedHashMap<>(extraFields);
+    boolean changed = false;
+    changed |= moveExtraKey(next, "cf_seaFreightEff", "cf_sea_freight_eff");
+    changed |= moveExtraKey(next, "cf_seaBunkerEff", "cf_sea_bunker_eff");
+    changed |= moveExtraKey(next, "cf_seaOthersEff", "cf_sea_others_eff");
+    return changed ? next : extraFields;
+  }
+
+  private static boolean moveExtraKey(
+      Map<String, Object> map, String from, String to) {
+    if (!map.containsKey(from)) {
+      return false;
+    }
+    if (!map.containsKey(to) || map.get(to) == null || String.valueOf(map.get(to)).isBlank()) {
+      map.put(to, map.get(from));
+    }
+    map.remove(from);
+    return true;
   }
 }

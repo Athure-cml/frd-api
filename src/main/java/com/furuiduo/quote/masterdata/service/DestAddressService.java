@@ -30,6 +30,8 @@ import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.dto.DestAddressTreeNodeResponse;
 import com.furuiduo.quote.masterdata.dto.DestCityResponse;
 import com.furuiduo.quote.masterdata.dto.DestCitySaveRequest;
+import com.furuiduo.quote.masterdata.dto.DestZipResolveItemRequest;
+import com.furuiduo.quote.masterdata.dto.DestZipResolveItemResponse;
 import com.furuiduo.quote.masterdata.dto.DestZipResponse;
 import com.furuiduo.quote.masterdata.dto.DestZipSaveRequest;
 import com.furuiduo.quote.masterdata.entity.MdDestCity;
@@ -83,6 +85,60 @@ public class DestAddressService {
     return zipRepository
         .searchRowsByZipPrefix(normalized, PageRequest.of(0, size))
         .getContent();
+  }
+
+  /**
+   * 按 City + State（州代码）解析邮编：唯一则返回 zip；多个为 ambiguous；无匹配为 notFound。
+   */
+  @Transactional(readOnly = true)
+  public List<DestZipResolveItemResponse> resolveZips(List<DestZipResolveItemRequest> items) {
+    if (items == null || items.isEmpty()) {
+      return List.of();
+    }
+    Map<String, DestZipResolveItemResponse> cache = new HashMap<>();
+    List<DestZipResolveItemResponse> results = new ArrayList<>(items.size());
+    for (DestZipResolveItemRequest item : items) {
+      String city = item == null || item.city() == null ? "" : item.city().trim();
+      String state = item == null || item.state() == null ? "" : item.state().trim();
+      if (city.isEmpty() || state.isEmpty()) {
+        results.add(
+            DestZipResolveItemResponse.skipped(city, state, "City 与 State 均需提供才能解析邮编"));
+        continue;
+      }
+      String cacheKey = state.toUpperCase() + '\0' + city.toUpperCase();
+      DestZipResolveItemResponse cached = cache.get(cacheKey);
+      if (cached != null) {
+        results.add(cached);
+        continue;
+      }
+      DestZipResolveItemResponse resolved = resolveZip(city, state);
+      cache.put(cacheKey, resolved);
+      results.add(resolved);
+    }
+    return results;
+  }
+
+  @Transactional(readOnly = true)
+  public DestZipResolveItemResponse resolveZip(String city, String state) {
+    String normalizedCity = city == null ? "" : city.trim();
+    String normalizedState = state == null ? "" : state.trim();
+    if (normalizedCity.isEmpty() || normalizedState.isEmpty()) {
+      return DestZipResolveItemResponse.skipped(
+          normalizedCity, normalizedState, "City 与 State 均需提供才能解析邮编");
+    }
+    List<String> zips =
+        zipRepository.findZipCodesByStateCodeAndCityName(normalizedState, normalizedCity).stream()
+            .filter(zip -> zip != null && !zip.isBlank())
+            .map(String::trim)
+            .distinct()
+            .toList();
+    if (zips.isEmpty()) {
+      return DestZipResolveItemResponse.notFound(normalizedCity, normalizedState);
+    }
+    if (zips.size() == 1) {
+      return DestZipResolveItemResponse.unique(normalizedCity, normalizedState, zips.get(0));
+    }
+    return DestZipResolveItemResponse.ambiguous(normalizedCity, normalizedState, zips);
   }
 
   /** 熏蒸 REGION 等下拉：按关键词搜索去重后的城市名。 */

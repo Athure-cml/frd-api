@@ -128,7 +128,10 @@ public final class MenuRegistry {
         .meta("title", "page.customer.title")
         .requireAnyPermission(
             PermissionCodes.CUSTOMER_VIEW,
-            PermissionCodes.SUPPLIER_VIEW,
+            PermissionCodes.SUPPLIER_TRUCK_VIEW,
+            PermissionCodes.SUPPLIER_FUMIGATION_VIEW,
+            PermissionCodes.SUPPLIER_YARD_VIEW,
+            PermissionCodes.SUPPLIER_OTHER_VIEW,
             PermissionCodes.SHIPPING_LINE_VIEW,
             PermissionCodes.AGENT_VIEW)
         .child(
@@ -138,11 +141,12 @@ public final class MenuRegistry {
                 .meta("title", "page.customer.list")
                 .requirePermission(PermissionCodes.CUSTOMER_VIEW))
         .child(
-            MenuRouteDto.of("SupplierList", "/customers/suppliers")
+            MenuRouteDto.of("SupplierTruckList", "/customers/suppliers")
                 .component("/supplier/list/index")
                 .meta("icon", "lucide:truck")
-                .meta("title", "page.supplier.list")
-                .requirePermission(PermissionCodes.SUPPLIER_VIEW))
+                .meta("supplierCategory", "TRUCK")
+                .meta("title", "page.supplier.truckList")
+                .requirePermission(PermissionCodes.SUPPLIER_TRUCK_VIEW))
         .child(
             MenuRouteDto.of("ShippingLineList", "/customers/shipping-lines")
                 .component("/shipping-line/list/index")
@@ -150,11 +154,32 @@ public final class MenuRegistry {
                 .meta("title", "page.shippingLine.list")
                 .requirePermission(PermissionCodes.SHIPPING_LINE_VIEW))
         .child(
+            MenuRouteDto.of("SupplierFumigationList", "/customers/fumigation-suppliers")
+                .component("/supplier/list/index")
+                .meta("icon", "lucide:flame")
+                .meta("supplierCategory", "FUMIGATION")
+                .meta("title", "page.supplier.fumigationList")
+                .requirePermission(PermissionCodes.SUPPLIER_FUMIGATION_VIEW))
+        .child(
             MenuRouteDto.of("AgentList", "/customers/agents")
                 .component("/agent/list/index")
                 .meta("icon", "lucide:handshake")
                 .meta("title", "page.agent.list")
-                .requirePermission(PermissionCodes.AGENT_VIEW));
+                .requirePermission(PermissionCodes.AGENT_VIEW))
+        .child(
+            MenuRouteDto.of("SupplierYardList", "/customers/yard-suppliers")
+                .component("/supplier/list/index")
+                .meta("icon", "lucide:warehouse")
+                .meta("supplierCategory", "YARD")
+                .meta("title", "page.supplier.yardList")
+                .requirePermission(PermissionCodes.SUPPLIER_YARD_VIEW))
+        .child(
+            MenuRouteDto.of("SupplierOtherList", "/customers/other-suppliers")
+                .component("/supplier/list/index")
+                .meta("icon", "lucide:boxes")
+                .meta("supplierCategory", "OTHER")
+                .meta("title", "page.supplier.otherList")
+                .requirePermission(PermissionCodes.SUPPLIER_OTHER_VIEW));
   }
 
   private static MenuRouteDto masterData() {
@@ -176,6 +201,12 @@ public final class MenuRegistry {
                 .meta("icon", "lucide:arrow-left-right")
                 .meta("title", "page.masterData.exchangeRate")
                 .requirePermission(PermissionCodes.EXCHANGE_RATE_VIEW))
+        .child(
+            MenuRouteDto.of("MasterDataUnit", "/master-data/unit")
+                .component("/master-data/unit/index")
+                .meta("icon", "lucide:ruler")
+                .meta("title", "page.masterData.unit")
+                .requirePermission(PermissionCodes.UNIT_VIEW))
         .child(
             MenuRouteDto.of("MasterDataUsStateZip", "/master-data/us-state-zip")
                 .component("/master-data/us-state-zip/index")

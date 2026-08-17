@@ -3,6 +3,7 @@ package com.furuiduo.quote.supplier.controller;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,7 +24,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
+import com.furuiduo.quote.common.BatchIdsRequest;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.ReorderRequest;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostImportResult;
@@ -31,7 +34,9 @@ import com.furuiduo.quote.supplier.dto.SupplierResponse;
 import com.furuiduo.quote.supplier.dto.SupplierSaveRequest;
 import com.furuiduo.quote.supplier.service.SupplierCommandService;
 import com.furuiduo.quote.supplier.service.SupplierQueryService;
+import com.furuiduo.quote.supplier.support.SupplierCategories;
 import com.furuiduo.quote.sys.PermissionCodes;
+import com.furuiduo.quote.sys.SupplierPermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
 
@@ -39,7 +44,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "供应商", description = "供应商主数据")
+@Tag(name = "供应商", description = "供应商主数据（按分类）")
 @RestController
 @RequestMapping("/suppliers")
 public class SupplierController {
@@ -68,11 +73,14 @@ public class SupplierController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int pageSize,
+      @RequestParam(defaultValue = "TRUCK") String category,
       @RequestParam(required = false) String code,
       @RequestParam(required = false) String name,
-      @RequestParam(required = false) Integer status) {
-    requireView(authService.requireUser(authorization));
-    return ApiResponse.ok(supplierQueryService.list(page, pageSize, code, name, status));
+      @RequestParam(required = false) Integer status,
+      @RequestParam(required = false) String typeId) {
+    require(authService.requireUser(authorization), category, "view");
+    return ApiResponse.ok(
+        supplierQueryService.list(page, pageSize, category, code, name, status, typeId));
   }
 
   @Operation(
@@ -82,8 +90,9 @@ public class SupplierController {
   public ApiResponse<SupplierResponse> get(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
-    requireView(authService.requireUser(authorization));
-    return ApiResponse.ok(supplierCommandService.getById(id));
+    SupplierResponse row = supplierCommandService.getById(id);
+    require(authService.requireUser(authorization), row.category(), "view");
+    return ApiResponse.ok(row);
   }
 
   @Operation(
@@ -94,7 +103,7 @@ public class SupplierController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody SupplierSaveRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireCreate(user);
+    require(user, request.category(), "create");
     return ApiResponse.ok(supplierCommandService.create(user, request));
   }
 
@@ -106,8 +115,49 @@ public class SupplierController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id,
       @RequestBody SupplierSaveRequest request) {
-    requireEdit(authService.requireUser(authorization));
+    SupplierResponse existing = supplierCommandService.getById(id);
+    require(authService.requireUser(authorization), existing.category(), "edit");
     return ApiResponse.ok(supplierCommandService.update(id, request));
+  }
+
+  @Operation(
+      summary = "置顶供应商",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/pin")
+  public ApiResponse<SupplierResponse> pin(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SupplierResponse existing = supplierCommandService.getById(id);
+    require(authService.requireUser(authorization), existing.category(), "edit");
+    return ApiResponse.ok(supplierCommandService.setPinned(id, true));
+  }
+
+  @Operation(
+      summary = "取消置顶供应商",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/unpin")
+  public ApiResponse<SupplierResponse> unpin(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SupplierResponse existing = supplierCommandService.getById(id);
+    require(authService.requireUser(authorization), existing.category(), "edit");
+    return ApiResponse.ok(supplierCommandService.setPinned(id, false));
+  }
+
+  @Operation(
+      summary = "拖拽排序",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PutMapping("/reorder")
+  public ApiResponse<Void> reorder(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody ReorderRequest request) {
+    List<Long> ids = request.ids() == null ? List.of() : request.ids();
+    if (!ids.isEmpty()) {
+      SupplierResponse existing = supplierCommandService.getById(ids.get(0));
+      require(authService.requireUser(authorization), existing.category(), "edit");
+    }
+    supplierCommandService.reorder(ids);
+    return ApiResponse.ok(null);
   }
 
   @Operation(
@@ -117,8 +167,29 @@ public class SupplierController {
   public ApiResponse<Void> delete(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
-    requireDelete(authService.requireUser(authorization));
+    SupplierResponse existing = supplierCommandService.getById(id);
+    require(authService.requireUser(authorization), existing.category(), "delete");
     supplierCommandService.delete(id);
+    return ApiResponse.ok(null);
+  }
+
+  @Operation(
+      summary = "批量删除供应商",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/batch-delete")
+  public ApiResponse<Void> batchDelete(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody BatchIdsRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    List<Long> ids = request.ids() == null ? List.of() : request.ids();
+    for (Long id : ids) {
+      if (id == null) {
+        continue;
+      }
+      SupplierResponse existing = supplierCommandService.getById(id);
+      require(user, existing.category(), "delete");
+    }
+    supplierCommandService.batchDelete(ids);
     return ApiResponse.ok(null);
   }
 
@@ -128,11 +199,12 @@ public class SupplierController {
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(defaultValue = "TRUCK") String category)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
-    requireCreate(user);
-    return ApiResponse.ok(supplierCommandService.importExcel(user, file));
+    require(user, category, "create");
+    return ApiResponse.ok(supplierCommandService.importExcel(user, file, category));
   }
 
   @Operation(
@@ -141,15 +213,19 @@ public class SupplierController {
   @GetMapping("/export")
   public ResponseEntity<byte[]> exportExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(defaultValue = "TRUCK") String category,
       @RequestParam(required = false) String code,
       @RequestParam(required = false) String name,
       @RequestParam(required = false) Integer status,
+      @RequestParam(required = false) String typeId,
       @RequestParam(required = false) String ids) {
-    requireView(authService.requireUser(authorization));
+    require(authService.requireUser(authorization), category, "view");
     byte[] bytes =
-        supplierCommandService.exportExcel(code, name, status, RequestIds.parse(ids));
+        supplierCommandService.exportExcel(
+            category, code, name, status, typeId, RequestIds.parse(ids));
     String filename =
-        URLEncoder.encode("供应商.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+        URLEncoder.encode(SupplierCategories.exportFilename(category), StandardCharsets.UTF_8)
+            .replace("+", "%20");
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
@@ -159,27 +235,16 @@ public class SupplierController {
         .body(bytes);
   }
 
-  private void requireView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SUPPLIER_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+  private void require(SysUser user, String category, String action) {
+    String modern = SupplierPermissionCodes.of(category, action);
+    if (permissionService.hasPermission(user, modern)) {
+      return;
     }
-  }
-
-  private void requireCreate(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SUPPLIER_CREATE)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    // 兼容未迁移的旧扁平权限
+    String legacy = "supplier:" + action;
+    if (permissionService.hasPermission(user, legacy)) {
+      return;
     }
-  }
-
-  private void requireEdit(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SUPPLIER_EDIT)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
-    }
-  }
-
-  private void requireDelete(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SUPPLIER_DELETE)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
-    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
   }
 }

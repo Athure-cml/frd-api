@@ -1,7 +1,9 @@
 package com.furuiduo.quote.cost.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "表格列覆盖配置")
 public record CostTableFieldOverride(
     @Schema(description = "是否可见") Boolean visible,
@@ -10,4 +12,6 @@ public record CostTableFieldOverride(
     @Schema(description = "固定列 left/right") String fixed,
     @Schema(description = "自定义列标题") String title,
     @Schema(description = "是否必填") Boolean required,
-    @Schema(description = "对齐 left/center/right") String align) {}
+    @Schema(description = "对齐 left/center/right") String align,
+    @Schema(description = "列背景色，如 #E8F1FC") String bgColor,
+    @Schema(description = "列表是否允许表头排序") Boolean sortable) {}

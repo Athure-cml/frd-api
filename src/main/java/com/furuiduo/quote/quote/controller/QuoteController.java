@@ -23,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
+import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
@@ -269,10 +270,56 @@ public class QuoteController {
   }
 
   @Operation(
-      summary = "批量导出 Excel",
+      summary = "导出 Excel（勾选优先，否则按搜索条件，无条件则全部）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/export")
+  public ResponseEntity<byte[]> export(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String ids,
+      @RequestParam(required = false) String quoteNo,
+      @RequestParam(required = false) String customerName,
+      @RequestParam(required = false) String transportMode,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String zipCode,
+      @RequestParam(required = false) String city,
+      @RequestParam(required = false) String state,
+      @RequestParam(required = false) String por,
+      @RequestParam(required = false) String pol,
+      @RequestParam(required = false) String pod,
+      @RequestParam(required = false) String ssl,
+      @RequestParam(required = false) String followUpByName) {
+    SysUser user = authService.requireUser(authorization);
+    requireExport(user);
+    byte[] bytes =
+        quoteExportService.export(
+            user,
+            RequestIds.parse(ids),
+            quoteNo,
+            customerName,
+            transportMode,
+            status,
+            zipCode,
+            city,
+            state,
+            por,
+            pol,
+            pod,
+            ssl,
+            followUpByName);
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename*=UTF-8''"
+                + URLEncoder.encode("报价单.xlsx", StandardCharsets.UTF_8).replace("+", "%20"))
+        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+        .body(bytes);
+  }
+
+  @Operation(
+      summary = "批量导出 Excel（兼容旧 POST）",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/export")
-  public ResponseEntity<byte[]> export(
+  public ResponseEntity<byte[]> exportPost(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteBatchExportRequest request) {
     SysUser user = authService.requireUser(authorization);

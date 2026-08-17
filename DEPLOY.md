@@ -30,7 +30,8 @@ CORS_ALLOWED_ORIGIN_PATTERNS=https://your-app.vercel.app,https://*.vercel.app
 | 文件 | 说明 |
 |------|------|
 | `src/main/resources/db/migration/V1__init_schema.sql` | Flyway 全量建表（24 张业务表 + 关联表） |
-| `scripts/reset-postgres.sql` | 清库 SQL（供 psql / CLI 使用） |
+| `scripts/reset-postgres.sql` | **整库重建**（DROP SCHEMA，重启后 Flyway 全量重跑；账号也没了） |
+| `scripts/clear-business-data.sql` | **上线清理**：只清报价/成本/客商/操作日志，保留系统账号与主数据 |
 
 Render 启动时 `spring.flyway.enabled=true`，自动执行迁移。`ddl-auto=none`，不再依赖 Hibernate 自动建表。
 

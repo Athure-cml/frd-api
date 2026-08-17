@@ -13,7 +13,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +26,8 @@ import com.furuiduo.quote.agent.repository.AgentRepository;
 import com.furuiduo.quote.agent.support.AgentCodeGenerator;
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
+import com.furuiduo.quote.common.PartyReorderSupport;
+import com.furuiduo.quote.common.PartySort;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
@@ -36,7 +37,9 @@ import com.furuiduo.quote.sys.entity.SysUser;
 @Service
 public class AgentCommandService {
 
-  private static final String[] EXPORT_HEADERS = {"编码", "名称", "邮箱", "备注", "状态"};
+  private static final String[] EXPORT_HEADERS = {
+    "编码", "名称", "简称", "联系人", "电话", "邮箱", "备注", "状态"
+  };
 
   private final AgentRepository repository;
   private final AgentCodeGenerator codeGenerator;
@@ -79,11 +82,49 @@ public class AgentCommandService {
     repository.delete(entity);
   }
 
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
+  }
+
   public AgentResponse getById(Long id) {
     return repository
         .findById(id)
         .map(AgentResponse::from)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "代理商不存在"));
+  }
+
+  @Transactional
+  public AgentResponse setPinned(Long id, boolean pinned) {
+    Agent entity =
+        repository
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "代理商不存在"));
+    if (pinned) {
+      entity.setPinnedAt(LocalDateTime.now());
+      entity.setSortOrder(repository.minPinnedSortOrder() - 1);
+    } else {
+      entity.setPinnedAt(null);
+      entity.setSortOrder(repository.maxUnpinnedSortOrder() + 1);
+    }
+    return AgentResponse.from(repository.save(entity));
+  }
+
+  @Transactional
+  public void reorder(List<Long> orderedIds) {
+    PartyReorderSupport.reorder(
+        orderedIds,
+        id -> repository.findById(id).orElse(null),
+        Agent::getId,
+        e -> e.getPinnedAt() != null,
+        repository::findAllByPinned,
+        Agent::setSortOrder,
+        repository::saveAll);
   }
 
   @Transactional
@@ -109,7 +150,10 @@ public class AgentCommandService {
               .toList();
     } else {
       var pageable =
-          PageRequest.of(0, 10_000, Sort.by(Sort.Direction.DESC, "updatedAt"));
+          PageRequest.of(
+              0,
+              10_000,
+              PartySort.list());
       items =
           repository
               .search(SearchText.orEmpty(code), SearchText.orEmpty(name), status, pageable)
@@ -123,9 +167,13 @@ public class AgentCommandService {
         Row row = sheet.createRow(rowIndex++);
         row.createCell(0).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
         row.createCell(1).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getName()));
-        row.createCell(2).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
-        row.createCell(3).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
-        row.createCell(4).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
+        row.createCell(2).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getShortName()));
+        row.createCell(3)
+            .setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContactName()));
+        row.createCell(4).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
+        row.createCell(5).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
+        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
+        row.createCell(7).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
@@ -147,6 +195,9 @@ public class AgentCommandService {
       assertNameAvailable(name, entity.getId());
     }
     entity.setName(name);
+    entity.setShortName(PartyMasterExcelSupport.trimToNull(row.shortName()));
+    entity.setContactName(PartyMasterExcelSupport.trimToNull(row.contactName()));
+    entity.setPhone(PartyMasterExcelSupport.trimToNull(row.phone()));
     entity.setEmail(PartyMasterExcelSupport.trimToNull(row.email()));
     entity.setRemark(PartyMasterExcelSupport.trimToNull(row.remark()));
     entity.setStatus(
@@ -173,18 +224,33 @@ public class AgentCommandService {
     Map<String, Integer> headers = CostExcelSupport.readHeaderMap(row.getSheet().getRow(0));
     String code = CostExcelSupport.readByHeader(row, headers, "编码", "Code");
     String name = CostExcelSupport.readByHeader(row, headers, "名称", "Name", "代理商名称");
+    String shortName =
+        CostExcelSupport.readByHeader(row, headers, "简称", "Short Name", "ShortName");
+    String contactName =
+        CostExcelSupport.readByHeader(row, headers, "联系人", "Contact", "Contact Name");
+    String phone = CostExcelSupport.readByHeader(row, headers, "电话", "Phone", "Mobile");
     String email = CostExcelSupport.readByHeader(row, headers, "邮箱", "Email");
     String remark = CostExcelSupport.readByHeader(row, headers, "备注", "Remark");
     String statusRaw = CostExcelSupport.readByHeader(row, headers, "状态", "Status");
     if (code.isBlank()
         && name.isBlank()
+        && shortName.isBlank()
+        && contactName.isBlank()
+        && phone.isBlank()
         && email.isBlank()
         && remark.isBlank()
         && statusRaw.isBlank()) {
       return null;
     }
     return new ImportRow(
-        code, name, email, remark, PartyMasterExcelSupport.parseStatusCell(statusRaw));
+        code,
+        name,
+        shortName,
+        contactName,
+        phone,
+        email,
+        remark,
+        PartyMasterExcelSupport.parseStatusCell(statusRaw));
   }
 
   private String validateImportRow(ImportRow row, Set<String> seenNames) {
@@ -219,6 +285,9 @@ public class AgentCommandService {
 
   private void apply(Agent entity, AgentSaveRequest request) {
     entity.setName(PartyMasterExcelSupport.normalizeName(request.name()));
+    entity.setShortName(PartyMasterExcelSupport.trimToNull(request.shortName()));
+    entity.setContactName(PartyMasterExcelSupport.trimToNull(request.contactName()));
+    entity.setPhone(PartyMasterExcelSupport.trimToNull(request.phone()));
     entity.setEmail(PartyMasterExcelSupport.trimToNull(request.email()));
     entity.setRemark(PartyMasterExcelSupport.trimToNull(request.remark()));
     entity.setStatus(request.status());
@@ -226,5 +295,12 @@ public class AgentCommandService {
   }
 
   private record ImportRow(
-      String code, String name, String email, String remark, StatusCell status) {}
+      String code,
+      String name,
+      String shortName,
+      String contactName,
+      String phone,
+      String email,
+      String remark,
+      StatusCell status) {}
 }

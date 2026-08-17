@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
@@ -32,9 +34,8 @@ import com.furuiduo.quote.masterdata.repository.MdInlandPorRepository;
 @Service
 public class GlobalPortService {
 
-  private static final String[] EXPORT_HEADERS = {
-    "Port Code", "Name EN", "Name ZH", "Route", "Country/Region", "Port Type"
-  };
+  /** 与业务港口 Excel 表头一致 */
+  private static final String[] EXPORT_HEADERS = {"名称", "类型", "国家"};
 
   private final MdGlobalPortRepository repository;
   private final MdInlandPorRepository inlandPorRepository;
@@ -69,7 +70,7 @@ public class GlobalPortService {
         && normalizedRoute.isEmpty()
         && normalizedCountryRegion.isEmpty()
         && portType == null) {
-      return paginate(repository.findAll(Sort.by("code")), safePage, safePageSize);
+      return paginate(repository.findAll(Sort.by("nameEn")), safePage, safePageSize);
     }
 
     List<MdGlobalPort> filtered =
@@ -89,7 +90,7 @@ public class GlobalPortService {
     return GlobalPortResponse.from(requireEntity(id));
   }
 
-  /** 录入下拉：按关键词搜索港口（编码 / 英文 / 中文），限制返回条数。 */
+  /** 录入下拉：按关键词搜索港口（名称 / 国家），限制返回条数。 */
   @Transactional(readOnly = true)
   public List<GlobalPortResponse> listOptions(
       String keyword, Collection<PortType> portTypes, int limit) {
@@ -137,7 +138,7 @@ public class GlobalPortService {
 
   @Transactional
   public CostImportResult importExcel(MultipartFile file) throws IOException {
-    Set<String> seenCodes = new HashSet<>();
+    Set<String> seenBusinessKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
@@ -147,8 +148,12 @@ public class GlobalPortService {
           if (error != null) {
             return error;
           }
-          if (!seenCodes.add(entity.getCode())) {
-            return "港口代码与文件中其他行重复：" + entity.getCode();
+          String businessKey = businessKey(entity);
+          if (!seenBusinessKeys.add(businessKey)) {
+            return "已有该行数据（文件内重复）：" + entity.getNameEn();
+          }
+          if (findExistingByBusinessKey(entity).isPresent()) {
+            return "已有该行数据";
           }
           return null;
         },
@@ -191,18 +196,14 @@ public class GlobalPortService {
     }
 
     try (Workbook workbook = new XSSFWorkbook()) {
-      Sheet sheet = workbook.createSheet("Global Port");
+      Sheet sheet = workbook.createSheet("港口");
       CostExcelSupport.writeHeaderRow(sheet, EXPORT_HEADERS);
       int rowIndex = 1;
       for (MdGlobalPort item : items) {
         Row row = sheet.createRow(rowIndex++);
-        row.createCell(0).setCellValue(nullToEmpty(item.getCode()));
-        row.createCell(1).setCellValue(nullToEmpty(item.getNameEn()));
-        row.createCell(2).setCellValue(nullToEmpty(item.getNameZh()));
-        row.createCell(3).setCellValue(nullToEmpty(item.getRoute()));
-        row.createCell(4).setCellValue(nullToEmpty(item.getCountryRegion()));
-        row.createCell(5)
-            .setCellValue(item.getPortType() == null ? "" : item.getPortType().name());
+        row.createCell(0).setCellValue(nullToEmpty(item.getNameEn()));
+        row.createCell(1).setCellValue(formatPortTypeLabel(item.getPortType()));
+        row.createCell(2).setCellValue(nullToEmpty(item.getCountryRegion()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
@@ -233,58 +234,91 @@ public class GlobalPortService {
 
   private MdGlobalPort mapImportRow(Row row) {
     var headers = CostExcelSupport.readHeaderMap(row.getSheet().getRow(0));
-    String code = CostExcelSupport.readByHeader(row, headers, "Port Code", "PORT CODE", "CODE");
-    String nameEn = CostExcelSupport.readByHeader(row, headers, "Name EN", "NAME EN");
-    String nameZh = CostExcelSupport.readByHeader(row, headers, "Name ZH", "NAME ZH");
-    String route = CostExcelSupport.readByHeader(row, headers, "Route", "ROUTE");
+    String nameEn =
+        firstNonBlank(
+            CostExcelSupport.readByHeader(row, headers, "名称", "NAME", "Name EN", "NAME EN"),
+            CostExcelSupport.readByHeader(row, headers, "Port Code", "PORT CODE", "CODE"));
     String countryRegion =
-        CostExcelSupport.readByHeader(row, headers, "Country/Region", "COUNTRY/REGION");
-    String portTypeRaw = CostExcelSupport.readByHeader(row, headers, "Port Type", "PORT TYPE");
-    if (code.isBlank() && nameEn.isBlank() && nameZh.isBlank() && route.isBlank()
-        && countryRegion.isBlank() && portTypeRaw.isBlank()) {
+        firstNonBlank(
+            CostExcelSupport.readByHeader(row, headers, "国家", "COUNTRY", "Country/Region", "COUNTRY/REGION"),
+            "");
+    String portTypeRaw =
+        firstNonBlank(
+            CostExcelSupport.readByHeader(row, headers, "类型", "TYPE", "Port Type", "PORT TYPE"),
+            "");
+    String code =
+        CostExcelSupport.readByHeader(row, headers, "Port Code", "PORT CODE", "CODE", "编码");
+    if (nameEn.isBlank() && countryRegion.isBlank() && portTypeRaw.isBlank() && code.isBlank()) {
       return null;
     }
+    String resolvedName = sanitizeName(nameEn);
+    if (resolvedName.isBlank()) {
+      resolvedName = sanitizeName(code);
+    }
     MdGlobalPort entity = new MdGlobalPort();
-    entity.setCode(normalizeCode(code));
-    entity.setNameEn(nameEn.trim());
-    entity.setNameZh(trimToNull(nameZh));
-    entity.setRoute(trimToNull(route));
+    entity.setNameEn(resolvedName);
+    entity.setCode(code.isBlank() ? generateCode(resolvedName) : normalizeCode(code));
+    entity.setNameZh(null);
+    entity.setRoute(null);
     entity.setCountryRegion(trimToNull(countryRegion));
     entity.setPortType(parsePortType(portTypeRaw));
     return entity;
   }
 
   private String validateImportRow(MdGlobalPort entity) {
-    if (entity.getCode() == null || entity.getCode().isBlank()) {
-      return "港口代码不能为空";
-    }
     if (entity.getNameEn() == null || entity.getNameEn().isBlank()) {
-      return "英文名称不能为空";
+      return "名称不能为空";
+    }
+    if (entity.getCode() == null || entity.getCode().isBlank()) {
+      return "无法根据名称生成编码";
     }
     return null;
   }
 
+  private Optional<MdGlobalPort> findExistingByBusinessKey(MdGlobalPort entity) {
+    String country =
+        entity.getCountryRegion() == null ? "" : entity.getCountryRegion().trim();
+    PortType portType = entity.getPortType() == null ? PortType.SEAPORT : entity.getPortType();
+    return repository.findByBusinessKey(entity.getNameEn().trim(), country, portType);
+  }
+
+  private String businessKey(MdGlobalPort entity) {
+    String name = sanitizeName(entity.getNameEn()).toUpperCase(Locale.ROOT);
+    String country =
+        entity.getCountryRegion() == null
+            ? ""
+            : entity.getCountryRegion().trim().toUpperCase(Locale.ROOT);
+    PortType portType = entity.getPortType() == null ? PortType.SEAPORT : entity.getPortType();
+    return name + '\u0001' + portType.name() + '\u0001' + country;
+  }
+
   private void validateSave(GlobalPortSaveRequest request, MdGlobalPort existing) {
-    if (request.code() == null || request.code().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "港口代码不能为空");
-    }
     if (request.nameEn() == null || request.nameEn().isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "英文名称不能为空");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "名称不能为空");
     }
-    String code = normalizeCode(request.code());
+    String name = sanitizeName(request.nameEn());
+    String code =
+        (request.code() == null || request.code().isBlank())
+            ? generateCode(name)
+            : normalizeCode(request.code());
     if (existing == null && repository.existsByCode(code)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "港口代码已存在");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "港口已存在");
     }
     if (existing != null
         && !existing.getCode().equals(code)
         && repository.existsByCode(code)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "港口代码已存在");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "港口已存在");
     }
   }
 
   private void apply(MdGlobalPort entity, GlobalPortSaveRequest request) {
-    entity.setCode(normalizeCode(request.code()));
-    entity.setNameEn(request.nameEn().trim());
+    String name = sanitizeName(request.nameEn());
+    String code =
+        (request.code() == null || request.code().isBlank())
+            ? generateCode(name)
+            : normalizeCode(request.code());
+    entity.setCode(code);
+    entity.setNameEn(name);
     entity.setNameZh(trimToNull(request.nameZh()));
     entity.setRoute(trimToNull(request.route()));
     entity.setCountryRegion(trimToNull(request.countryRegion()));
@@ -308,14 +342,36 @@ public class GlobalPortService {
   }
 
   private String normalizeCode(String code) {
-    return code.trim().toUpperCase();
+    return code.trim().toUpperCase(Locale.ROOT);
   }
 
-  private String trim(String value) {
-    if (value == null || value.isBlank()) {
-      return null;
+  /** 由名称生成稳定内部编码（仅字母数字，大写）。 */
+  static String generateCode(String name) {
+    String cleaned =
+        sanitizeName(name)
+            .replaceAll("[^A-Za-z0-9]", "")
+            .toUpperCase(Locale.ROOT);
+    if (cleaned.isBlank()) {
+      return "PORT";
     }
-    return value.trim();
+    return cleaned.length() > 64 ? cleaned.substring(0, 64) : cleaned;
+  }
+
+  private static String sanitizeName(String value) {
+    if (value == null) {
+      return "";
+    }
+    // 去掉零宽字符等不可见符号
+    return value.replaceAll("[\\u200B-\\u200D\\uFEFF]", "").trim();
+  }
+
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value.trim();
+      }
+    }
+    return "";
   }
 
   private String trimToNull(String value) {
@@ -334,10 +390,33 @@ public class GlobalPortService {
     if (raw == null || raw.isBlank()) {
       return PortType.SEAPORT;
     }
-    try {
-      return PortType.valueOf(raw.trim().toUpperCase());
-    } catch (IllegalArgumentException ex) {
-      return PortType.SEAPORT;
+    String normalized = raw.trim();
+    return switch (normalized) {
+      case "港口", "海港", "SEAPORT", "Seaport", "seaport" -> PortType.SEAPORT;
+      case "内陆点", "内陆", "INLAND", "Inland", "inland" -> PortType.INLAND;
+      case "铁路场站", "铁路", "RAIL", "Rail", "rail" -> PortType.RAIL;
+      case "机场", "AIRPORT", "Airport", "airport" -> PortType.AIRPORT;
+      case "其他", "OTHER", "Other", "other" -> PortType.OTHER;
+      default -> {
+        try {
+          yield PortType.valueOf(normalized.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+          yield PortType.SEAPORT;
+        }
+      }
+    };
+  }
+
+  private String formatPortTypeLabel(PortType portType) {
+    if (portType == null) {
+      return "";
     }
+    return switch (portType) {
+      case SEAPORT -> "港口";
+      case INLAND -> "内陆点";
+      case RAIL -> "铁路场站";
+      case AIRPORT -> "机场";
+      case OTHER -> "其他";
+    };
   }
 }
