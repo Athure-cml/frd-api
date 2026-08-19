@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
@@ -26,6 +27,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
+import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.dto.DestAddressTreeNodeResponse;
 import com.furuiduo.quote.masterdata.dto.DestCityResponse;
@@ -100,31 +102,55 @@ public class DestAddressService {
     for (DestZipResolveItemRequest item : items) {
       String city = item == null || item.city() == null ? "" : item.city().trim();
       String state = item == null || item.state() == null ? "" : item.state().trim();
-      if (city.isEmpty() || state.isEmpty()) {
-        results.add(
-            DestZipResolveItemResponse.skipped(city, state, "City 与 State 均需提供才能解析邮编"));
-        continue;
-      }
-      String cacheKey = state.toUpperCase() + '\0' + city.toUpperCase();
+      String zip = item == null || item.zipCode() == null ? "" : item.zipCode().trim();
+      String cacheKey = state.toUpperCase() + '\0' + city.toUpperCase() + '\0' + zip.toUpperCase();
       DestZipResolveItemResponse cached = cache.get(cacheKey);
       if (cached != null) {
         results.add(cached);
         continue;
       }
-      DestZipResolveItemResponse resolved = resolveZip(city, state);
+      DestZipResolveItemResponse resolved = resolveRouteFields(city, state, zip);
       cache.put(cacheKey, resolved);
       results.add(resolved);
     }
     return results;
   }
 
+  /**
+   * 按 City+State（及可选 ZIP）解析邮编，并返回主数据中的规范城市名。
+   */
+  @Transactional(readOnly = true)
+  public DestZipResolveItemResponse resolveRouteFields(String city, String state, String zipCode) {
+    String normalizedCity = city == null ? "" : city.trim();
+    String normalizedState = state == null ? "" : state.trim();
+    String normalizedZip = zipCode == null ? "" : zipCode.trim();
+    Optional<String> canonical = resolveCanonicalCityName(normalizedCity, normalizedState, normalizedZip);
+
+    if (!normalizedZip.isEmpty()) {
+      return DestZipResolveItemResponse.skipped(
+          normalizedCity,
+          normalizedState,
+          "ZIP 已提供，仅规范 City 格式",
+          canonical.orElse(null));
+    }
+    return resolveZip(normalizedCity, normalizedState, canonical);
+  }
+
   @Transactional(readOnly = true)
   public DestZipResolveItemResponse resolveZip(String city, String state) {
+    return resolveZip(city, state, resolveCanonicalCityName(city, state, null));
+  }
+
+  private DestZipResolveItemResponse resolveZip(
+      String city, String state, Optional<String> canonical) {
     String normalizedCity = city == null ? "" : city.trim();
     String normalizedState = state == null ? "" : state.trim();
     if (normalizedCity.isEmpty() || normalizedState.isEmpty()) {
       return DestZipResolveItemResponse.skipped(
-          normalizedCity, normalizedState, "City 与 State 均需提供才能解析邮编");
+          normalizedCity,
+          normalizedState,
+          "City 与 State 均需提供才能解析邮编",
+          canonical.orElse(null));
     }
     List<String> zips =
         zipRepository.findZipCodesByStateCodeAndCityName(normalizedState, normalizedCity).stream()
@@ -132,13 +158,54 @@ public class DestAddressService {
             .map(String::trim)
             .distinct()
             .toList();
+    String canonicalCity = canonical.orElse(null);
     if (zips.isEmpty()) {
       return DestZipResolveItemResponse.notFound(normalizedCity, normalizedState);
     }
     if (zips.size() == 1) {
-      return DestZipResolveItemResponse.unique(normalizedCity, normalizedState, zips.get(0));
+      return DestZipResolveItemResponse.unique(
+          normalizedCity, normalizedState, zips.get(0), canonicalCity);
     }
-    return DestZipResolveItemResponse.ambiguous(normalizedCity, normalizedState, zips);
+    return DestZipResolveItemResponse.ambiguous(
+        normalizedCity, normalizedState, zips, canonicalCity);
+  }
+
+  /** 按 City+State 或 ZIP+State 查找主数据中的规范城市名。 */
+  @Transactional(readOnly = true)
+  public Optional<String> resolveCanonicalCityName(String city, String state, String zipCode) {
+    String normalizedCity = city == null ? "" : city.trim();
+    String normalizedState = state == null ? "" : state.trim();
+    String normalizedZip = zipCode == null ? "" : zipCode.trim();
+
+    if (CostRoadZipPlaceholder.isCityStateInvalid(normalizedZip)) {
+      return Optional.empty();
+    }
+
+    if (!normalizedCity.isEmpty() && !normalizedState.isEmpty()) {
+      Optional<String> byCityState = findCanonicalCityByCityState(normalizedCity, normalizedState);
+      if (byCityState.isPresent()) {
+        return byCityState;
+      }
+    }
+
+    if (!normalizedZip.isEmpty() && !CostRoadZipPlaceholder.skipsZipMasterCheck(normalizedZip)) {
+      List<String> names =
+          zipRepository.findDistinctCityNamesByZipCode(normalizedZip, normalizedState);
+      if (names.size() == 1) {
+        return Optional.of(names.get(0));
+      }
+      if (names.size() > 1 && !normalizedState.isEmpty()) {
+        return Optional.of(names.get(0));
+      }
+    }
+    return Optional.empty();
+  }
+
+  private Optional<String> findCanonicalCityByCityState(String city, String stateCode) {
+    return stateRepository
+        .findByCodeNormalized(stateCode)
+        .flatMap(state -> cityRepository.findByStateIdAndNameIgnoreCase(state.getId(), city))
+        .map(MdDestCity::getName);
   }
 
   /** 熏蒸 REGION 等下拉：按关键词搜索去重后的城市名。 */
@@ -353,7 +420,7 @@ public class DestAddressService {
   }
 
   @Transactional
-  public CostImportResult importExcel(MultipartFile file) throws IOException {
+  public CostImportResult importExcel(MultipartFile file, boolean dryRun) throws IOException {
     Set<String> seenKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
@@ -375,12 +442,23 @@ public class DestAddressService {
           }
           return null;
         },
-        (rowNum, row) -> upsertImportRow(row));
+        (rowNum, row) -> upsertImportRow(row),
+        dryRun);
+  }
+
+  @Transactional
+  public CostImportResult importExcel(MultipartFile file) throws IOException {
+    return importExcel(file, false);
+  }
+
+  @Transactional
+  public CostImportResult importGeonames(MultipartFile file, boolean dryRun) throws IOException {
+    return usZipImportService.importGeonamesFile(file, dryRun);
   }
 
   @Transactional
   public CostImportResult importGeonames(MultipartFile file) throws IOException {
-    return usZipImportService.importGeonamesFile(file);
+    return importGeonames(file, false);
   }
 
   @Transactional(readOnly = true)

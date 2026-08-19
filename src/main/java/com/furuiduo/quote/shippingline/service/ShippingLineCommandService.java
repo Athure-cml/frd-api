@@ -129,14 +129,16 @@ public class ShippingLineCommandService {
   }
 
   @Transactional
-  public CostImportResult importExcel(SysUser user, MultipartFile file) throws IOException {
+  public CostImportResult importExcel(SysUser user, MultipartFile file, boolean dryRun)
+      throws IOException {
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
         (row) -> validateImportRow(row, seenNames),
-        (rowNum, row) -> upsertImported(user, row));
+        (rowNum, row) -> upsertImported(user, row),
+        dryRun);
   }
 
   @Transactional(readOnly = true)

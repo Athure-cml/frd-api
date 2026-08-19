@@ -129,4 +129,17 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
       """)
   List<String> findZipCodesByStateCodeAndCityName(
       @Param("stateCode") String stateCode, @Param("cityName") String cityName);
+
+  @Query(
+      """
+      SELECT DISTINCT c.name
+      FROM MdDestZip z, MdDestCity c, MdUsState s
+      WHERE z.cityId = c.id
+        AND c.stateId = s.id
+        AND UPPER(TRIM(z.zipCode)) = UPPER(TRIM(:zipCode))
+        AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
+      ORDER BY c.name ASC
+      """)
+  List<String> findDistinctCityNamesByZipCode(
+      @Param("zipCode") String zipCode, @Param("stateCode") String stateCode);
 }

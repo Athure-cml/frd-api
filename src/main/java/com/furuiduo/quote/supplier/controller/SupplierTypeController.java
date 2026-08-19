@@ -95,10 +95,7 @@ public class SupplierTypeController {
   }
 
   private void requireView(SysUser user) {
-    if (permissionService.hasAnyPermission(
-            user, SupplierPermissionCodes.allViews())
-        || permissionService.hasPermission(user, PermissionCodes.SUPPLIER_VIEW)
-        || permissionService.hasPermission(user, PermissionCodes.SUPPLIER_OTHER_VIEW)) {
+    if (permissionService.hasAnyPermission(user, SupplierPermissionCodes.allViews())) {
       return;
     }
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
@@ -106,11 +103,7 @@ public class SupplierTypeController {
 
   private void requireEdit(SysUser user) {
     if (permissionService.hasAnyPermission(
-            user,
-            PermissionCodes.SUPPLIER_OTHER_CREATE,
-            PermissionCodes.SUPPLIER_OTHER_EDIT,
-            PermissionCodes.SUPPLIER_CREATE,
-            PermissionCodes.SUPPLIER_EDIT)) {
+        user, PermissionCodes.SUPPLIER_OTHER_CREATE, PermissionCodes.SUPPLIER_OTHER_EDIT)) {
       return;
     }
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");

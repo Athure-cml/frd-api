@@ -74,7 +74,8 @@ public class UsZipImportService {
   }
 
   @Transactional
-  public CostImportResult importGeonamesFile(MultipartFile file) throws IOException {
+  public CostImportResult importGeonamesFile(MultipartFile file, boolean dryRun)
+      throws IOException {
     if (file == null || file.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 US.txt 文件");
     }
@@ -82,15 +83,29 @@ public class UsZipImportService {
     if (filename == null || !filename.toLowerCase().endsWith(".txt")) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 GeoNames US.txt 文本文件");
     }
-    log.info("开始导入美国邮编数据：{}", filename);
+    log.info("开始导入美国邮编数据：{}{}", filename, dryRun ? "（预校验）" : "");
     try (InputStream inputStream = file.getInputStream()) {
-      return importFromStream(inputStream);
+      return importFromStream(inputStream, dryRun);
     }
   }
 
   @Transactional
+  public CostImportResult importGeonamesFile(MultipartFile file) throws IOException {
+    return importGeonamesFile(file, false);
+  }
+
+  @Transactional
   public CostImportResult importFromStream(InputStream inputStream) throws IOException {
+    return importFromStream(inputStream, false);
+  }
+
+  @Transactional
+  public CostImportResult importFromStream(InputStream inputStream, boolean dryRun)
+      throws IOException {
     ParsedData parsed = parseGeonamesFile(inputStream);
+    if (dryRun) {
+      return new CostImportResult(parsed.zipRows().size(), 0, List.of(), List.of());
+    }
     Map<String, Long> stateIdByCode = upsertStates(parsed.stateNames());
     Map<String, Long> cityIdByKey = insertCities(parsed.cityNameByKey(), stateIdByCode);
     int zipCount = insertZips(parsed.zipRows(), cityIdByKey);
@@ -127,29 +142,18 @@ public class UsZipImportService {
         if (line.isBlank()) {
           continue;
         }
-        String[] parts = line.split("\t", -1);
-        if (parts.length < 5) {
-          continue;
-        }
-        if (!"US".equalsIgnoreCase(parts[0].trim())) {
+        GeonamesRow row = parseGeonamesLine(line);
+        if (row == null) {
           continue;
         }
 
-        String zipCode = parts[1].trim();
-        String cityName = parts[2].trim();
-        String stateName = parts[3].trim();
-        String stateCode = parts[4].trim().toUpperCase();
-        if (zipCode.isEmpty() || cityName.isEmpty() || stateCode.isEmpty()) {
-          continue;
-        }
+        stateNames.putIfAbsent(row.stateCode(), row.stateName());
+        String cityKey = row.stateCode() + "\0" + row.cityName().toLowerCase();
+        cityNameByKey.putIfAbsent(cityKey, row.cityName());
 
-        stateNames.putIfAbsent(stateCode, stateName);
-        String cityKey = stateCode + "\0" + cityName.toLowerCase();
-        cityNameByKey.putIfAbsent(cityKey, cityName);
-
-        String zipKey = cityKey + "\0" + zipCode.toLowerCase();
+        String zipKey = cityKey + "\0" + row.zipCode().toLowerCase();
         if (zipKeys.add(zipKey)) {
-          zipRows.add(new ZipRow(stateCode, cityName, zipCode));
+          zipRows.add(new ZipRow(row.stateCode(), row.cityName(), row.zipCode()));
         }
       }
     }
@@ -283,6 +287,61 @@ public class UsZipImportService {
     return inserted;
   }
 
+  private GeonamesRow parseGeonamesLine(String line) {
+    if (line == null || line.isBlank()) {
+      return null;
+    }
+    String normalized = line;
+    if (normalized.charAt(0) == '\uFEFF') {
+      normalized = normalized.substring(1);
+    }
+
+    String[] tabParts = normalized.split("\t", -1);
+    if (tabParts.length >= 5 && "US".equalsIgnoreCase(tabParts[0].trim())) {
+      return rowFromParts(
+          tabParts[1].trim(),
+          tabParts[2].trim(),
+          tabParts[3].trim(),
+          tabParts[4].trim().toUpperCase());
+    }
+
+    // 部分工具会把 Tab 转成空格；按 GeoNames 列结构从行首/州代码位解析
+    String[] parts = normalized.trim().split("\\s+");
+    if (parts.length < 10 || !"US".equalsIgnoreCase(parts[0])) {
+      return null;
+    }
+    int stateCodeIdx = findStateCodeIndex(parts);
+    if (stateCodeIdx < 3) {
+      return null;
+    }
+    String stateCode = parts[stateCodeIdx].trim().toUpperCase();
+    String stateName = parts[stateCodeIdx - 1].trim();
+    String cityName =
+        stateCodeIdx <= 3
+            ? parts[2].trim()
+            : String.join(" ", java.util.Arrays.copyOfRange(parts, 2, stateCodeIdx - 1)).trim();
+    return rowFromParts(parts[1].trim(), cityName, stateName, stateCode);
+  }
+
+  private GeonamesRow rowFromParts(
+      String zipCode, String cityName, String stateName, String stateCode) {
+    if (zipCode.isEmpty() || cityName.isEmpty() || stateCode.isEmpty()) {
+      return null;
+    }
+    return new GeonamesRow(zipCode, cityName, stateName, stateCode);
+  }
+
+  private static int findStateCodeIndex(String[] parts) {
+    int searchEnd = Math.min(parts.length - 7, 8);
+    for (int i = 3; i <= searchEnd; i++) {
+      String token = parts[i].trim().toUpperCase();
+      if (token.length() == 2 && STATE_NAME_ZH.containsKey(token)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   private static Map<String, String> buildStateNameZh() {
     Map<String, String> map = new LinkedHashMap<>();
     map.put("AL", "阿拉巴马州");
@@ -353,4 +412,7 @@ public class UsZipImportService {
       List<ZipRow> zipRows) {}
 
   private record ZipRow(String stateCode, String cityName, String zipCode) {}
+
+  private record GeonamesRow(
+      String zipCode, String cityName, String stateName, String stateCode) {}
 }

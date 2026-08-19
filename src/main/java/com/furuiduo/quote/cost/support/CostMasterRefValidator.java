@@ -3,6 +3,7 @@ package com.furuiduo.quote.cost.support;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
@@ -10,6 +11,7 @@ import com.furuiduo.quote.agent.repository.AgentRepository;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
+import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
 import com.furuiduo.quote.masterdata.entity.PortType;
 import com.furuiduo.quote.masterdata.repository.MdContainerTypeRepository;
 import com.furuiduo.quote.masterdata.repository.MdDestCityRepository;
@@ -18,6 +20,7 @@ import com.furuiduo.quote.masterdata.repository.MdGlobalPortRepository;
 import com.furuiduo.quote.masterdata.repository.MdUsStateRepository;
 import com.furuiduo.quote.shippingline.repository.ShippingLineRepository;
 import com.furuiduo.quote.supplier.repository.SupplierRepository;
+import com.furuiduo.quote.unit.repository.UnitRepository;
 
 /**
  * 成本库导入：下拉主数据存在性校验。客商字段支持全称/简称识别，落库统一写全称。
@@ -39,6 +42,7 @@ public class CostMasterRefValidator {
   private final SupplierRepository supplierRepository;
   private final ShippingLineRepository shippingLineRepository;
   private final AgentRepository agentRepository;
+  private final UnitRepository unitRepository;
 
   public CostMasterRefValidator(
       MdUsStateRepository usStateRepository,
@@ -48,7 +52,8 @@ public class CostMasterRefValidator {
       MdContainerTypeRepository containerTypeRepository,
       SupplierRepository supplierRepository,
       ShippingLineRepository shippingLineRepository,
-      AgentRepository agentRepository) {
+      AgentRepository agentRepository,
+      UnitRepository unitRepository) {
     this.usStateRepository = usStateRepository;
     this.destCityRepository = destCityRepository;
     this.destZipRepository = destZipRepository;
@@ -57,23 +62,34 @@ public class CostMasterRefValidator {
     this.supplierRepository = supplierRepository;
     this.shippingLineRepository = shippingLineRepository;
     this.agentRepository = agentRepository;
+    this.unitRepository = unitRepository;
   }
 
   public String validateRoad(CostRoad entity) {
     if (entity == null) {
       return null;
     }
+    resolveCityRoad(entity);
+    String unitError = resolveRoadUnits(entity);
+    if (unitError != null) {
+      return unitError;
+    }
+    String zipCode = entity.getZipCode();
     String error = requireState(entity.getState());
     if (error != null) {
       return error;
     }
-    error = requireCity(entity.getCity(), entity.getState(), "CITY");
-    if (error != null) {
-      return error;
+    if (!CostRoadZipPlaceholder.skipsCityMasterCheck(zipCode)) {
+      error = requireCity(entity.getCity(), entity.getState(), "CITY");
+      if (error != null) {
+        return error;
+      }
     }
-    error = requireZip(entity.getZipCode());
-    if (error != null) {
-      return error;
+    if (!CostRoadZipPlaceholder.skipsZipMasterCheck(zipCode)) {
+      error = requireZip(zipCode);
+      if (error != null) {
+        return error;
+      }
     }
     error = requirePort(entity.getPor(), "POR", ROAD_PORT_TYPES);
     if (error != null) {
@@ -168,6 +184,9 @@ public class CostMasterRefValidator {
     if (isBlank(zipCode)) {
       return null;
     }
+    if (CostRoadZipPlaceholder.skipsZipMasterCheck(zipCode)) {
+      return null;
+    }
     String zip = normalizeToken(zipCode);
     if (!destZipRepository.existsByZipCodeIgnoreCase(zip)) {
       return missing("ZIP CODE", zip.isEmpty() ? zipCode : zip);
@@ -201,6 +220,65 @@ public class CostMasterRefValidator {
       if (!containerTypeRepository.existsByCodeIgnoreCase(code, 1)) {
         return missing("箱型", code);
       }
+    }
+    return null;
+  }
+
+  /** 卡车 CITY：按主数据规范大小写回写（City+State 或 ZIP+State 匹配）。 */
+  public void resolveCityRoad(CostRoad entity) {
+    if (entity == null || isBlank(entity.getCity())) {
+      return;
+    }
+    if (CostRoadZipPlaceholder.skipsCityMasterCheck(entity.getZipCode())) {
+      return;
+    }
+    String city = normalizeToken(entity.getCity());
+    String state = normalizeToken(entity.getState());
+    String zip = normalizeToken(entity.getZipCode());
+
+    if (!isBlank(state)) {
+      var stateEntity = usStateRepository.findByCodeNormalized(state);
+      if (stateEntity.isPresent()) {
+        var found =
+            destCityRepository.findByStateIdAndNameIgnoreCase(stateEntity.get().getId(), city);
+        if (found.isPresent()) {
+          entity.setCity(found.get().getName());
+          return;
+        }
+      }
+    }
+
+    if (!isBlank(zip) && !CostRoadZipPlaceholder.skipsZipMasterCheck(zip)) {
+      List<String> names = destZipRepository.findDistinctCityNamesByZipCode(zip, state);
+      if (names.size() == 1) {
+        entity.setCity(names.get(0));
+      }
+    }
+  }
+
+  /** 卡车费用单位：按单位主数据 code/name 忽略大小写匹配，回写规范 code。 */
+  public String resolveRoadUnits(CostRoad entity) {
+    if (entity == null || entity.getExtraFields() == null || entity.getExtraFields().isEmpty()) {
+      return null;
+    }
+    Map<String, Object> extra = entity.getExtraFields();
+    for (String field : CostTemplateLayoutTools.roadFeeUnitFieldKeys()) {
+      Object raw = extra.get(field);
+      if (raw == null) {
+        continue;
+      }
+      String text = normalizeToken(String.valueOf(raw));
+      if (text.isEmpty()) {
+        continue;
+      }
+      var unit =
+          unitRepository
+              .findEnabledByCodeIgnoreCase(text)
+              .or(() -> unitRepository.findEnabledByNameIgnoreCase(text));
+      if (unit.isEmpty()) {
+        return missing("单位", text);
+      }
+      extra.put(field, unit.get().getCode());
     }
     return null;
   }

@@ -200,11 +200,12 @@ public class SupplierController {
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestParam("file") MultipartFile file,
-      @RequestParam(defaultValue = "TRUCK") String category)
+      @RequestParam(defaultValue = "TRUCK") String category,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
     require(user, category, "create");
-    return ApiResponse.ok(supplierCommandService.importExcel(user, file, category));
+    return ApiResponse.ok(supplierCommandService.importExcel(user, file, category, dryRun));
   }
 
   @Operation(

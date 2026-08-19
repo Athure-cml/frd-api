@@ -70,6 +70,11 @@ public final class CostTemplateLayoutTools {
           new RoadFeeUnitPair(
               "cf_road_extra_chassis", "cf_road_extra_chassis_unit", "EXTRA CHASSIS UNIT"));
 
+  /** 卡车费用单位自定义字段（导入/校验用）。 */
+  public static List<String> roadFeeUnitFieldKeys() {
+    return ROAD_FEE_UNIT_PAIRS.stream().map(RoadFeeUnitPair::unitField).toList();
+  }
+
   /**
    * 为 WAITING / YARD STORAGE / EXTRA CHASSIS 补齐单位列。 按字段 key 配对插入，不依赖原顺序相邻；
    * 若金额列存在而单位列缺失，则插在金额列之后（中间有别的字段也不影响识别）。

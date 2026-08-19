@@ -35,4 +35,20 @@ public interface UnitRepository extends JpaRepository<Unit, Long> {
         AND (:excludeId IS NULL OR u.id <> :excludeId)
       """)
   boolean existsByCodeNormalized(@Param("code") String code, @Param("excludeId") Long excludeId);
+
+  @Query(
+      """
+      SELECT u FROM Unit u
+      WHERE LOWER(TRIM(u.code)) = LOWER(TRIM(:code))
+        AND u.status = 1
+      """)
+  Optional<Unit> findEnabledByCodeIgnoreCase(@Param("code") String code);
+
+  @Query(
+      """
+      SELECT u FROM Unit u
+      WHERE LOWER(TRIM(u.name)) = LOWER(TRIM(:name))
+        AND u.status = 1
+      """)
+  Optional<Unit> findEnabledByNameIgnoreCase(@Param("name") String name);
 }

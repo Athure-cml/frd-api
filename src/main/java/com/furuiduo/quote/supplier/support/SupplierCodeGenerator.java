@@ -16,16 +16,35 @@ public class SupplierCodeGenerator {
     this.supplierRepository = supplierRepository;
   }
 
-  public String next() {
+  public String next(String category) {
+    String normalized = SupplierCategories.normalize(category);
     int year = LocalDate.now().getYear();
-    String prefix = "SUP-" + year + "-";
+    String prefix = prefix(normalized, year);
     int seq =
         supplierRepository
-            .findSupplierCodesByPrefix(prefix + "%", PageRequest.of(0, 1))
+            .findSupplierCodesByCategoryAndPrefix(
+                normalized, prefix + "%", PageRequest.of(0, 1))
             .stream()
             .findFirst()
             .map(code -> Integer.parseInt(code.substring(prefix.length())) + 1)
             .orElse(1);
-    return prefix + String.format("%04d", seq);
+    return format(normalized, year, seq);
+  }
+
+  public static String format(String category, int year, int seq) {
+    return prefix(SupplierCategories.normalize(category), year) + String.format("%04d", seq);
+  }
+
+  public static String prefix(String category, int year) {
+    return "SUP-" + categoryTag(category) + "-" + year + "-";
+  }
+
+  private static String categoryTag(String category) {
+    return switch (SupplierCategories.normalize(category)) {
+      case SupplierCategories.FUMIGATION -> "FUM";
+      case SupplierCategories.YARD -> "YRD";
+      case SupplierCategories.OTHER -> "OTH";
+      default -> "TRK";
+    };
   }
 }

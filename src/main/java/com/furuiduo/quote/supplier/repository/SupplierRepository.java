@@ -92,6 +92,19 @@ public interface SupplierRepository extends JpaRepository<Supplier, Long> {
   @Query("SELECT s.code FROM Supplier s WHERE s.code LIKE :prefix ORDER BY s.code DESC")
   Page<String> findSupplierCodesByPrefix(@Param("prefix") String prefix, Pageable pageable);
 
+  @Query(
+      """
+      SELECT s.code FROM Supplier s
+      WHERE s.category = :category AND s.code LIKE :prefix
+      ORDER BY s.code DESC
+      """)
+  Page<String> findSupplierCodesByCategoryAndPrefix(
+      @Param("category") String category, @Param("prefix") String prefix, Pageable pageable);
+
+  @Query(
+      "SELECT s FROM Supplier s WHERE s.category = :category ORDER BY s.id ASC")
+  List<Supplier> findAllByCategoryOrderByIdAsc(@Param("category") String category);
+
   Optional<Supplier> findFirstByCategoryAndNameIgnoreCase(String category, String name);
 
   Optional<Supplier> findFirstByNameIgnoreCase(String name);

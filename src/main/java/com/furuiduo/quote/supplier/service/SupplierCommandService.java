@@ -58,8 +58,8 @@ public class SupplierCommandService {
     String category = resolveCategory(request.category());
     validateSaveRequest(request, category, null);
     Supplier supplier = new Supplier();
-    supplier.setCode(supplierCodeGenerator.next());
     supplier.setCategory(category);
+    supplier.setCode(supplierCodeGenerator.next(category));
     supplier.setCreatedBy(user.getId());
     supplier.setCreatedByName(user.getRealName());
     supplier.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -149,16 +149,17 @@ public class SupplierCommandService {
   }
 
   @Transactional
-  public CostImportResult importExcel(SysUser user, MultipartFile file, String category)
-      throws IOException {
+  public CostImportResult importExcel(
+      SysUser user, MultipartFile file, String category, boolean dryRun) throws IOException {
     String normalized = resolveCategory(category);
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         exportHeaders(normalized),
         (row) -> mapImportRow(row, normalized),
-        (row) -> validateImportRow(row, seenNames),
-        (rowNum, row) -> upsertImported(user, row, normalized));
+        (row) -> validateImportRow(row, seenNames, normalized),
+        (rowNum, row) -> upsertImported(user, row, normalized),
+        dryRun);
   }
 
   @Transactional(readOnly = true)
@@ -237,8 +238,8 @@ public class SupplierCommandService {
     boolean creating = supplier.getId() == null;
     if (creating) {
       assertNameAvailable(category, name, null);
-      supplier.setCode(supplierCodeGenerator.next());
       supplier.setCategory(category);
+      supplier.setCode(supplierCodeGenerator.next(category));
       supplier.setCreatedBy(user.getId());
       supplier.setCreatedByName(user.getRealName());
       supplier.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -361,7 +362,7 @@ public class SupplierCommandService {
         typeError);
   }
 
-  private String validateImportRow(ImportRow row, Set<String> seenNames) {
+  private String validateImportRow(ImportRow row, Set<String> seenNames, String category) {
     if (row.typeError() != null) {
       return row.typeError();
     }
@@ -374,6 +375,25 @@ public class SupplierCommandService {
     String key = PartyMasterExcelSupport.nameKey(row.name());
     if (!seenNames.add(key)) {
       return "名称与文件中其他行重复";
+    }
+    return validateImportConflict(row, category);
+  }
+
+  private String validateImportConflict(ImportRow row, String category) {
+    String code = PartyMasterExcelSupport.trimToNull(row.code());
+    if (code != null) {
+      Supplier byCode = supplierRepository.findByCode(code).orElse(null);
+      if (byCode != null) {
+        if (!category.equals(byCode.getCategory())) {
+          return "编码已存在于其他供应商分类，无法导入到"
+              + SupplierCategories.displayName(category);
+        }
+        return null;
+      }
+    }
+    String name = PartyMasterExcelSupport.normalizeName(row.name());
+    if (supplierRepository.existsByCategoryAndNameNormalized(category, name, null)) {
+      return "供应商名称已存在：" + name + "（如需更新请填写正确编码）";
     }
     return null;
   }

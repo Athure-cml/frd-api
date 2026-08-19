@@ -14,6 +14,7 @@ import java.util.function.Function;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -62,6 +63,44 @@ public final class CostExcelSupport {
       return null;
     }
     return new BigDecimal(text.replace(",", ""));
+  }
+
+  /**
+   * 读取百分比字段。系统内以「数值 + %」存储（如 49.5 表示 49.5%），兼容 Excel 百分比格式（0.495 →
+   * 49.5）及文本「49.50%」。
+   */
+  public static BigDecimal cellPercentDecimal(Cell cell) {
+    if (cell == null || cell.getCellType() == CellType.BLANK) {
+      return null;
+    }
+    String text = new DataFormatter().formatCellValue(cell).trim();
+    if (text.isBlank()) {
+      return null;
+    }
+    return parsePercentText(text);
+  }
+
+  public static BigDecimal readPercentDecimalByHeader(
+      Row row, Map<String, Integer> headers, String... candidates) {
+    int index = findColumn(headers, candidates);
+    if (index < 0) {
+      return null;
+    }
+    return cellPercentDecimal(row.getCell(index));
+  }
+
+  private static BigDecimal parsePercentText(String text) {
+    String normalized = text.replace(",", "").trim();
+    if (normalized.isBlank()) {
+      return null;
+    }
+    if (normalized.endsWith("%")) {
+      normalized = normalized.substring(0, normalized.length() - 1).trim();
+    }
+    if (normalized.isBlank()) {
+      return null;
+    }
+    return new BigDecimal(normalized);
   }
 
   private static String formatNumeric(double value) {

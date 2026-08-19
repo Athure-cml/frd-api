@@ -177,11 +177,12 @@ public class ShippingLineController {
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
     requireCreate(user);
-    return ApiResponse.ok(commandService.importExcel(user, file));
+    return ApiResponse.ok(commandService.importExcel(user, file, dryRun));
   }
 
   @Operation(

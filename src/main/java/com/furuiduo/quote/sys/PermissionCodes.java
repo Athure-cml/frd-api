@@ -58,15 +58,6 @@ public final class PermissionCodes {
   public static final String CUSTOMER_EDIT = "customer:edit";
   public static final String CUSTOMER_DELETE = "customer:delete";
 
-  /** @deprecated 已拆分为 supplier:{category}:view，仅用于迁移 */
-  public static final String SUPPLIER_VIEW = "supplier:view";
-  /** @deprecated 已拆分为 supplier:{category}:create，仅用于迁移 */
-  public static final String SUPPLIER_CREATE = "supplier:create";
-  /** @deprecated 已拆分为 supplier:{category}:edit，仅用于迁移 */
-  public static final String SUPPLIER_EDIT = "supplier:edit";
-  /** @deprecated 已拆分为 supplier:{category}:delete，仅用于迁移 */
-  public static final String SUPPLIER_DELETE = "supplier:delete";
-
   public static final String SUPPLIER_TRUCK_VIEW = "supplier:truck:view";
   public static final String SUPPLIER_TRUCK_CREATE = "supplier:truck:create";
   public static final String SUPPLIER_TRUCK_EDIT = "supplier:truck:edit";

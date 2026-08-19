@@ -62,15 +62,4 @@ public final class SupplierPermissionCodes {
     }
     return codes;
   }
-
-  /** 旧版扁平权限 → 动作 */
-  public static String legacyAction(String legacyCode) {
-    return switch (legacyCode) {
-      case PermissionCodes.SUPPLIER_VIEW -> "view";
-      case PermissionCodes.SUPPLIER_CREATE -> "create";
-      case PermissionCodes.SUPPLIER_EDIT -> "edit";
-      case PermissionCodes.SUPPLIER_DELETE -> "delete";
-      default -> null;
-    };
-  }
 }

@@ -36,6 +36,7 @@ import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
+import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.cost.support.RoadAllInFormulaEvaluator;
@@ -520,7 +521,8 @@ public class CostRoadService {
         CostExcelSupport.readDecimalByHeader(
             row, headers, "基础", "BASE", "BASE FREIGHT", "*BASE", "*BASE FREIGHT"));
     entity.setFsc(
-        CostExcelSupport.readDecimalByHeader(row, headers, "燃油", "FSC (%)", "FSC", "*FSC"));
+        CostExcelSupport.readPercentDecimalByHeader(
+            row, headers, "燃油", "FSC (%)", "FSC", "*FSC"));
     entity.setChassis(
         CostExcelSupport.readDecimalByHeader(row, headers, "车架", "CHASSIS"));
     entity.setTriTandemAxle(
@@ -669,7 +671,7 @@ public class CostRoadService {
   }
 
   /**
-   * 导入缺 ZIP、但有 City+State 时尝试主数据补全。唯一匹配写入 zip；歧义/未找到则整行失败。
+   * 导入缺 ZIP、但有 City+State 时尝试主数据补全。唯一匹配写入 zip；多个邮编「待补录」；未找到「CITY、STATE有误」。
    */
   private String tryEnrichZipFromCityState(CostRoad entity) {
     if (!isBlank(entity.getZipCode())) {
@@ -679,22 +681,22 @@ public class CostRoadService {
       return null;
     }
     DestZipResolveItemResponse resolved =
-        destAddressService.resolveZip(entity.getCity(), entity.getState());
+        destAddressService.resolveRouteFields(
+            entity.getCity(), entity.getState(), entity.getZipCode());
+    if (resolved.canonicalCity() != null && !resolved.canonicalCity().isBlank()) {
+      entity.setCity(resolved.canonicalCity());
+    }
     if ("unique".equals(resolved.status()) && !isBlank(resolved.zipCode())) {
       entity.setZipCode(resolved.zipCode());
       return null;
     }
     if ("ambiguous".equals(resolved.status())) {
-      String candidates =
-          resolved.candidates() == null || resolved.candidates().isEmpty()
-              ? ""
-              : String.join(", ", resolved.candidates());
-      return "City+State 对应多个邮编"
-          + (candidates.isEmpty() ? "" : "（" + candidates + "）")
-          + "，请填写邮编";
+      entity.setZipCode(CostRoadZipPlaceholder.PENDING);
+      return null;
     }
     if ("notFound".equals(resolved.status())) {
-      return "主数据中未找到 City+State 对应的邮编，请填写邮编";
+      entity.setZipCode(CostRoadZipPlaceholder.CITY_STATE_INVALID);
+      return null;
     }
     return null;
   }

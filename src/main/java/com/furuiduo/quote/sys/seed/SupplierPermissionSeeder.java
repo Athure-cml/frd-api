@@ -27,6 +27,14 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
 
   private record PermDef(String code, String name, int sort) {}
 
+  /** 已下线扁平供应商权限，启动时从库中清除。 */
+  private static final List<String> REMOVED_LEGACY_CODES =
+      List.of(
+          "supplier:view",
+          "supplier:create",
+          "supplier:edit",
+          "supplier:delete");
+
   private static final List<PermDef> SUPPLIER_PERMISSIONS =
       List.of(
           new PermDef(PermissionCodes.SUPPLIER_TRUCK_VIEW, "卡车供应商-查看", 63),
@@ -68,11 +76,28 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
       return;
     }
 
+    removeLegacyPermissions();
     Map<String, SysPermission> permissions = ensurePermissions();
     for (SysRole role : roleRepository.findAll()) {
       if (grantPermissions(role, permissions)) {
         roleRepository.save(role);
       }
+    }
+  }
+
+  private void removeLegacyPermissions() {
+    for (String code : REMOVED_LEGACY_CODES) {
+      permissionRepository
+          .findByCode(code)
+          .ifPresent(
+              legacy -> {
+                for (SysRole role : roleRepository.findAll()) {
+                  if (role.getPermissions().remove(legacy)) {
+                    roleRepository.save(role);
+                  }
+                }
+                permissionRepository.delete(legacy);
+              });
     }
   }
 
@@ -129,25 +154,6 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
 
     Set<String> roleCodes =
         role.getPermissions().stream().map(SysPermission::getCode).collect(Collectors.toSet());
-
-    // 旧版扁平权限 → 四类同动作
-    for (String legacy :
-        List.of(
-            PermissionCodes.SUPPLIER_VIEW,
-            PermissionCodes.SUPPLIER_CREATE,
-            PermissionCodes.SUPPLIER_EDIT,
-            PermissionCodes.SUPPLIER_DELETE)) {
-      if (!roleCodes.contains(legacy)) {
-        continue;
-      }
-      String action = SupplierPermissionCodes.legacyAction(legacy);
-      if (action == null) {
-        continue;
-      }
-      for (String category : SupplierPermissionCodes.CATEGORIES) {
-        addIfPresent(permissions, SupplierPermissionCodes.of(category, action), grants);
-      }
-    }
 
     if (roleCodes.contains(PermissionCodes.QUOTE_CREATE)
         || roleCodes.contains(PermissionCodes.QUOTE_EDIT)

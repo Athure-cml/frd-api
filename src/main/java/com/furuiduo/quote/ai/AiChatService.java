@@ -403,8 +403,7 @@ public class AiChatService {
     if (permissionService.hasPermission(user, PermissionCodes.CUSTOMER_VIEW)) {
       pages.add("customer_list");
     }
-    if (permissionService.hasAnyPermission(user, SupplierPermissionCodes.allViews())
-        || permissionService.hasPermission(user, PermissionCodes.SUPPLIER_VIEW)) {
+    if (permissionService.hasAnyPermission(user, SupplierPermissionCodes.allViews())) {
       pages.add("supplier_list");
     }
     return pages;

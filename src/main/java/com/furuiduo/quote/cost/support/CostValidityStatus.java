@@ -16,6 +16,12 @@ public final class CostValidityStatus {
       Pattern.compile(
           "^(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})\\s*[-–—~至到]\\s*(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})$");
 
+  private static final DateTimeFormatter EXPORT_DATE_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy/MM/dd");
+
+  private static final Pattern US_SLASH_DATE =
+      Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2,4})$");
+
   private static final DateTimeFormatter[] FORMATTERS =
       new DateTimeFormatter[] {
         DateTimeFormatter.ofPattern("yyyy-M-d"),
@@ -79,6 +85,30 @@ public final class CostValidityStatus {
     return parseSingleDate(text);
   }
 
+  /** 导出 Excel：统一格式化为 yyyy/MM/dd；区间用「 - 」连接。 */
+  public static String formatExportDate(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return raw;
+    }
+    String text = raw.trim();
+    Matcher range = RANGE.matcher(text);
+    if (range.matches()) {
+      String start = formatSingleExportDate(range.group(1));
+      String end = formatSingleExportDate(range.group(2));
+      if (start != null && end != null) {
+        return start + " - " + end;
+      }
+      return text;
+    }
+    String single = formatSingleExportDate(text);
+    return single != null ? single : text;
+  }
+
+  private static String formatSingleExportDate(String text) {
+    LocalDate date = parseSingleDate(text);
+    return date == null ? null : date.format(EXPORT_DATE_FORMATTER);
+  }
+
   /** 解析单日或区间结束日；解析失败返回 null。 */
   public static LocalDate tryParseDate(String raw) {
     return parseEndDate(raw);
@@ -97,6 +127,26 @@ public final class CostValidityStatus {
       return LocalDate.parse(
           normalized.toLowerCase(Locale.ROOT), DateTimeFormatter.ofPattern("yyyy/M/d"));
     } catch (DateTimeParseException ignored) {
+      // try US slash
+    }
+    return parseUsSlashDate(text.trim());
+  }
+
+  /** 兼容 Excel 美式短日期：8/1/26、08/01/2026。 */
+  private static LocalDate parseUsSlashDate(String text) {
+    Matcher matcher = US_SLASH_DATE.matcher(text);
+    if (!matcher.matches()) {
+      return null;
+    }
+    int month = Integer.parseInt(matcher.group(1));
+    int day = Integer.parseInt(matcher.group(2));
+    int year = Integer.parseInt(matcher.group(3));
+    if (year < 100) {
+      year += 2000;
+    }
+    try {
+      return LocalDate.of(year, month, day);
+    } catch (RuntimeException ignored) {
       return null;
     }
   }

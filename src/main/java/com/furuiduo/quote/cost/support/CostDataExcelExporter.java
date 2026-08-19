@@ -10,11 +10,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.furuiduo.quote.cost.dto.CostExportColumn;
+import com.furuiduo.quote.cost.dto.CostTableCustomFieldDef;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
@@ -31,13 +34,20 @@ public final class CostDataExcelExporter {
   public static byte[] exportRoad(List<CostRoad> items, CostTableTemplateLayout layout) {
     List<CostExportColumn> columns = columnsWithStatus("road", layout);
     try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+      CellStyle dateTextStyle = createTextCellStyle(workbook);
       Sheet sheet = workbook.createSheet("road");
       writeHeaderRow(sheet, columns);
       int rowIndex = 1;
       for (CostRoad item : items) {
         Row row = sheet.createRow(rowIndex++);
         for (int col = 0; col < columns.size(); col++) {
-          writeCell(row, col, readRoadValue(item, columns.get(col).field()));
+          String field = columns.get(col).field();
+          Object value = readRoadValue(item, field);
+          writeCell(
+              row,
+              col,
+              formatExportValue("road", layout, field, value),
+              isExportDateField("road", layout, field) ? dateTextStyle : null);
         }
       }
       return CostExcelSupport.writeWorkbook(workbook);
@@ -75,13 +85,20 @@ public final class CostDataExcelExporter {
       FreightValueReader<T> reader) {
     List<CostExportColumn> columns = columnsWithStatus(mode, layout);
     try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+      CellStyle dateTextStyle = createTextCellStyle(workbook);
       Sheet sheet = workbook.createSheet(mode);
       writeHeaderRow(sheet, columns);
       int rowIndex = 1;
       for (T item : items) {
         Row row = sheet.createRow(rowIndex++);
         for (int col = 0; col < columns.size(); col++) {
-          writeCell(row, col, reader.read(item, columns.get(col).field()));
+          String field = columns.get(col).field();
+          Object value = reader.read(item, field);
+          writeCell(
+              row,
+              col,
+              formatExportValue(mode, layout, field, value),
+              isExportDateField(mode, layout, field) ? dateTextStyle : null);
         }
       }
       return CostExcelSupport.writeWorkbook(workbook);
@@ -252,7 +269,7 @@ public final class CostDataExcelExporter {
     return extraFields.get(field);
   }
 
-  private static void writeCell(Row row, int col, Object value) {
+  private static void writeCell(Row row, int col, Object value, CellStyle textStyle) {
     Cell cell = row.createCell(col);
     if (value == null) {
       cell.setBlank();
@@ -266,6 +283,53 @@ public final class CostDataExcelExporter {
       cell.setCellValue(number.doubleValue());
       return;
     }
+    if (textStyle != null) {
+      cell.setCellStyle(textStyle);
+    }
     cell.setCellValue(String.valueOf(value));
+  }
+
+  private static CellStyle createTextCellStyle(Workbook workbook) {
+    CellStyle style = workbook.createCellStyle();
+    style.setDataFormat(workbook.createDataFormat().getFormat("@"));
+    return style;
+  }
+
+  private static Object formatExportValue(
+      String mode, CostTableTemplateLayout layout, String field, Object value) {
+    if (value == null || !isExportDateField(mode, layout, field)) {
+      return value;
+    }
+    String text = String.valueOf(value).trim();
+    if (text.isEmpty()) {
+      return value;
+    }
+    return CostValidityStatus.formatExportDate(text);
+  }
+
+  private static boolean isExportDateField(
+      String mode, CostTableTemplateLayout layout, String field) {
+    if (field == null || field.isBlank()) {
+      return false;
+    }
+    if (field.endsWith("ValidDate") || field.endsWith("Validity") || field.endsWith("_eff")) {
+      return true;
+    }
+    if ("validDate".equals(field) || "validFrom".equals(field) || "validTo".equals(field)) {
+      return true;
+    }
+    CostTableCustomFieldDef custom = findCustomDef(layout, field);
+    return custom != null && "date".equals(custom.dataType());
+  }
+
+  private static CostTableCustomFieldDef findCustomDef(
+      CostTableTemplateLayout layout, String field) {
+    if (layout == null || layout.customFields() == null) {
+      return null;
+    }
+    return layout.customFields().stream()
+        .filter(item -> field.equals(item.field()))
+        .findFirst()
+        .orElse(null);
   }
 }
