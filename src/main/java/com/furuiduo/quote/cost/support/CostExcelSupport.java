@@ -15,6 +15,7 @@ import java.util.function.Function;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -36,12 +37,39 @@ public final class CostExcelSupport {
       type = cell.getCachedFormulaResultType();
     }
     return switch (type) {
-      case NUMERIC -> formatNumeric(cell.getNumericCellValue());
+      case NUMERIC -> {
+        try {
+          yield formatNumeric(cell.getNumericCellValue());
+        } catch (RuntimeException ex) {
+          yield new DataFormatter().formatCellValue(cell).trim();
+        }
+      }
       case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
       case STRING -> cell.getStringCellValue() == null ? "" : cell.getStringCellValue().trim();
       case BLANK, _NONE, ERROR -> "";
       case FORMULA -> ""; // unreachable after unwrap
     };
+  }
+
+  /** 导入读取：Excel 日期单元格用 DataFormatter，避免序列号或错误格式。 */
+  public static String cellImportText(Cell cell) {
+    if (cell == null || cell.getCellType() == CellType.BLANK) {
+      return "";
+    }
+    CellType type = cell.getCellType();
+    if (type == CellType.FORMULA) {
+      type = cell.getCachedFormulaResultType();
+    }
+    if (type == CellType.NUMERIC) {
+      try {
+        if (DateUtil.isCellDateFormatted(cell)) {
+          return new DataFormatter().formatCellValue(cell).trim();
+        }
+      } catch (RuntimeException ignored) {
+        // fall through to cellString
+      }
+    }
+    return cellString(cell);
   }
 
   public static BigDecimal cellDecimal(Cell cell) {
@@ -53,7 +81,15 @@ public final class CostExcelSupport {
       type = cell.getCachedFormulaResultType();
     }
     if (type == CellType.NUMERIC) {
-      return BigDecimal.valueOf(cell.getNumericCellValue());
+      try {
+        return BigDecimal.valueOf(cell.getNumericCellValue());
+      } catch (RuntimeException ex) {
+        String text = new DataFormatter().formatCellValue(cell).trim();
+        if (text.isBlank()) {
+          return null;
+        }
+        return new BigDecimal(text.replace(",", ""));
+      }
     }
     if (type == CellType.BOOLEAN) {
       return cell.getBooleanCellValue() ? BigDecimal.ONE : BigDecimal.ZERO;

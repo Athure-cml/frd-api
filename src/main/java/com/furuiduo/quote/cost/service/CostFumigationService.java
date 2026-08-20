@@ -32,6 +32,7 @@ import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
+import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
@@ -81,11 +82,12 @@ public class CostFumigationService {
     String iv = SearchText.orEmpty(indoorValidity);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+    boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
 
-    if (!filterStatus) {
+    if (!filterStatus && !filterDates) {
       var pageable =
           PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostFumigation> result = repository.search(r, st, ov, iv, pageable);
+      Page<CostFumigation> result = repository.search(r, st, pageable);
       return new PageResult<>(
           result.getContent().stream().map(FumigationCostResponse::from).toList(),
           result.getTotalElements());
@@ -93,7 +95,8 @@ public class CostFumigationService {
 
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostFumigation> filtered =
-        repository.search(r, st, ov, iv, pageable).getContent().stream()
+        repository.search(r, st, pageable).getContent().stream()
+            .filter(item -> matchesFumigationDateSearch(item, ov, iv))
             .filter(
                 item ->
                     CostValidityStatus.matchesFilter(
@@ -211,19 +214,21 @@ public class CostFumigationService {
     } else {
       String statusFilter = status;
       boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+      String ov = SearchText.orEmpty(outdoorValidity);
+      String iv = SearchText.orEmpty(indoorValidity);
+      boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       items =
           repository
               .search(
                   SearchText.orEmpty(region),
                   SearchText.orEmpty(station),
-                  SearchText.orEmpty(outdoorValidity),
-                  SearchText.orEmpty(indoorValidity),
                   pageable)
               .getContent();
-      if (filterStatus) {
+      if (filterStatus || filterDates) {
         items =
             items.stream()
+                .filter(item -> matchesFumigationDateSearch(item, ov, iv))
                 .filter(
                     item ->
                         CostValidityStatus.matchesFilter(
@@ -238,6 +243,12 @@ public class CostFumigationService {
 
     var layout = templateService.resolveExportLayout("fumigation", templateId);
     return CostDataExcelExporter.exportFumigation(items, layout);
+  }
+
+  private boolean matchesFumigationDateSearch(
+      CostFumigation item, String outdoorSearch, String indoorSearch) {
+    return CostDateSearchFilter.matchesValidTo(item.getOutdoorValidity(), outdoorSearch)
+        && CostDateSearchFilter.matchesValidTo(item.getIndoorValidity(), indoorSearch);
   }
 
   private PageResult<FumigationCostResponse> paginate(
@@ -264,32 +275,7 @@ public class CostFumigationService {
     if (nested) {
       entity = mapNestedImportRow(row);
     } else {
-      String region = readHeader(row, headers, "REGION", "PORT", "港口");
-      String station = readHeader(row, headers, "STATION", "场站");
-      if (region.isBlank() && station.isBlank()) {
-        return null;
-      }
-      entity = new CostFumigation();
-      entity.setRegion(region);
-      entity.setStation(station);
-      entity.setOutdoorNonOak(
-          CostExcelSupport.readDecimalByHeader(
-              row, headers, "FM-OUTDOOR NON OAK", "NON-OAK OUTDOOR"));
-      entity.setOutdoorOak(
-          CostExcelSupport.readDecimalByHeader(row, headers, "FM-OUTDOOR OAK", "OAK OUTDOOR"));
-      entity.setOutdoorValidity(
-          readHeader(row, headers, "FM-OUTDOOR VALIDITY", "FM OUTDOOR VALIDITY", "有效期"));
-      entity.setIndoorNonOak(
-          CostExcelSupport.readDecimalByHeader(
-              row, headers, "FM-INDOOR NON OAK", "NON-OAK IN DOOR"));
-      entity.setIndoorOak(
-          CostExcelSupport.readDecimalByHeader(row, headers, "FM-INDOOR OAK", "OAK IN DOOR"));
-      entity.setIndoorValidity(
-          readHeader(row, headers, "FM-INDOOR VALIDITY", "FM INDOOR VALIDITY", "有效期"));
-      entity.setAddress(readHeader(row, headers, "ADDRESS", "备注", "REMARK"));
-      entity.setStatus(
-          CostValidityStatus.resolve(
-              CostStatus.active, entity.getOutdoorValidity(), entity.getIndoorValidity()));
+      entity = mapFlatImportRow(row, layout, headers);
     }
     if (entity == null) {
       return null;
@@ -298,7 +284,83 @@ public class CostFumigationService {
         entity.getExtraFields() == null ? new HashMap<>() : new HashMap<>(entity.getExtraFields());
     CostTemplateImportSupport.applyCustomFields("fumigation", layout, row, headers, extra);
     entity.setExtraFields(extra);
+    normalizeFumigationImportDates(entity, layout);
     return entity;
+  }
+
+  private CostFumigation mapFlatImportRow(
+      Row row, CostTableTemplateLayout layout, Map<String, Integer> headers) {
+    Map<String, String> values =
+        CostTemplateImportSupport.readTemplateRowValues("fumigation", layout, row);
+    String region =
+        firstNonBlank(values.get("region"), readHeader(row, headers, "REGION", "PORT", "港口"));
+    String station =
+        firstNonBlank(values.get("station"), readHeader(row, headers, "STATION", "场站"));
+    if (region.isBlank() && station.isBlank()) {
+      return null;
+    }
+    CostFumigation entity = new CostFumigation();
+    entity.setRegion(region);
+    entity.setStation(station);
+    entity.setOutdoorNonOak(
+        firstDecimal(
+            values.get("outdoorNonOak"),
+            CostExcelSupport.readDecimalByHeader(
+                row, headers, "FM-OUTDOOR NON OAK", "NON-OAK OUTDOOR")));
+    entity.setOutdoorOak(
+        firstDecimal(
+            values.get("outdoorOak"),
+            CostExcelSupport.readDecimalByHeader(row, headers, "FM-OUTDOOR OAK", "OAK OUTDOOR")));
+    entity.setOutdoorValidity(
+        firstNonBlank(
+            values.get("outdoorValidity"),
+            readHeader(row, headers, "FM-OUTDOOR VALIDITY", "FM OUTDOOR VALIDITY", "有效期")));
+    entity.setIndoorNonOak(
+        firstDecimal(
+            values.get("indoorNonOak"),
+            CostExcelSupport.readDecimalByHeader(
+                row, headers, "FM-INDOOR NON OAK", "NON-OAK IN DOOR")));
+    entity.setIndoorOak(
+        firstDecimal(
+            values.get("indoorOak"),
+            CostExcelSupport.readDecimalByHeader(row, headers, "FM-INDOOR OAK", "OAK IN DOOR")));
+    entity.setIndoorValidity(
+        firstNonBlank(
+            values.get("indoorValidity"),
+            readHeader(row, headers, "FM-INDOOR VALIDITY", "FM INDOOR VALIDITY", "有效期")));
+    entity.setAddress(firstNonBlank(values.get("address"), readHeader(row, headers, "ADDRESS", "备注", "REMARK")));
+    entity.setStatus(
+        CostValidityStatus.resolve(
+            CostStatus.active, entity.getOutdoorValidity(), entity.getIndoorValidity()));
+    return entity;
+  }
+
+  private void normalizeFumigationImportDates(CostFumigation entity, CostTableTemplateLayout layout) {
+    entity.setOutdoorValidity(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "fumigation", layout, "outdoorValidity", entity.getOutdoorValidity()));
+    entity.setIndoorValidity(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "fumigation", layout, "indoorValidity", entity.getIndoorValidity()));
+    CostTemplateImportSupport.normalizeExtraDateFields("fumigation", layout, entity.getExtraFields());
+  }
+
+  private static String firstNonBlank(String primary, String fallback) {
+    if (primary != null && !primary.isBlank()) {
+      return primary.trim();
+    }
+    return fallback == null ? "" : fallback.trim();
+  }
+
+  private static java.math.BigDecimal firstDecimal(String primary, java.math.BigDecimal fallback) {
+    if (primary != null && !primary.isBlank()) {
+      try {
+        return new java.math.BigDecimal(primary.replace(",", "").trim());
+      } catch (NumberFormatException ignored) {
+        return fallback;
+      }
+    }
+    return fallback;
   }
 
   /** 双行表头：REGION/STATION | FM-OUTDOOR(NON OAK/OAK/生效期/VALIDITY) | FM-INDOOR(...) | ADDRESS */
@@ -320,24 +382,24 @@ public class CostFumigationService {
     entity.setOutdoorOak(CostExcelSupport.cellDecimal(row.getCell(3)));
     Map<String, Object> extra = new HashMap<>();
     if (hasEffColumns) {
-      String outdoorEff = CostExcelSupport.cellString(row.getCell(4));
+      String outdoorEff = CostExcelSupport.cellImportText(row.getCell(4));
       if (!outdoorEff.isBlank()) {
         extra.put("cf_fum_outdoor_eff", outdoorEff);
       }
-      entity.setOutdoorValidity(CostExcelSupport.cellString(row.getCell(5)));
+      entity.setOutdoorValidity(CostExcelSupport.cellImportText(row.getCell(5)));
       entity.setIndoorNonOak(CostExcelSupport.cellDecimal(row.getCell(6)));
       entity.setIndoorOak(CostExcelSupport.cellDecimal(row.getCell(7)));
-      String indoorEff = CostExcelSupport.cellString(row.getCell(8));
+      String indoorEff = CostExcelSupport.cellImportText(row.getCell(8));
       if (!indoorEff.isBlank()) {
         extra.put("cf_fum_indoor_eff", indoorEff);
       }
-      entity.setIndoorValidity(CostExcelSupport.cellString(row.getCell(9)));
+      entity.setIndoorValidity(CostExcelSupport.cellImportText(row.getCell(9)));
       entity.setAddress(CostExcelSupport.cellString(row.getCell(10)));
     } else {
-      entity.setOutdoorValidity(CostExcelSupport.cellString(row.getCell(4)));
+      entity.setOutdoorValidity(CostExcelSupport.cellImportText(row.getCell(4)));
       entity.setIndoorNonOak(CostExcelSupport.cellDecimal(row.getCell(5)));
       entity.setIndoorOak(CostExcelSupport.cellDecimal(row.getCell(6)));
-      entity.setIndoorValidity(CostExcelSupport.cellString(row.getCell(7)));
+      entity.setIndoorValidity(CostExcelSupport.cellImportText(row.getCell(7)));
       entity.setAddress(CostExcelSupport.cellString(row.getCell(8)));
     }
     entity.setExtraFields(extra);

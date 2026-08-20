@@ -34,6 +34,7 @@ import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
+import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
@@ -122,11 +123,12 @@ public class CostRoadService {
     String vd = SearchText.orEmpty(validDate);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+    boolean filterDates = !vd.isEmpty();
 
-    if (!filterStatus) {
+    if (!filterStatus && !filterDates) {
       var pageable =
           PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostRoad> result = repository.search(z, c, st, p, pl, sup, redelivery, vd, pageable);
+      Page<CostRoad> result = repository.search(z, c, st, p, pl, sup, redelivery, pageable);
       return new PageResult<>(
           result.getContent().stream().map(RoadCostResponse::from).toList(),
           result.getTotalElements());
@@ -134,7 +136,8 @@ public class CostRoadService {
 
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostRoad> filtered =
-        repository.search(z, c, st, p, pl, sup, redelivery, vd, pageable).getContent().stream()
+        repository.search(z, c, st, p, pl, sup, redelivery, pageable).getContent().stream()
+            .filter(item -> CostDateSearchFilter.matchesValidTo(item.getValidDate(), vd))
             .filter(
                 item ->
                     CostValidityStatus.matchesFilter(
@@ -451,6 +454,8 @@ public class CostRoadService {
     } else {
       String statusFilter = status;
       boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+      String vd = SearchText.orEmpty(validDate);
+      boolean filterDates = !vd.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       items =
           repository
@@ -462,12 +467,12 @@ public class CostRoadService {
                   SearchText.orEmpty(pol),
                   SearchText.orEmpty(supplier),
                   redelivery,
-                  SearchText.orEmpty(validDate),
                   pageable)
               .getContent();
-      if (filterStatus) {
+      if (filterStatus || filterDates) {
         items =
             items.stream()
+                .filter(item -> CostDateSearchFilter.matchesValidTo(item.getValidDate(), vd))
                 .filter(
                     item ->
                         CostValidityStatus.matchesFilter(
@@ -619,12 +624,31 @@ public class CostRoadService {
       extra.put("cf_road_eff", effective.trim());
     }
     CostTemplateImportSupport.applyCustomFields("road", layout, row, headers, extra);
+    overlayRoadTemplateDates(entity, extra, layout, row);
     entity.setExtraFields(extra);
     entity.setStatus(CostValidityStatus.resolve(CostStatus.active, entity.getValidDate()));
     if (isImportRowEmpty(entity)) {
       return null;
     }
     return entity;
+  }
+
+  private void overlayRoadTemplateDates(
+      CostRoad entity,
+      Map<String, Object> extra,
+      CostTableTemplateLayout layout,
+      Row row) {
+    Map<String, String> values = CostTemplateImportSupport.readTemplateRowValues("road", layout, row);
+    if (values.containsKey("validDate")) {
+      entity.setValidDate(values.get("validDate"));
+    }
+    if (values.containsKey("cf_road_eff")) {
+      extra.put("cf_road_eff", values.get("cf_road_eff"));
+    }
+    entity.setValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "road", layout, "validDate", entity.getValidDate()));
+    CostTemplateImportSupport.normalizeExtraDateFields("road", layout, extra);
   }
 
   private boolean isImportRowEmpty(CostRoad entity) {

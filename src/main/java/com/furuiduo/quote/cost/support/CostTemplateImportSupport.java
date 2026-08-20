@@ -38,55 +38,122 @@ public final class CostTemplateImportSupport {
     return null;
   }
 
+  /** 按导出列顺序读取一行所有可见字段（可正确处理重复「生效期/有效期」表头）。 */
+  public static Map<String, String> readTemplateRowValues(
+      String mode, CostTableTemplateLayout layout, Row row) {
+    Map<String, String> values = new HashMap<>();
+    if (layout == null || row == null) {
+      return values;
+    }
+    Map<String, Integer> headers = CostExcelSupport.readHeaderMap(row.getSheet().getRow(0));
+    List<CostExportColumn> columns = CostTemplateExcelSupport.exportColumns(mode, layout);
+    Set<Integer> usedColumns = new HashSet<>();
+    for (int i = 0; i < columns.size(); i++) {
+      CostExportColumn column = columns.get(i);
+      if (column == null || column.field() == null || column.field().isBlank()) {
+        continue;
+      }
+      if ("status".equals(column.field())) {
+        continue;
+      }
+      if (!CostTemplateExcelSupport.isFieldVisible(layout, column.field())) {
+        continue;
+      }
+      String text = readLayoutCell(row, headers, column, i, usedColumns);
+      if (text != null && !text.isBlank()) {
+        values.put(column.field(), text.trim());
+      }
+    }
+    return values;
+  }
+
   public static void applyCustomFields(
       String mode,
       CostTableTemplateLayout layout,
       Row row,
       Map<String, Integer> headers,
       Map<String, Object> extraFields) {
+    applyCustomFieldsFromValues(mode, layout, readTemplateRowValues(mode, layout, row), extraFields);
+  }
+
+  public static void applyCustomFieldsFromValues(
+      String mode,
+      CostTableTemplateLayout layout,
+      Map<String, String> values,
+      Map<String, Object> extraFields) {
     if (layout == null || layout.customFields() == null || layout.customFields().isEmpty()) {
       return;
     }
     Map<String, Object> target = extraFields == null ? new HashMap<>() : extraFields;
-    List<CostExportColumn> columns = CostTemplateExcelSupport.exportColumns(mode, layout);
-    Set<Integer> usedColumns = new HashSet<>();
-
-    // 优先按导出列顺序对齐（可正确处理多个同名「生效期」）
     Map<String, String> dataTypeByField = dataTypeByField(layout);
-    for (int i = 0; i < columns.size(); i++) {
-      CostExportColumn column = columns.get(i);
-      if (column == null || column.field() == null || !column.field().startsWith("cf_")) {
-        continue;
-      }
-      if (!CostTemplateExcelSupport.isFieldVisible(layout, column.field())) {
-        continue;
-      }
-      String text = readCustomCell(row, headers, column, i, usedColumns);
-      if (text != null && !text.isBlank()) {
-        target.put(
-            column.field(),
-            coerceCustomValue(text, dataTypeByField.get(column.field())));
-      }
-    }
-
-    // 兜底：未写入的自定义字段再按标题/字段码查找
     for (CostTableCustomFieldDef custom : layout.customFields()) {
       if (custom == null || custom.field() == null || custom.field().isBlank()) {
-        continue;
-      }
-      if (target.containsKey(custom.field())) {
         continue;
       }
       if (!CostTemplateExcelSupport.isFieldVisible(layout, custom.field())) {
         continue;
       }
-      String title = CostTemplateExcelSupport.resolveFieldTitle(mode, custom.field(), layout);
-      String text =
-          CostExcelSupport.readByHeader(row, headers, title, "*" + title, custom.field());
-      if (text != null && !text.isBlank()) {
-        target.put(custom.field(), coerceCustomValue(text, custom.dataType()));
+      String text = values.get(custom.field());
+      if (text == null || text.isBlank()) {
+        continue;
+      }
+      target.put(custom.field(), coerceCustomValue(text, dataTypeByField.get(custom.field()), layout, custom.field()));
+    }
+  }
+
+  public static String normalizeImportDateValue(
+      String mode, CostTableTemplateLayout layout, String field, String raw) {
+    if (raw == null || raw.isBlank()) {
+      return raw;
+    }
+    if (!isImportDateField(mode, layout, field)) {
+      return raw.trim();
+    }
+    return CostValidityStatus.normalizeImportDate(raw);
+  }
+
+  public static void normalizeExtraDateFields(
+      String mode, CostTableTemplateLayout layout, Map<String, Object> extraFields) {
+    if (extraFields == null || extraFields.isEmpty()) {
+      return;
+    }
+    for (Map.Entry<String, Object> entry : extraFields.entrySet()) {
+      String field = entry.getKey();
+      Object value = entry.getValue();
+      if (value == null || !isImportDateField(mode, layout, field)) {
+        continue;
+      }
+      String text = String.valueOf(value).trim();
+      if (!text.isEmpty()) {
+        entry.setValue(CostValidityStatus.normalizeImportDate(text));
       }
     }
+  }
+
+  public static boolean isImportDateField(
+      String mode, CostTableTemplateLayout layout, String field) {
+    if (field == null || field.isBlank()) {
+      return false;
+    }
+    if (field.endsWith("ValidDate") || field.endsWith("Validity") || field.endsWith("_eff")) {
+      return true;
+    }
+    if ("validDate".equals(field) || "validFrom".equals(field) || "validTo".equals(field)) {
+      return true;
+    }
+    CostTableCustomFieldDef custom = findCustomDef(layout, field);
+    return custom != null && "date".equalsIgnoreCase(custom.dataType());
+  }
+
+  private static CostTableCustomFieldDef findCustomDef(
+      CostTableTemplateLayout layout, String field) {
+    if (layout == null || layout.customFields() == null) {
+      return null;
+    }
+    return layout.customFields().stream()
+        .filter(item -> field.equals(item.field()))
+        .findFirst()
+        .orElse(null);
   }
 
   private static Map<String, String> dataTypeByField(CostTableTemplateLayout layout) {
@@ -102,7 +169,8 @@ public final class CostTemplateImportSupport {
     return map;
   }
 
-  private static Object coerceCustomValue(String text, String dataType) {
+  private static Object coerceCustomValue(
+      String text, String dataType, CostTableTemplateLayout layout, String field) {
     String trimmed = text.trim();
     if ("number".equalsIgnoreCase(dataType)) {
       try {
@@ -111,10 +179,16 @@ public final class CostTemplateImportSupport {
         return trimmed;
       }
     }
+    if ("date".equalsIgnoreCase(dataType)) {
+      return CostValidityStatus.normalizeImportDate(trimmed);
+    }
+    if (isImportDateField(null, layout, field)) {
+      return CostValidityStatus.normalizeImportDate(trimmed);
+    }
     return trimmed;
   }
 
-  private static String readCustomCell(
+  static String readLayoutCell(
       Row row,
       Map<String, Integer> headers,
       CostExportColumn column,
@@ -123,7 +197,6 @@ public final class CostTemplateImportSupport {
     Row headerRow = row.getSheet().getRow(0);
     if (headerRow != null) {
       String expected = CostExcelSupport.normalizeHeader(column.header());
-      // 从左到右找尚未占用、标题匹配的列（支持重复表头）
       int lastCell = Math.max(headerRow.getLastCellNum(), 0);
       for (int col = 0; col < lastCell; col++) {
         if (usedColumns.contains(col)) {
@@ -137,24 +210,23 @@ public final class CostTemplateImportSupport {
         if (header.equals(expected)
             || header.equals(CostExcelSupport.normalizeHeader(column.field()))) {
           usedColumns.add(col);
-          return CostExcelSupport.cellString(row.getCell(col));
+          return CostExcelSupport.cellImportText(row.getCell(col));
         }
       }
-      // 表头与导出列完全同序时，直接按索引读取
       if (exportIndex < lastCell && !usedColumns.contains(exportIndex)) {
         String header =
             CostExcelSupport.normalizeHeader(
                 CostExcelSupport.cellString(headerRow.getCell(exportIndex)));
         if (header.equals(expected)) {
           usedColumns.add(exportIndex);
-          return CostExcelSupport.cellString(row.getCell(exportIndex));
+          return CostExcelSupport.cellImportText(row.getCell(exportIndex));
         }
       }
     }
     Integer mapped = headers.get(CostExcelSupport.normalizeHeader(column.header()));
     if (mapped != null && !usedColumns.contains(mapped)) {
       usedColumns.add(mapped);
-      return CostExcelSupport.cellString(row.getCell(mapped));
+      return CostExcelSupport.cellImportText(row.getCell(mapped));
     }
     return "";
   }

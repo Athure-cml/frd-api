@@ -23,7 +23,7 @@ public interface MdGlobalPortRepository extends JpaRepository<MdGlobalPort, Long
       """
       SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
       FROM MdGlobalPort p
-      WHERE UPPER(TRIM(p.nameEn)) = UPPER(TRIM(:nameEn))
+      WHERE UPPER(REPLACE(TRIM(p.nameEn), ', ', ',')) = UPPER(TRIM(:nameEn))
         AND (:restrictTypes = false OR p.portType IN :portTypes)
       """)
   boolean existsByNameEnIgnoreCase(

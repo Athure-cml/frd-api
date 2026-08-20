@@ -25,13 +25,9 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
       SELECT f FROM CostFumigation f WHERE
       (:region = '' OR LOWER(COALESCE(f.region, '')) LIKE LOWER(CONCAT('%', :region, '%')))
       AND (:station = '' OR LOWER(COALESCE(f.station, '')) LIKE LOWER(CONCAT('%', :station, '%')))
-      AND (:outdoorValidity = '' OR LOWER(COALESCE(f.outdoorValidity, '')) LIKE LOWER(CONCAT('%', :outdoorValidity, '%')))
-      AND (:indoorValidity = '' OR LOWER(COALESCE(f.indoorValidity, '')) LIKE LOWER(CONCAT('%', :indoorValidity, '%')))
       """)
   Page<CostFumigation> search(
       @Param("region") String region,
       @Param("station") String station,
-      @Param("outdoorValidity") String outdoorValidity,
-      @Param("indoorValidity") String indoorValidity,
       Pageable pageable);
 }

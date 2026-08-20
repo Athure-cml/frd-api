@@ -22,6 +22,11 @@ public final class CostValidityStatus {
   private static final Pattern US_SLASH_DATE =
       Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2,4})$");
 
+  private static final Pattern CN_MONTH_DAY =
+      Pattern.compile("^(\\d{1,2})月(\\d{1,2})日$");
+
+  private static final Pattern MD_ONLY = Pattern.compile("^(\\d{1,2})/(\\d{1,2})$");
+
   private static final DateTimeFormatter[] FORMATTERS =
       new DateTimeFormatter[] {
         DateTimeFormatter.ofPattern("yyyy-M-d"),
@@ -85,6 +90,11 @@ public final class CostValidityStatus {
     return parseSingleDate(text);
   }
 
+  /** 导入落库：统一格式化为 yyyy/MM/dd；无法解析时保留原文。 */
+  public static String normalizeImportDate(String raw) {
+    return formatExportDate(raw);
+  }
+
   /** 导出 Excel：统一格式化为 yyyy/MM/dd；区间用「 - 」连接。 */
   public static String formatExportDate(String raw) {
     if (raw == null || raw.isBlank()) {
@@ -114,6 +124,31 @@ public final class CostValidityStatus {
     return parseEndDate(raw);
   }
 
+  /** 解析区间起始日；非区间则按单日解析。 */
+  public static LocalDate tryParseRangeStart(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    String text = raw.trim();
+    Matcher range = RANGE.matcher(text);
+    if (range.matches()) {
+      return parseSingleDate(range.group(1));
+    }
+    return parseSingleDate(text);
+  }
+
+  /** 列表搜索：兼容 MM/DD、区间、历史 Excel 短格式。 */
+  public static LocalDate tryParseDateForSearch(String raw) {
+    LocalDate end = tryParseDate(raw);
+    if (end != null) {
+      return end;
+    }
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    return parseMonthDayOnly(raw.trim());
+  }
+
   private static LocalDate parseSingleDate(String text) {
     String normalized = text.trim().replace('.', '-');
     for (DateTimeFormatter formatter : FORMATTERS) {
@@ -129,7 +164,45 @@ public final class CostValidityStatus {
     } catch (DateTimeParseException ignored) {
       // try US slash
     }
+    LocalDate cn = parseChineseMonthDay(text.trim());
+    if (cn != null) {
+      return cn;
+    }
+    LocalDate md = parseMonthDayOnly(text.trim());
+    if (md != null) {
+      return md;
+    }
     return parseUsSlashDate(text.trim());
+  }
+
+  /** 仅月/日（缺少年份时用当前年，与列表 MM/DD 展示一致）。 */
+  private static LocalDate parseMonthDayOnly(String text) {
+    Matcher matcher = MD_ONLY.matcher(text);
+    if (!matcher.matches()) {
+      return null;
+    }
+    int month = Integer.parseInt(matcher.group(1));
+    int day = Integer.parseInt(matcher.group(2));
+    try {
+      return LocalDate.of(LocalDate.now().getYear(), month, day);
+    } catch (RuntimeException ignored) {
+      return null;
+    }
+  }
+
+  /** 中文月日：10月1日（缺年份时用当前年）。 */
+  private static LocalDate parseChineseMonthDay(String text) {
+    Matcher matcher = CN_MONTH_DAY.matcher(text.trim());
+    if (!matcher.matches()) {
+      return null;
+    }
+    int month = Integer.parseInt(matcher.group(1));
+    int day = Integer.parseInt(matcher.group(2));
+    try {
+      return LocalDate.of(LocalDate.now().getYear(), month, day);
+    } catch (RuntimeException ignored) {
+      return null;
+    }
   }
 
   /** 兼容 Excel 美式短日期：8/1/26、08/01/2026。 */

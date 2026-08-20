@@ -106,15 +106,15 @@ public class CostMasterRefValidator {
     if (entity == null) {
       return null;
     }
-    String error = requirePort(entity.getPor(), "POR", SEA_POR_TYPES);
+    String     error = requirePort(entity.getPor(), "POR", SEA_POR_TYPES);
     if (error != null) {
       return error;
     }
-    error = requirePort(entity.getPol(), "POL", SEA_SEAPORT_TYPES);
+    error = requirePorts(entity.getPol(), "POL", SEA_SEAPORT_TYPES);
     if (error != null) {
       return error;
     }
-    error = requirePorts(entity.getPod(), "POD", SEA_SEAPORT_TYPES);
+    error = requirePort(entity.getPod(), "POD", SEA_SEAPORT_TYPES);
     if (error != null) {
       return error;
     }
@@ -198,15 +198,15 @@ public class CostMasterRefValidator {
     if (isBlank(name)) {
       return null;
     }
-    String port = normalizeToken(name);
+    String port = canonicalPortName(name);
     if (!globalPortRepository.existsByNameEnIgnoreCase(port, types, true)) {
-      return missing(label, port.isEmpty() ? name : port);
+      return missing(label, displayPortName(name));
     }
     return null;
   }
 
   private String requirePorts(String raw, String label, Collection<PortType> types) {
-    for (String name : splitValues(raw)) {
+    for (String name : splitSlashValues(raw)) {
       String error = requirePort(name, label, types);
       if (error != null) {
         return error;
@@ -216,7 +216,7 @@ public class CostMasterRefValidator {
   }
 
   private String requireContainerTypes(String raw) {
-    for (String code : splitValues(raw)) {
+    for (String code : splitSlashValues(raw)) {
       if (!containerTypeRepository.existsByCodeIgnoreCase(code, 1)) {
         return missing("箱型", code);
       }
@@ -325,11 +325,12 @@ public class CostMasterRefValidator {
     return null;
   }
 
-  private static List<String> splitValues(String raw) {
+  /** 多选值仅按 `/` 拆分（港口名如 NEW YORK, NY 含逗号，不能当分隔符）。 */
+  private static List<String> splitSlashValues(String raw) {
     if (isBlank(raw)) {
       return List.of();
     }
-    String[] parts = raw.split("[/,;|，；]+");
+    String[] parts = raw.split("/");
     List<String> values = new ArrayList<>(parts.length);
     for (String part : parts) {
       String trimmed = part.trim();
@@ -338,6 +339,20 @@ public class CostMasterRefValidator {
       }
     }
     return values;
+  }
+
+  /** 港口匹配键：忽略逗号后空格差异（NEW YORK,NY ≡ NEW YORK, NY）。 */
+  private static String canonicalPortName(String name) {
+    return normalizeToken(name).replaceAll(",\\s*", ",");
+  }
+
+  /** 报错展示：统一为「逗号+空格」便于阅读。 */
+  private static String displayPortName(String name) {
+    String canonical = canonicalPortName(name);
+    if (canonical.isEmpty()) {
+      return name == null ? "" : name.trim();
+    }
+    return canonical.replace(",", ", ");
   }
 
   private static String missing(String label, String value) {

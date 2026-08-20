@@ -42,7 +42,6 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       AND (:pol = '' OR LOWER(COALESCE(r.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
       AND (:supplier = '' OR LOWER(COALESCE(r.supplier, '')) LIKE LOWER(CONCAT('%', :supplier, '%')))
       AND (:redelivery IS NULL OR r.redelivery = :redelivery)
-      AND (:validDate = '' OR LOWER(COALESCE(r.validDate, '')) LIKE LOWER(CONCAT('%', :validDate, '%')))
       """)
   Page<CostRoad> search(
       @Param("zipCode") String zipCode,
@@ -52,6 +51,5 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       @Param("pol") String pol,
       @Param("supplier") String supplier,
       @Param("redelivery") BigDecimal redelivery,
-      @Param("validDate") String validDate,
       Pageable pageable);
 }

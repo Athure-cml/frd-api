@@ -34,6 +34,7 @@ import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
+import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
@@ -107,12 +108,12 @@ public class CostSeaService {
     String fed = SearchText.orEmpty(freightEffDate);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
-    boolean filterFreightEff = !fed.isEmpty();
+    boolean filterDates = !fed.isEmpty() || !fvd.isEmpty();
 
-    if (!filterStatus && !filterFreightEff) {
+    if (!filterStatus && !filterDates) {
       var pageable =
           PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostSea> result = repository.search(p, pl, pd, s, ct, a, fvd, pageable);
+      Page<CostSea> result = repository.search(p, pl, pd, s, ct, a, pageable);
       return new PageResult<>(
           result.getContent().stream().map(FreightCostResponse::fromSea).toList(),
           result.getTotalElements());
@@ -120,8 +121,8 @@ public class CostSeaService {
 
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostSea> filtered =
-        repository.search(p, pl, pd, s, ct, a, fvd, pageable).getContent().stream()
-            .filter(item -> matchesFreightEffDate(item, fed))
+        repository.search(p, pl, pd, s, ct, a, pageable).getContent().stream()
+            .filter(item -> matchesSeaDateSearch(item, fed, fvd))
             .filter(
                 item ->
                     CostValidityStatus.matchesFilter(
@@ -322,7 +323,8 @@ public class CostSeaService {
       String statusFilter = status;
       boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
       String fed = SearchText.orEmpty(freightEffDate);
-      boolean filterFreightEff = !fed.isEmpty();
+      String fvd = SearchText.orEmpty(freightValidDate);
+      boolean filterDates = !fed.isEmpty() || !fvd.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       items =
           repository
@@ -333,13 +335,12 @@ public class CostSeaService {
                   SearchText.orEmpty(ssl),
                   SearchText.orEmpty(containerType),
                   SearchText.orEmpty(agent),
-                  SearchText.orEmpty(freightValidDate),
                   pageable)
               .getContent();
-      if (filterStatus || filterFreightEff) {
+      if (filterStatus || filterDates) {
         items =
             items.stream()
-                .filter(item -> matchesFreightEffDate(item, fed))
+                .filter(item -> matchesSeaDateSearch(item, fed, fvd))
                 .filter(
                     item ->
                         CostValidityStatus.matchesFilter(
@@ -353,23 +354,12 @@ public class CostSeaService {
     return CostDataExcelExporter.exportSea(items, layout);
   }
 
-  private boolean matchesFreightEffDate(CostSea item, String freightEffDate) {
-    if (freightEffDate == null || freightEffDate.isBlank()) {
-      return true;
-    }
-    Object value = null;
-    if (item.getExtraFields() != null) {
-      value = item.getExtraFields().get(CF_FREIGHT_EFF);
-      if (value == null) {
-        value = item.getExtraFields().get("cf_seaFreightEff");
-      }
-    }
-    if (value == null) {
-      return false;
-    }
-    return String.valueOf(value)
-        .toLowerCase()
-        .contains(freightEffDate.trim().toLowerCase());
+  private boolean matchesSeaDateSearch(CostSea item, String freightEffDate, String freightValidDate) {
+    String eff =
+        CostDateSearchFilter.resolveSeaFreightEff(
+            item.getExtraFields(), item.getFreightValidDate());
+    return CostDateSearchFilter.matchesRange(
+        eff, item.getFreightValidDate(), freightEffDate, freightValidDate);
   }
 
   private PageResult<FreightCostResponse> paginate(List<CostSea> filtered, int page, int pageSize) {
@@ -394,35 +384,7 @@ public class CostSeaService {
     if (nested) {
       entity = mapNestedImportRow(row);
     } else {
-      String pol = readHeader(row, headers, "POL", "起运港", "ORIGIN");
-      String pod = readHeader(row, headers, "POD", "目的港", "DESTINATION");
-      if (pol.isBlank() && pod.isBlank()) {
-        return null;
-      }
-      entity = new CostSea();
-      entity.setPor(readHeader(row, headers, "POR"));
-      entity.setPol(pol);
-      entity.setPod(pod);
-      entity.setCnShortName(readHeader(row, headers, "中文简称"));
-      entity.setEnProductName(readHeader(row, headers, "英文品名"));
-      entity.setContainerType(readHeader(row, headers, "箱型", "SPEC"));
-      entity.setFreight(
-          CostExcelSupport.readDecimalByHeader(row, headers, "运费", "O/F RATE (USD)", "UNIT PRICE"));
-      entity.setFreightValidDate(readHeader(row, headers, "有效期", "FREIGHT VALID DATE", "VALID DATE"));
-      entity.setBuc(CostExcelSupport.readDecimalByHeader(row, headers, "BUC", "燃油附加费"));
-      entity.setBucValidDate(readHeader(row, headers, "BUC有效期", "附加费有效期"));
-      entity.setEbs(CostExcelSupport.readDecimalByHeader(row, headers, "EBS"));
-      entity.setEbsValidDate(readHeader(row, headers, "EBS有效期"));
-      entity.setGri(CostExcelSupport.readDecimalByHeader(row, headers, "GRI"));
-      entity.setGriValidDate(readHeader(row, headers, "GRI有效期"));
-      entity.setOthers(CostExcelSupport.readDecimalByHeader(row, headers, "OTHERS"));
-      entity.setOthersValidDate(readHeader(row, headers, "OTHERS有效期"));
-      entity.setAllIn(
-          CostExcelSupport.readDecimalByHeader(row, headers, "ALL IN (小计)", "ALL IN"));
-      entity.setSsl(readHeader(row, headers, "SSL (船公司)", "SSL", "承运商", "CARRIER"));
-      entity.setAgent(readHeader(row, headers, "AGENT (代理)", "AGENT"));
-      entity.setRemark(readHeader(row, headers, "REMARK 备注", "备注", "REMARK"));
-      entity.setStatus(CostValidityStatus.resolve(CostStatus.active, entity.getFreightValidDate()));
+      entity = mapFlatImportRow(row, layout, headers);
     }
     if (entity == null) {
       return null;
@@ -431,7 +393,117 @@ public class CostSeaService {
         entity.getExtraFields() == null ? new HashMap<>() : new HashMap<>(entity.getExtraFields());
     CostTemplateImportSupport.applyCustomFields("sea", layout, row, headers, extra);
     entity.setExtraFields(extra);
+    normalizeSeaImportDates(entity, layout);
     return entity;
+  }
+
+  private CostSea mapFlatImportRow(
+      Row row, CostTableTemplateLayout layout, Map<String, Integer> headers) {
+    Map<String, String> values = CostTemplateImportSupport.readTemplateRowValues("sea", layout, row);
+    String pol =
+        firstNonBlank(
+            values.get("pol"), readHeader(row, headers, "POL", "起运港", "ORIGIN"));
+    String pod =
+        firstNonBlank(
+            values.get("pod"), readHeader(row, headers, "POD", "目的港", "DESTINATION"));
+    if (pol.isBlank() && pod.isBlank()) {
+      return null;
+    }
+    CostSea entity = new CostSea();
+    entity.setPor(firstNonBlank(values.get("por"), readHeader(row, headers, "POR")));
+    entity.setPol(pol);
+    entity.setPod(pod);
+    entity.setCnShortName(
+        firstNonBlank(values.get("cnShortName"), readHeader(row, headers, "中文简称")));
+    entity.setEnProductName(
+        firstNonBlank(values.get("enProductName"), readHeader(row, headers, "英文品名")));
+    entity.setContainerType(
+        firstNonBlank(values.get("containerType"), readHeader(row, headers, "箱型", "SPEC")));
+    entity.setFreight(
+        firstDecimal(
+            values.get("freight"),
+            CostExcelSupport.readDecimalByHeader(
+                row, headers, "运费", "O/F RATE (USD)", "UNIT PRICE")));
+    entity.setFreightValidDate(
+        firstNonBlank(
+            values.get("freightValidDate"),
+            readHeader(row, headers, "有效期", "FREIGHT VALID DATE", "VALID DATE")));
+    entity.setBuc(
+        firstDecimal(
+            values.get("buc"),
+            CostExcelSupport.readDecimalByHeader(row, headers, "BUC", "燃油附加费")));
+    entity.setBucValidDate(
+        firstNonBlank(
+            values.get("bucValidDate"),
+            readHeader(row, headers, "BUC有效期", "附加费有效期")));
+    entity.setEbs(
+        firstDecimal(
+            values.get("ebs"), CostExcelSupport.readDecimalByHeader(row, headers, "EBS")));
+    entity.setEbsValidDate(
+        firstNonBlank(values.get("ebsValidDate"), readHeader(row, headers, "EBS有效期")));
+    entity.setGri(
+        firstDecimal(
+            values.get("gri"), CostExcelSupport.readDecimalByHeader(row, headers, "GRI")));
+    entity.setGriValidDate(
+        firstNonBlank(values.get("griValidDate"), readHeader(row, headers, "GRI有效期")));
+    entity.setOthers(
+        firstDecimal(
+            values.get("others"),
+            CostExcelSupport.readDecimalByHeader(row, headers, "OTHERS")));
+    entity.setOthersValidDate(
+        firstNonBlank(
+            values.get("othersValidDate"), readHeader(row, headers, "OTHERS有效期")));
+    entity.setAllIn(
+        firstDecimal(
+            values.get("allIn"),
+            CostExcelSupport.readDecimalByHeader(row, headers, "ALL IN (小计)", "ALL IN")));
+    entity.setSsl(
+        firstNonBlank(
+            values.get("ssl"), readHeader(row, headers, "SSL (船公司)", "SSL", "承运商", "CARRIER")));
+    entity.setAgent(
+        firstNonBlank(values.get("agent"), readHeader(row, headers, "AGENT (代理)", "AGENT")));
+    entity.setRemark(
+        firstNonBlank(
+            values.get("remark"), readHeader(row, headers, "REMARK 备注", "备注", "REMARK")));
+    entity.setStatus(CostValidityStatus.resolve(CostStatus.active, entity.getFreightValidDate()));
+    return entity;
+  }
+
+  private void normalizeSeaImportDates(CostSea entity, CostTableTemplateLayout layout) {
+    entity.setFreightValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "sea", layout, "freightValidDate", entity.getFreightValidDate()));
+    entity.setBucValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "sea", layout, "bucValidDate", entity.getBucValidDate()));
+    entity.setEbsValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "sea", layout, "ebsValidDate", entity.getEbsValidDate()));
+    entity.setGriValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "sea", layout, "griValidDate", entity.getGriValidDate()));
+    entity.setOthersValidDate(
+        CostTemplateImportSupport.normalizeImportDateValue(
+            "sea", layout, "othersValidDate", entity.getOthersValidDate()));
+    CostTemplateImportSupport.normalizeExtraDateFields("sea", layout, entity.getExtraFields());
+  }
+
+  private static String firstNonBlank(String primary, String fallback) {
+    if (primary != null && !primary.isBlank()) {
+      return primary.trim();
+    }
+    return fallback == null ? "" : fallback.trim();
+  }
+
+  private static BigDecimal firstDecimal(String primary, BigDecimal fallback) {
+    if (primary != null && !primary.isBlank()) {
+      try {
+        return new BigDecimal(primary.replace(",", "").trim());
+      } catch (NumberFormatException ignored) {
+        return fallback;
+      }
+    }
+    return fallback;
   }
 
   /** 双行表头：… | 附加费(BUC/有效期/EBS/有效期/GRI/有效期/OTHERS/有效期) | … */
@@ -452,15 +524,15 @@ public class CostSeaService {
     entity.setEnProductName(CostExcelSupport.cellString(row.getCell(4)));
     entity.setContainerType(CostExcelSupport.cellString(row.getCell(5)));
     entity.setFreight(CostExcelSupport.cellDecimal(row.getCell(6)));
-    entity.setFreightValidDate(CostExcelSupport.cellString(row.getCell(7)));
+    entity.setFreightValidDate(CostExcelSupport.cellImportText(row.getCell(7)));
     entity.setBuc(CostExcelSupport.cellDecimal(row.getCell(8)));
-    entity.setBucValidDate(CostExcelSupport.cellString(row.getCell(9)));
+    entity.setBucValidDate(CostExcelSupport.cellImportText(row.getCell(9)));
     entity.setEbs(CostExcelSupport.cellDecimal(row.getCell(10)));
-    entity.setEbsValidDate(CostExcelSupport.cellString(row.getCell(11)));
+    entity.setEbsValidDate(CostExcelSupport.cellImportText(row.getCell(11)));
     entity.setGri(CostExcelSupport.cellDecimal(row.getCell(12)));
-    entity.setGriValidDate(CostExcelSupport.cellString(row.getCell(13)));
+    entity.setGriValidDate(CostExcelSupport.cellImportText(row.getCell(13)));
     entity.setOthers(CostExcelSupport.cellDecimal(row.getCell(14)));
-    entity.setOthersValidDate(CostExcelSupport.cellString(row.getCell(15)));
+    entity.setOthersValidDate(CostExcelSupport.cellImportText(row.getCell(15)));
     entity.setAllIn(CostExcelSupport.cellDecimal(row.getCell(16)));
     entity.setSsl(CostExcelSupport.cellString(row.getCell(17)));
     entity.setAgent(CostExcelSupport.cellString(row.getCell(18)));
