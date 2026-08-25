@@ -95,7 +95,8 @@ public class CostSeaService {
       String agent,
       String freightValidDate,
       String freightEffDate,
-      String status) {
+      String status,
+      String remark) {
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String p = SearchText.orEmpty(por);
@@ -104,6 +105,7 @@ public class CostSeaService {
     String s = SearchText.orEmpty(ssl);
     String ct = SearchText.orEmpty(containerType);
     String a = SearchText.orEmpty(agent);
+    String rm = SearchText.orEmpty(remark);
     String fvd = SearchText.orEmpty(freightValidDate);
     String fed = SearchText.orEmpty(freightEffDate);
     String statusFilter = status;
@@ -113,7 +115,7 @@ public class CostSeaService {
     if (!filterStatus && !filterDates) {
       var pageable =
           PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostSea> result = repository.search(p, pl, pd, s, ct, a, pageable);
+      Page<CostSea> result = repository.search(p, pl, pd, s, ct, a, rm, pageable);
       return new PageResult<>(
           result.getContent().stream().map(FreightCostResponse::fromSea).toList(),
           result.getTotalElements());
@@ -121,7 +123,7 @@ public class CostSeaService {
 
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostSea> filtered =
-        repository.search(p, pl, pd, s, ct, a, pageable).getContent().stream()
+        repository.search(p, pl, pd, s, ct, a, rm, pageable).getContent().stream()
             .filter(item -> matchesSeaDateSearch(item, fed, fvd))
             .filter(
                 item ->
@@ -311,6 +313,7 @@ public class CostSeaService {
       String freightValidDate,
       String freightEffDate,
       String status,
+      String remark,
       Long templateId,
       List<Long> ids) {
     List<CostSea> items;
@@ -335,6 +338,7 @@ public class CostSeaService {
                   SearchText.orEmpty(ssl),
                   SearchText.orEmpty(containerType),
                   SearchText.orEmpty(agent),
+                  SearchText.orEmpty(remark),
                   pageable)
               .getContent();
       if (filterStatus || filterDates) {

@@ -157,7 +157,8 @@ public class AiToolExecutor {
             null,
             null,
             null,
-            text(args, "status"));
+            text(args, "status"),
+            text(args, "remark"));
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
     for (FreightCostResponse row : page.items()) {

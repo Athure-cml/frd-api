@@ -152,10 +152,11 @@ public class GlobalPortController {
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ApiResponse<CostImportResult> importExcel(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestParam("file") MultipartFile file)
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     requireManage(authService.requireUser(authorization));
-    return ApiResponse.ok(globalPortService.importExcel(file));
+    return ApiResponse.ok(globalPortService.importExcel(file, dryRun));
   }
 
   @Operation(

@@ -34,6 +34,7 @@ public interface CostSeaRepository extends JpaRepository<CostSea, Long> {
       AND (:ssl = '' OR LOWER(COALESCE(s.ssl, '')) LIKE LOWER(CONCAT('%', :ssl, '%')))
       AND (:containerType = '' OR LOWER(COALESCE(s.containerType, '')) LIKE LOWER(CONCAT('%', :containerType, '%')))
       AND (:agent = '' OR LOWER(COALESCE(s.agent, '')) LIKE LOWER(CONCAT('%', :agent, '%')))
+      AND (:remark = '' OR LOWER(COALESCE(s.remark, '')) LIKE LOWER(CONCAT('%', :remark, '%')))
       """)
   Page<CostSea> search(
       @Param("por") String por,
@@ -42,5 +43,6 @@ public interface CostSeaRepository extends JpaRepository<CostSea, Long> {
       @Param("ssl") String ssl,
       @Param("containerType") String containerType,
       @Param("agent") String agent,
+      @Param("remark") String remark,
       Pageable pageable);
 }

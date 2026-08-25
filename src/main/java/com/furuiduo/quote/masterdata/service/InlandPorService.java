@@ -84,7 +84,7 @@ public class InlandPorService {
   }
 
   @Transactional
-  public CostImportResult importExcel(MultipartFile file) throws IOException {
+  public CostImportResult importExcel(MultipartFile file, boolean dryRun) throws IOException {
     Set<String> seenKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
@@ -119,7 +119,8 @@ public class InlandPorService {
           entity.setPolId(pol.getId());
           entity.setRegion(trimToNull(row.region()));
           repository.save(entity);
-        });
+        },
+        dryRun);
   }
 
   @Transactional(readOnly = true)

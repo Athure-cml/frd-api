@@ -74,7 +74,8 @@ public class CostSeaController {
       @RequestParam(required = false) String agent,
       @RequestParam(required = false) String freightValidDate,
       @RequestParam(required = false) String freightEffDate,
-      @RequestParam(required = false) String status) {
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String remark) {
     requireView(authService.requireUser(authorization));
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
@@ -91,7 +92,8 @@ public class CostSeaController {
             agent,
             freightValidDate,
             freightEffDate,
-            status));
+            status,
+            remark));
   }
 
   @GetMapping("/{id}")
@@ -179,6 +181,7 @@ public class CostSeaController {
       @RequestParam(required = false) String freightValidDate,
       @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String remark,
       @RequestParam(required = false) Long templateId,
       @RequestParam(required = false) String ids) {
     requireView(authService.requireUser(authorization));
@@ -196,6 +199,7 @@ public class CostSeaController {
             freightValidDate,
             freightEffDate,
             status,
+            remark,
             templateId,
             RequestIds.parse(ids));
     String filename =

@@ -137,7 +137,7 @@ public class GlobalPortService {
   }
 
   @Transactional
-  public CostImportResult importExcel(MultipartFile file) throws IOException {
+  public CostImportResult importExcel(MultipartFile file, boolean dryRun) throws IOException {
     Set<String> seenBusinessKeys = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
@@ -166,7 +166,8 @@ public class GlobalPortService {
                     repository.save(existing);
                   },
                   () -> repository.save(entity));
-        });
+        },
+        dryRun);
   }
 
   @Transactional(readOnly = true)
