@@ -102,8 +102,12 @@ public final class PermissionCodes {
   public static final String MD_INLAND_POR_MANAGE = "md_inland_por:manage";
   public static final String MD_CONTAINER_TYPE_VIEW = "md_container_type:view";
   public static final String MD_CONTAINER_TYPE_MANAGE = "md_container_type:manage";
+  public static final String MD_QUOTE_RULE_VIEW = "md_quote_rule:view";
+  public static final String MD_QUOTE_RULE_MANAGE = "md_quote_rule:manage";
 
   public static final String SYS_OPERATION_LOG_VIEW = "sys:operation_log:view";
+  public static final String SYS_ANNOUNCEMENT_VIEW = "sys:announcement:view";
+  public static final String SYS_ANNOUNCEMENT_MANAGE = "sys:announcement:manage";
 
   public static final String AI_USE = "ai:use";
 
@@ -185,7 +189,11 @@ public final class PermissionCodes {
       MD_INLAND_POR_MANAGE,
       MD_CONTAINER_TYPE_VIEW,
       MD_CONTAINER_TYPE_MANAGE,
+      MD_QUOTE_RULE_VIEW,
+      MD_QUOTE_RULE_MANAGE,
       SYS_OPERATION_LOG_VIEW,
+      SYS_ANNOUNCEMENT_VIEW,
+      SYS_ANNOUNCEMENT_MANAGE,
       AI_USE,
       REPORT_VIEW,
       REPORT_EXPORT

@@ -224,7 +224,13 @@ public final class MenuRegistry {
                 .component("/master-data/container-type/index")
                 .meta("icon", "lucide:box")
                 .meta("title", "page.masterData.containerType")
-                .requirePermission(PermissionCodes.MD_CONTAINER_TYPE_VIEW));
+                .requirePermission(PermissionCodes.MD_CONTAINER_TYPE_VIEW))
+        .child(
+            MenuRouteDto.of("MasterDataQuoteRule", "/master-data/quote-rule")
+                .component("/master-data/quote-rule/index")
+                .meta("icon", "lucide:scale")
+                .meta("title", "page.masterData.quoteRule")
+                .requirePermission(PermissionCodes.MD_QUOTE_RULE_VIEW));
   }
 
   private static MenuRouteDto system() {
@@ -257,6 +263,12 @@ public final class MenuRegistry {
                 .component("/system/operation-log/index")
                 .meta("icon", "lucide:scroll-text")
                 .meta("title", "page.system.operationLog")
-                .requirePermission(PermissionCodes.SYS_OPERATION_LOG_VIEW));
+                .requirePermission(PermissionCodes.SYS_OPERATION_LOG_VIEW))
+        .child(
+            MenuRouteDto.of("SystemAnnouncement", "/system/announcement")
+                .component("/system/announcement/index")
+                .meta("icon", "lucide:megaphone")
+                .meta("title", "page.system.announcement")
+                .requirePermission(PermissionCodes.SYS_ANNOUNCEMENT_VIEW));
   }
 }

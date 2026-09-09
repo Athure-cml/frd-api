@@ -187,11 +187,12 @@ public class DashboardQueryRepository {
             "statuses",
             List.of(
                 QuoteStatus.DRAFT,
-                QuoteStatus.FOLLOWING,
-                QuoteStatus.EFFECTIVE,
-                QuoteStatus.PENDING,
+                QuoteStatus.PENDING_APPROVAL,
                 QuoteStatus.SENT,
-                QuoteStatus.WON))
+                QuoteStatus.WON,
+                QuoteStatus.PENDING,
+                QuoteStatus.FOLLOWING,
+                QuoteStatus.EFFECTIVE))
         .setParameter("scopeAll", scope.scopeAll())
         .setParameter("scopeDept", scope.scopeDept())
         .setParameter("scopeSelf", scope.scopeSelf())

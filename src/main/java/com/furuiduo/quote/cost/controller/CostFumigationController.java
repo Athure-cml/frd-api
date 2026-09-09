@@ -3,7 +3,9 @@ package com.furuiduo.quote.cost.controller;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -32,7 +34,10 @@ import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.FumigationCostResponse;
 import com.furuiduo.quote.cost.dto.FumigationCostSaveRequest;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
+import com.furuiduo.quote.cost.service.CostDeptHighlightService;
 import com.furuiduo.quote.cost.service.CostFumigationService;
+import com.furuiduo.quote.cost.support.CostHighlightQuerySupport;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
@@ -47,14 +52,20 @@ public class CostFumigationController {
   private final AuthService authService;
   private final PermissionService permissionService;
   private final CostFumigationService costFumigationService;
+  private final CostDeptHighlightService highlightService;
+  private final CostHighlightQuerySupport highlightQuerySupport;
 
   public CostFumigationController(
       AuthService authService,
       PermissionService permissionService,
-      CostFumigationService costFumigationService) {
+      CostFumigationService costFumigationService,
+      CostDeptHighlightService highlightService,
+      CostHighlightQuerySupport highlightQuerySupport) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.costFumigationService = costFumigationService;
+    this.highlightService = highlightService;
+    this.highlightQuerySupport = highlightQuerySupport;
   }
 
   @GetMapping
@@ -67,19 +78,61 @@ public class CostFumigationController {
       @RequestParam(required = false) String station,
       @RequestParam(required = false) String outdoorValidity,
       @RequestParam(required = false) String indoorValidity,
-      @RequestParam(required = false) String status) {
-    requireView(authService.requireUser(authorization));
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
     String regionFilter =
         region != null && !region.isBlank() ? region : port;
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.fumigation, user, highlightOnly);
     return ApiResponse.ok(
-        costFumigationService.list(
-            page,
-            pageSize,
+        highlightService.enrichFumigationPage(
+            user,
+            costFumigationService.list(
+                page,
+                pageSize,
+                regionFilter,
+                station,
+                outdoorValidity,
+                indoorValidity,
+                status,
+                sortField,
+                sortOrder,
+                restrictIds)));
+  }
+
+  @GetMapping("/ids")
+  public ApiResponse<List<Long>> listIds(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String region,
+      @RequestParam(required = false) String port,
+      @RequestParam(required = false) String station,
+      @RequestParam(required = false) String outdoorValidity,
+      @RequestParam(required = false) String indoorValidity,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    String regionFilter = region != null && !region.isBlank() ? region : port;
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.fumigation, user, highlightOnly);
+    return ApiResponse.ok(
+        costFumigationService.listIds(
             regionFilter,
             station,
             outdoorValidity,
             indoorValidity,
-            status));
+            status,
+            sortField,
+            sortOrder,
+            restrictIds));
   }
 
   @GetMapping("/{id}")

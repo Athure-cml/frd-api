@@ -17,6 +17,9 @@ public interface SupplierRepository extends JpaRepository<Supplier, Long> {
 
   Optional<Supplier> findByCode(String code);
 
+  @Query("SELECT s.code FROM Supplier s")
+  List<String> findAllCodes();
+
   @Query(
       """
       SELECT s FROM Supplier s

@@ -16,33 +16,34 @@ import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
+import com.furuiduo.quote.quote.support.QuoteDateTimes;
+import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 
 @Service
 public class QuoteExportService {
 
   private static final String[] HEADERS = {
-    "Zip code",
-    "City",
-    "State",
-    "POR",
-    "POL",
+    "QUOTE NO",
+    "CLINET",
+    "PICK UP ADDRESS",
+    "POR/POL",
     "POD",
-    "O/F (USD)",
-    "SSL",
-    "TRUCKING NON OAK (USD)",
-    "TRUCKING OAK (USD)",
-    "FM NON OAK",
-    "FM OAK",
-    "DOC (USD)",
-    "CARGO Max weight (ton)",
+    "OCEAN FREIGHT",
+    "TRUCKING FEE",
+    "NS LIFT",
+    "CHASSIS",
+    "WAITING",
+    "REDELIVERY FEE",
+    "TRUCK REMARK",
+    "FM (NON-OAK)",
+    "FM (OAK)",
+    "DOC FEE",
+    "CARGO INSURANCE PREMIUM",
+    "CARGO AGENT FEE",
     "REMARK",
-    "Customer",
-    "Currency",
-    "Valid Until",
-    "Status",
-    "Follow Up By",
-    "Quote No"
+    "QUOTE DATA",
+    "状态"
   };
 
   private final QuoteOrderRepository quoteOrderRepository;
@@ -118,29 +119,34 @@ public class QuoteExportService {
         Row row = sheet.createRow(rowIndex++);
         QuoteSheetFieldsDto sheetFields = QuoteSheetFieldsDto.from(order);
         int col = 0;
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.zipCode()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.city()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.state()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.por()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.pol()));
+        row.createCell(col++).setCellValue(nullToEmpty(order.getQuoteNo()));
+        row.createCell(col++).setCellValue(nullToEmpty(order.getCustomerName()));
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.pickUpAddress()));
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.porPol()));
         row.createCell(col++).setCellValue(nullToEmpty(sheetFields.pod()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.ofUsd()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.ssl()));
-        setDecimal(row.createCell(col++), sheetFields.truckingNonOakUsd());
-        setDecimal(row.createCell(col++), sheetFields.truckingOakUsd());
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.oceanFreight()));
+        setDecimal(row.createCell(col++), sheetFields.truckingFee());
+        setDecimal(row.createCell(col++), sheetFields.nsLift());
+        setDecimal(row.createCell(col++), sheetFields.chassis());
+        setDecimal(row.createCell(col++), sheetFields.waiting());
+        setDecimal(row.createCell(col++), sheetFields.redeliveryFee());
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.truckRemark()));
         setDecimal(row.createCell(col++), sheetFields.fmNonOak());
         setDecimal(row.createCell(col++), sheetFields.fmOak());
         row.createCell(col++).setCellValue(nullToEmpty(sheetFields.docUsd()));
-        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.cargoMaxWeightTon()));
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.cargoInsurancePremium()));
+        row.createCell(col++).setCellValue(nullToEmpty(sheetFields.cargoAgentFee()));
         row.createCell(col++).setCellValue(nullToEmpty(sheetFields.sheetRemark()));
-        row.createCell(col++).setCellValue(nullToEmpty(order.getCustomerName()));
-        row.createCell(col++).setCellValue(nullToEmpty(order.getCurrency()));
         row.createCell(col++)
-            .setCellValue(order.getValidUntil() != null ? order.getValidUntil().toString() : "");
+            .setCellValue(
+                order.getCreatedAt() != null
+                    ? QuoteDateTimes.format(order.getCreatedAt()).substring(0, 10)
+                    : "");
         row.createCell(col++)
-            .setCellValue(order.getStatus() == null ? "" : order.getStatus().name());
-        row.createCell(col++).setCellValue(nullToEmpty(order.getFollowUpByName()));
-        row.createCell(col).setCellValue(nullToEmpty(order.getQuoteNo()));
+            .setCellValue(
+                order.getStatus() == null
+                    ? ""
+                    : QuoteStatusSupport.displayStatus(order.getStatus()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {

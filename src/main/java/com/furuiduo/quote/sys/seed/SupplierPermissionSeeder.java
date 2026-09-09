@@ -72,10 +72,6 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (permissionRepository.count() == 0) {
-      return;
-    }
-
     removeLegacyPermissions();
     Map<String, SysPermission> permissions = ensurePermissions();
     for (SysRole role : roleRepository.findAll()) {

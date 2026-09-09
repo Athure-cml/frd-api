@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
+import com.furuiduo.quote.common.BatchIdsRequest;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.currency.dto.CurrencyResponse;
 import com.furuiduo.quote.currency.dto.CurrencySaveRequest;
@@ -107,6 +108,19 @@ public class CurrencyController {
       @PathVariable Long id) {
     requireManage(authService.requireUser(authorization));
     currencyCommandService.delete(id);
+    return ApiResponse.ok(null);
+  }
+
+  @Operation(
+      summary = "批量删除币种",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/batch-delete")
+  public ApiResponse<Void> batchDelete(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody BatchIdsRequest request) {
+    requireManage(authService.requireUser(authorization));
+    currencyCommandService.batchDelete(
+        request.ids() == null ? List.of() : request.ids());
     return ApiResponse.ok(null);
   }
 

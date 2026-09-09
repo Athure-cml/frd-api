@@ -50,6 +50,9 @@ public interface ShippingLineRepository extends JpaRepository<ShippingLine, Long
       @Param("status") Integer status,
       Pageable pageable);
 
+  @Query("SELECT s.code FROM ShippingLine s")
+  List<String> findAllCodes();
+
   @Query("SELECT s.code FROM ShippingLine s WHERE s.code LIKE :prefix ORDER BY s.code DESC")
   Page<String> findCodesByPrefix(@Param("prefix") String prefix, Pageable pageable);
 

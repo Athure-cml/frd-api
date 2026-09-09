@@ -38,13 +38,18 @@ public record RoadCostResponse(
     @Schema(description = "堆场地址") String logYardNameAddress,
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "自定义字段值") Map<String, Object> extraFields,
-    @Schema(description = "更新时间") String updatedAt) {
+    @Schema(description = "更新时间") String updatedAt,
+    @Schema(description = "部门常用标记") CostHighlightView highlight) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
   public static RoadCostResponse from(CostRoad entity) {
+    return from(entity, null);
+  }
+
+  public static RoadCostResponse from(CostRoad entity, CostHighlightView highlight) {
     CostStatus status =
-        CostValidityStatus.resolve(entity.getStatus(), entity.getValidDate());
+        CostValidityStatus.resolveRoad(entity.getStatus(), entity.getExtraFields(), entity.getValidDate());
     return new RoadCostResponse(
         entity.getId(),
         entity.getZipCode(),
@@ -72,6 +77,39 @@ public record RoadCostResponse(
         entity.getLogYardNameAddress(),
         status,
         entity.getExtraFields(),
-        entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER));
+        entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER),
+        highlight);
+  }
+
+  public RoadCostResponse withHighlight(CostHighlightView highlight) {
+    return new RoadCostResponse(
+        id,
+        zipCode,
+        city,
+        state,
+        por,
+        pol,
+        supplier,
+        baseFreight,
+        fsc,
+        chassis,
+        triTandemAxle,
+        split,
+        stopOff,
+        allInNoFm,
+        allInFmOneWay,
+        allInFmRound,
+        waitingFee,
+        redelivery,
+        prepull,
+        nsLift,
+        otherFee,
+        remark,
+        validDate,
+        logYardNameAddress,
+        status,
+        extraFields,
+        updatedAt,
+        highlight);
   }
 }

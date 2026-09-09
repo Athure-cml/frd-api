@@ -47,7 +47,7 @@ Render 启动时 `spring.flyway.enabled=true`，自动执行迁移。`ddl-auto=n
 
 2. **Manual Deploy** 重新部署，等日志出现「数据库重建完成」
 3. **立刻删除** `QUOTE_DB_RESET` 环境变量，再 **Manual Deploy** 一次（否则每次启动都会清库）
-4. 验证：`GET https://frd-api.onrender.com/hello` → 200，用 `vben` / `123456` 登录
+4. 验证：`GET https://frd-api.onrender.com/hello` → 200，用 `Arture` / `123456` 登录
 
 ## 仅重置三个成本库测试数据（不影响用户/权限/报价单）
 

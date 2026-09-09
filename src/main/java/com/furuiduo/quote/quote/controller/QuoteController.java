@@ -28,6 +28,8 @@ import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
 import com.furuiduo.quote.quote.dto.QuoteBatchExportRequest;
+import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
+import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpResponse;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpSaveRequest;
@@ -40,6 +42,7 @@ import com.furuiduo.quote.quote.service.QuoteCostMatchService;
 import com.furuiduo.quote.quote.service.QuoteExportService;
 import com.furuiduo.quote.quote.service.QuoteFollowUpService;
 import com.furuiduo.quote.quote.service.QuoteQueryService;
+import com.furuiduo.quote.quote.service.QuoteSheetGenerateService;
 import com.furuiduo.quote.quote.service.QuoteWorkflowService;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.dto.OperationLogResponse;
@@ -64,6 +67,7 @@ public class QuoteController {
   private final QuoteFollowUpService quoteFollowUpService;
   private final QuoteExportService quoteExportService;
   private final DestAddressService destAddressService;
+  private final QuoteSheetGenerateService quoteSheetGenerateService;
 
   public QuoteController(
       AuthService authService,
@@ -74,7 +78,8 @@ public class QuoteController {
       QuoteWorkflowService quoteWorkflowService,
       QuoteFollowUpService quoteFollowUpService,
       QuoteExportService quoteExportService,
-      DestAddressService destAddressService) {
+      DestAddressService destAddressService,
+      QuoteSheetGenerateService quoteSheetGenerateService) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.quoteQueryService = quoteQueryService;
@@ -84,6 +89,7 @@ public class QuoteController {
     this.quoteFollowUpService = quoteFollowUpService;
     this.quoteExportService = quoteExportService;
     this.destAddressService = destAddressService;
+    this.quoteSheetGenerateService = quoteSheetGenerateService;
   }
 
   @Operation(
@@ -172,6 +178,18 @@ public class QuoteController {
   }
 
   @Operation(
+      summary = "生成报价单（按业务规则自动取值）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/generate-sheet")
+  public ApiResponse<QuoteGenerateSheetResponse> generateSheet(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody QuoteGenerateSheetRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(quoteSheetGenerateService.generate(request));
+  }
+
+  @Operation(
       summary = "新建报价单",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping
@@ -210,7 +228,7 @@ public class QuoteController {
   }
 
   @Operation(
-      summary = "提交生效",
+      summary = "提交审批",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/submit")
   public ApiResponse<QuoteDetailResponse> submit(
@@ -218,19 +236,55 @@ public class QuoteController {
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
     requireSubmit(user);
-    return ApiResponse.ok(quoteWorkflowService.submitEffective(user, id));
+    return ApiResponse.ok(quoteWorkflowService.submitForApproval(user, id));
   }
 
   @Operation(
-      summary = "标记跟进中",
+      summary = "发送报价",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/send")
+  public ApiResponse<QuoteDetailResponse> send(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireApprove(user);
+    return ApiResponse.ok(quoteWorkflowService.markSent(user, id));
+  }
+
+  @Operation(
+      summary = "发送报价（兼容旧接口）",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/follow")
   public ApiResponse<QuoteDetailResponse> follow(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireEdit(user);
-    return ApiResponse.ok(quoteWorkflowService.markFollowing(user, id));
+    requireApprove(user);
+    return ApiResponse.ok(quoteWorkflowService.markSent(user, id));
+  }
+
+  @Operation(
+      summary = "取消审批",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/cancel-approval")
+  public ApiResponse<QuoteDetailResponse> cancelApproval(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireSubmit(user);
+    return ApiResponse.ok(quoteWorkflowService.cancelApproval(user, id));
+  }
+
+  @Operation(
+      summary = "拒绝报价",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/reject")
+  public ApiResponse<QuoteDetailResponse> reject(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireApprove(user);
+    return ApiResponse.ok(quoteWorkflowService.reject(user, id));
   }
 
   @Operation(

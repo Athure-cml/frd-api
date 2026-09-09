@@ -1,5 +1,6 @@
 package com.furuiduo.quote.cost.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -25,9 +26,14 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
       SELECT f FROM CostFumigation f WHERE
       (:region = '' OR LOWER(COALESCE(f.region, '')) LIKE LOWER(CONCAT('%', :region, '%')))
       AND (:station = '' OR LOWER(COALESCE(f.station, '')) LIKE LOWER(CONCAT('%', :station, '%')))
+      AND (:restrictIds = false OR f.id IN :ids)
       """)
   Page<CostFumigation> search(
       @Param("region") String region,
       @Param("station") String station,
+      @Param("restrictIds") boolean restrictIds,
+      @Param("ids") List<Long> ids,
       Pageable pageable);
+
+  long countByIdIn(Collection<Long> ids);
 }

@@ -41,7 +41,8 @@ public final class CostTemplateExcelSupport {
           Map.entry("prepull", "PREPULL"),
           Map.entry("nsLift", "LIFT"),
           Map.entry("otherFee", "OTHERS"),
-          Map.entry("remark", "REMARK"),
+          Map.entry("remark", "操作备注"),
+          Map.entry(CostTemplateLayouts.ROAD_REMARK, "REMARK"),
           Map.entry("validDate", "VALID TIME"),
           Map.entry("logYardNameAddress", "PICK UP ADDRESS"),
           Map.entry("status", "STATUS"));

@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -33,10 +35,14 @@ import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyRequest;
+import com.furuiduo.quote.cost.dto.CostRoadBatchCopyResult;
 import com.furuiduo.quote.cost.dto.RoadCostRenewRequest;
 import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.dto.RoadCostSaveRequest;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
+import com.furuiduo.quote.cost.service.CostDeptHighlightService;
 import com.furuiduo.quote.cost.service.CostRoadService;
+import com.furuiduo.quote.cost.support.CostHighlightQuerySupport;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
@@ -53,14 +59,20 @@ public class CostRoadController {
   private final AuthService authService;
   private final PermissionService permissionService;
   private final CostRoadService costRoadService;
+  private final CostDeptHighlightService highlightService;
+  private final CostHighlightQuerySupport highlightQuerySupport;
 
   public CostRoadController(
       AuthService authService,
       PermissionService permissionService,
-      CostRoadService costRoadService) {
+      CostRoadService costRoadService,
+      CostDeptHighlightService highlightService,
+      CostHighlightQuerySupport highlightQuerySupport) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.costRoadService = costRoadService;
+    this.highlightService = highlightService;
+    this.highlightQuerySupport = highlightQuerySupport;
   }
 
   @Operation(
@@ -78,13 +90,64 @@ public class CostRoadController {
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String supplier,
       @RequestParam(required = false) BigDecimal redelivery,
+      @RequestParam(required = false) String effectiveDate,
       @RequestParam(required = false) String validDate,
-      @RequestParam(required = false) String status) {
-    requireView(authService.requireUser(authorization));
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.road, user, highlightOnly);
     return ApiResponse.ok(
-        costRoadService.list(
-            page,
-            pageSize,
+        highlightService.enrichRoadPage(
+            user,
+            costRoadService.list(
+                page,
+                pageSize,
+                zipCode,
+                city,
+                state,
+                por,
+                pol,
+                supplier,
+                redelivery,
+                effectiveDate,
+                validDate,
+                status,
+                sortField,
+                sortOrder,
+                restrictIds)));
+  }
+
+  @Operation(
+      summary = "按筛选条件返回全部匹配 ID",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/ids")
+  public ApiResponse<List<Long>> listIds(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String zipCode,
+      @RequestParam(required = false) String city,
+      @RequestParam(required = false) String state,
+      @RequestParam(required = false) String por,
+      @RequestParam(required = false) String pol,
+      @RequestParam(required = false) String supplier,
+      @RequestParam(required = false) BigDecimal redelivery,
+      @RequestParam(required = false) String effectiveDate,
+      @RequestParam(required = false) String validDate,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.road, user, highlightOnly);
+    return ApiResponse.ok(
+        costRoadService.listIds(
             zipCode,
             city,
             state,
@@ -92,8 +155,12 @@ public class CostRoadController {
             pol,
             supplier,
             redelivery,
+            effectiveDate,
             validDate,
-            status));
+            status,
+            sortField,
+            sortOrder,
+            restrictIds));
   }
 
   @Operation(
@@ -184,12 +251,11 @@ public class CostRoadController {
       summary = "批量复制卡车成本",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/batch-copy")
-  public ApiResponse<Map<String, Integer>> batchCopy(
+  public ApiResponse<CostRoadBatchCopyResult> batchCopy(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody CostRoadBatchCopyRequest request) {
     requireEdit(authService.requireUser(authorization));
-    int created = costRoadService.batchCopy(request);
-    return ApiResponse.ok(Map.of("created", created));
+    return ApiResponse.ok(costRoadService.batchCopy(request));
   }
 
   @Operation(
@@ -219,6 +285,7 @@ public class CostRoadController {
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String supplier,
       @RequestParam(required = false) BigDecimal redelivery,
+      @RequestParam(required = false) String effectiveDate,
       @RequestParam(required = false) String validDate,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long templateId,
@@ -233,6 +300,7 @@ public class CostRoadController {
             pol,
             supplier,
             redelivery,
+            effectiveDate,
             validDate,
             status,
             templateId,

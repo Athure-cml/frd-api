@@ -92,6 +92,16 @@ public class CurrencyCommandService {
     currencyRepository.delete(currency);
   }
 
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
+  }
+
   private Currency requireEntity(Long id) {
     return currencyRepository
         .findById(id)

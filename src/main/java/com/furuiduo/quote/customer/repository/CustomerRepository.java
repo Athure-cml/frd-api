@@ -50,6 +50,9 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
       @Param("status") Integer status,
       Pageable pageable);
 
+  @Query("SELECT c.code FROM Customer c")
+  List<String> findAllCodes();
+
   @Query("SELECT c.code FROM Customer c WHERE c.code LIKE :prefix ORDER BY c.code DESC")
   org.springframework.data.domain.Page<String> findCustomerCodesByPrefix(
       @Param("prefix") String prefix, Pageable pageable);

@@ -3,6 +3,7 @@ package com.furuiduo.quote.masterdata.controller;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.auth.AuthService;
 import com.furuiduo.quote.common.ApiResponse;
+import com.furuiduo.quote.common.BatchIdsRequest;
 import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
@@ -114,6 +116,18 @@ public class InlandPorController {
       @PathVariable Long id) {
     requireManage(authService.requireUser(authorization));
     inlandPorService.delete(id);
+    return ApiResponse.ok(null);
+  }
+
+  @Operation(
+      summary = "批量删除内陆 POR",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/batch-delete")
+  public ApiResponse<Void> batchDelete(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody BatchIdsRequest request) {
+    requireManage(authService.requireUser(authorization));
+    inlandPorService.batchDelete(request.ids() == null ? List.of() : request.ids());
     return ApiResponse.ok(null);
   }
 

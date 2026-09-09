@@ -70,6 +70,7 @@ public final class CostTemplateLayouts {
   private static final String ROAD_YARD_STORAGE_UNIT = "cf_road_yard_storage_unit";
   private static final String ROAD_EXTRA_CHASSIS_UNIT = "cf_road_extra_chassis_unit";
   private static final String ROAD_EFF = "cf_road_eff";
+  public static final String ROAD_REMARK = "cf_road_remark";
 
   public static CostTableTemplateLayout roadDefault() {
     List<String> fieldOrder =
@@ -99,6 +100,7 @@ public final class CostTemplateLayouts {
             "nsLift",
             "otherFee",
             "remark",
+            ROAD_REMARK,
             ROAD_EFF,
             "validDate",
             "logYardNameAddress");
@@ -127,7 +129,8 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("prepull", titled("PREPULL"));
     fieldOverrides.put("nsLift", titled("LIFT"));
     fieldOverrides.put("otherFee", titled("OTHERS"));
-    fieldOverrides.put("remark", titled("REMARK"));
+    fieldOverrides.put("remark", titled("操作备注"));
+    fieldOverrides.put(ROAD_REMARK, titled("REMARK"));
     fieldOverrides.put(ROAD_EFF, titled("EFFECTIVE TIME"));
     fieldOverrides.put("validDate", titled("VALID TIME"));
     fieldOverrides.put("logYardNameAddress", titled("PICK UP ADDRESS"));
@@ -140,7 +143,8 @@ public final class CostTemplateLayouts {
             new CostTableCustomFieldDef(
                 ROAD_EXTRA_CHASSIS_UNIT, "EXTRA CHASSIS UNIT", null, "text"),
             new CostTableCustomFieldDef(ROAD_WAITING_UNIT, "WAITING UNIT", null, "text"),
-            new CostTableCustomFieldDef(ROAD_EFF, "EFFECTIVE TIME", null, "text"));
+            new CostTableCustomFieldDef(ROAD_EFF, "EFFECTIVE TIME", null, "text"),
+            new CostTableCustomFieldDef(ROAD_REMARK, "REMARK", null, "text"));
 
     // 单行英文表头（无分组），对齐业务 Excel
     return new CostTableTemplateLayout(

@@ -24,6 +24,9 @@ import com.furuiduo.quote.agent.dto.AgentSaveRequest;
 import com.furuiduo.quote.agent.entity.Agent;
 import com.furuiduo.quote.agent.repository.AgentRepository;
 import com.furuiduo.quote.agent.support.AgentCodeGenerator;
+import com.furuiduo.quote.common.PartyImportCodeKind;
+import com.furuiduo.quote.common.PartyImportContext;
+import com.furuiduo.quote.common.PartyImportSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
 import com.furuiduo.quote.common.PartyReorderSupport;
@@ -130,13 +133,15 @@ public class AgentCommandService {
   @Transactional
   public CostImportResult importExcel(SysUser user, MultipartFile file, boolean dryRun)
       throws IOException {
+    PartyImportContext importContext =
+        PartyImportContext.fromDbCodes(repository.findAllCodes());
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        (row) -> validateImportRow(row, seenNames),
-        (rowNum, row) -> upsertImported(user, row),
+        (row) -> validateImportRow(row, seenNames, importContext),
+        (rowNum, row) -> upsertImported(user, row, importContext),
         dryRun);
   }
 
@@ -183,13 +188,20 @@ public class AgentCommandService {
     }
   }
 
-  private void upsertImported(SysUser user, ImportRow row) {
+  private void upsertImported(SysUser user, ImportRow row, PartyImportContext importContext) {
     String name = PartyMasterExcelSupport.normalizeName(row.name());
-    Agent entity = resolveForImport(row.code(), name);
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.AGENT, row.code());
+    Agent entity = resolveForImport(importCode, name, importContext);
     boolean creating = entity.getId() == null;
     if (creating) {
       assertNameAvailable(name, null);
-      entity.setCode(codeGenerator.next());
+      if (importCode != null) {
+        entity.setCode(importCode);
+        importContext.reserveAssignedCode(importCode);
+      } else {
+        entity.setCode(importContext.allocateGenerated(codeGenerator::next));
+      }
       entity.setCreatedBy(user.getId());
       entity.setCreatedByName(user.getRealName());
       entity.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -208,13 +220,12 @@ public class AgentCommandService {
     repository.save(entity);
   }
 
-  /** 仅当编码命中时更新；名称已存在且编码未命中则拒绝。 */
-  private Agent resolveForImport(String code, String name) {
-    if (code != null && !code.isBlank()) {
-      Agent byCode = repository.findByCode(code.trim()).orElse(null);
-      if (byCode != null) {
-        return byCode;
-      }
+  /** 仅当编码在导入前已存在于本模块库中时更新；否则按 Excel 编码新建或自动生成。 */
+  private Agent resolveForImport(String importCode, String name, PartyImportContext importContext) {
+    if (importCode != null && importContext.isPreExisting(importCode)) {
+      return repository
+          .findByCode(importCode)
+          .orElseThrow(() -> new IllegalStateException("编码不存在：" + importCode));
     }
     if (repository.existsByNameNormalized(name, null)) {
       throw new IllegalArgumentException("代理商名称已存在：" + name + "（如需更新请填写正确编码）");
@@ -255,16 +266,31 @@ public class AgentCommandService {
         PartyMasterExcelSupport.parseStatusCell(statusRaw));
   }
 
-  private String validateImportRow(ImportRow row, Set<String> seenNames) {
+  private String validateImportRow(
+      ImportRow row, Set<String> seenNames, PartyImportContext importContext) {
     if (row.name() == null || row.name().isBlank()) {
       return "名称不能为空";
     }
     if (row.status() != null && row.status().isUnrecognized()) {
       return "状态无效（请填启用/停用或 1/0）";
     }
-    String key = PartyMasterExcelSupport.nameKey(row.name());
+    String name = PartyMasterExcelSupport.normalizeName(row.name());
+    String key = PartyMasterExcelSupport.nameKey(name);
     if (!seenNames.add(key)) {
       return "名称与文件中其他行重复";
+    }
+    String codeError =
+        PartyImportSupport.validateImportCode(
+            PartyImportCodeKind.AGENT, row.code(), importContext, null);
+    if (codeError != null) {
+      return codeError;
+    }
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.AGENT, row.code());
+    if (importCode != null && !importContext.isPreExisting(importCode)) {
+      if (repository.existsByNameNormalized(name, null)) {
+        return "代理商名称已存在：" + name + "（如需更新请填写正确编码）";
+      }
     }
     return null;
   }

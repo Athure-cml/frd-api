@@ -1,6 +1,7 @@
 package com.furuiduo.quote.cost.repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -42,6 +43,7 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       AND (:pol = '' OR LOWER(COALESCE(r.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
       AND (:supplier = '' OR LOWER(COALESCE(r.supplier, '')) LIKE LOWER(CONCAT('%', :supplier, '%')))
       AND (:redelivery IS NULL OR r.redelivery = :redelivery)
+      AND (:restrictIds = false OR r.id IN :ids)
       """)
   Page<CostRoad> search(
       @Param("zipCode") String zipCode,
@@ -51,5 +53,9 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       @Param("pol") String pol,
       @Param("supplier") String supplier,
       @Param("redelivery") BigDecimal redelivery,
+      @Param("restrictIds") boolean restrictIds,
+      @Param("ids") List<Long> ids,
       Pageable pageable);
+
+  long countByIdIn(Collection<Long> ids);
 }

@@ -50,6 +50,9 @@ public interface AgentRepository extends JpaRepository<Agent, Long> {
       @Param("status") Integer status,
       Pageable pageable);
 
+  @Query("SELECT a.code FROM Agent a")
+  List<String> findAllCodes();
+
   @Query("SELECT a.code FROM Agent a WHERE a.code LIKE :prefix ORDER BY a.code DESC")
   Page<String> findCodesByPrefix(@Param("prefix") String prefix, Pageable pageable);
 

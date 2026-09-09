@@ -36,7 +36,9 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
           new PermDef(PermissionCodes.MD_INLAND_POR_VIEW, "内陆POR-查看", 59),
           new PermDef(PermissionCodes.MD_INLAND_POR_MANAGE, "内陆POR-管理", 60),
           new PermDef(PermissionCodes.MD_CONTAINER_TYPE_VIEW, "箱型-查看", 61),
-          new PermDef(PermissionCodes.MD_CONTAINER_TYPE_MANAGE, "箱型-管理", 62));
+          new PermDef(PermissionCodes.MD_CONTAINER_TYPE_MANAGE, "箱型-管理", 62),
+          new PermDef(PermissionCodes.MD_QUOTE_RULE_VIEW, "报价单规则-查看", 63),
+          new PermDef(PermissionCodes.MD_QUOTE_RULE_MANAGE, "报价单规则-管理", 64));
 
   private static final Set<String> ROLES_WITH_VIEW =
       Set.of(
@@ -65,10 +67,6 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (permissionRepository.count() == 0) {
-      return;
-    }
-
     Map<String, SysPermission> permissions = ensurePermissions();
     for (SysRole role : roleRepository.findAll()) {
       if (grantPermissions(role, permissions)) {
@@ -113,6 +111,7 @@ public class MasterDataPermissionSeeder implements ApplicationRunner {
       addIfPresent(permissions, PermissionCodes.MD_GLOBAL_PORT_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_INLAND_POR_VIEW, grants);
       addIfPresent(permissions, PermissionCodes.MD_CONTAINER_TYPE_VIEW, grants);
+      addIfPresent(permissions, PermissionCodes.MD_QUOTE_RULE_VIEW, grants);
     }
 
     if (grants.isEmpty()) {

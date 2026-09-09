@@ -121,4 +121,19 @@ public interface MdGlobalPortRepository extends JpaRepository<MdGlobalPort, Long
       @Param("portTypes") Collection<PortType> portTypes,
       @Param("portTypesEmpty") boolean portTypesEmpty,
       Pageable pageable);
+
+  @Query(
+      """
+      SELECT p FROM MdGlobalPort p
+      WHERE UPPER(TRIM(p.nameEn)) = UPPER(TRIM(:nameEn))
+      ORDER BY
+        CASE p.portType
+          WHEN com.furuiduo.quote.masterdata.entity.PortType.SEAPORT THEN 0
+          WHEN com.furuiduo.quote.masterdata.entity.PortType.RAIL THEN 1
+          WHEN com.furuiduo.quote.masterdata.entity.PortType.INLAND THEN 2
+          ELSE 3
+        END,
+        p.code ASC
+      """)
+  List<MdGlobalPort> findByNameEnIgnoreCase(@Param("nameEn") String nameEn);
 }

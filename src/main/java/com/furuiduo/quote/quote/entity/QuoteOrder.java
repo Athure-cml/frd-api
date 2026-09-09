@@ -101,11 +101,44 @@ public class QuoteOrder {
   @Column(name = "fm_oak", precision = 14, scale = 2)
   private BigDecimal fmOak;
 
+  @Column(name = "fumigation_enabled", nullable = false)
+  private Boolean fumigationEnabled = false;
+
   @Column(name = "doc_usd", length = 64)
   private String docUsd;
 
   @Column(name = "cargo_max_weight_ton", length = 128)
   private String cargoMaxWeightTon;
+
+  @Column(name = "cif_amount", precision = 14, scale = 2)
+  private BigDecimal cifAmount;
+
+  @Column(name = "pick_up_address", length = 512)
+  private String pickUpAddress;
+
+  @Column(name = "trucking_fee", precision = 14, scale = 2)
+  private BigDecimal truckingFee;
+
+  @Column(name = "ns_lift", precision = 14, scale = 2)
+  private BigDecimal nsLift;
+
+  @Column(name = "chassis", precision = 14, scale = 2)
+  private BigDecimal chassis;
+
+  @Column(name = "waiting", precision = 14, scale = 2)
+  private BigDecimal waiting;
+
+  @Column(name = "redelivery_fee", precision = 14, scale = 2)
+  private BigDecimal redeliveryFee;
+
+  @Column(name = "truck_remark", length = 512)
+  private String truckRemark;
+
+  @Column(name = "cargo_insurance_premium", length = 128)
+  private String cargoInsurancePremium;
+
+  @Column(name = "cargo_agent_fee", length = 128)
+  private String cargoAgentFee;
 
   @Column(name = "sheet_remark", length = 1024)
   private String sheetRemark;

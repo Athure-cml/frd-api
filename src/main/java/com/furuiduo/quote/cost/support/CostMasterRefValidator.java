@@ -34,6 +34,9 @@ public class CostMasterRefValidator {
       List.of(PortType.SEAPORT, PortType.RAIL, PortType.INLAND);
   private static final List<PortType> SEA_SEAPORT_TYPES = List.of(PortType.SEAPORT);
 
+  private static final List<PortType> FUMIGATION_REGION_TYPES =
+      List.of(PortType.SEAPORT, PortType.RAIL, PortType.INLAND);
+
   private final MdUsStateRepository usStateRepository;
   private final MdDestCityRepository destCityRepository;
   private final MdDestZipRepository destZipRepository;
@@ -133,7 +136,7 @@ public class CostMasterRefValidator {
     if (entity == null) {
       return null;
     }
-    return requireCityName(entity.getRegion(), "REGION");
+    return requirePort(entity.getRegion(), "REGION", FUMIGATION_REGION_TYPES);
   }
 
   private String requireState(String state) {

@@ -25,11 +25,13 @@ public record QuoteListItem(
     @Schema(description = "是否已过期") boolean expired,
     @Schema(description = "是否已作废") boolean voided,
     @Schema(description = "业务表字段") QuoteSheetFieldsDto sheet,
+    @Schema(description = "创建人ID") Long createdBy,
     @Schema(description = "创建人") String createdByName,
+    @Schema(description = "当前用户是否可操作（创建人或超级管理员）") boolean operable,
     @Schema(description = "创建时间") String createdAt,
     @Schema(description = "更新时间") String updatedAt) {
 
-  public static QuoteListItem from(QuoteOrder order) {
+  public static QuoteListItem from(QuoteOrder order, boolean operable) {
     return new QuoteListItem(
         order.getId(),
         order.getQuoteNo(),
@@ -45,7 +47,9 @@ public record QuoteListItem(
         QuoteStatusSupport.isExpired(order),
         QuoteStatusSupport.isVoided(order),
         QuoteSheetFieldsDto.from(order),
+        order.getCreatedBy(),
         order.getCreatedByName(),
+        operable,
         QuoteDateTimes.format(order.getCreatedAt()),
         QuoteDateTimes.format(order.getUpdatedAt()));
   }

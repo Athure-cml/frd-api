@@ -24,6 +24,7 @@ import com.furuiduo.quote.quote.entity.QuoteOrderLine;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteNoGenerator;
+import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 
 @Service
@@ -31,6 +32,7 @@ public class QuoteCommandService {
 
   private final QuoteOrderRepository quoteOrderRepository;
   private final QuoteQueryService quoteQueryService;
+  private final QuoteAccessService quoteAccessService;
   private final QuoteNoGenerator quoteNoGenerator;
   private final CustomerCommandService customerCommandService;
   private final CurrencyCommandService currencyCommandService;
@@ -40,6 +42,7 @@ public class QuoteCommandService {
   public QuoteCommandService(
       QuoteOrderRepository quoteOrderRepository,
       QuoteQueryService quoteQueryService,
+      QuoteAccessService quoteAccessService,
       QuoteNoGenerator quoteNoGenerator,
       CustomerCommandService customerCommandService,
       CurrencyCommandService currencyCommandService,
@@ -47,6 +50,7 @@ public class QuoteCommandService {
       QuoteCostMatchService quoteCostMatchService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteQueryService = quoteQueryService;
+    this.quoteAccessService = quoteAccessService;
     this.quoteNoGenerator = quoteNoGenerator;
     this.customerCommandService = customerCommandService;
     this.currencyCommandService = currencyCommandService;
@@ -67,7 +71,7 @@ public class QuoteCommandService {
     applySaveRequest(order, request);
     QuoteOrder saved = quoteOrderRepository.save(order);
     if (request.costMatches() != null && !request.costMatches().isEmpty()) {
-      quoteCostMatchService.persistSnapshots(saved, request.costMatches());
+      quoteCostMatchService.replaceSnapshots(saved, request.costMatches());
     }
     return quoteQueryService.getById(user, saved.getId());
   }
@@ -81,15 +85,17 @@ public class QuoteCommandService {
     order.setUpdatedAt(LocalDateTime.now());
 
     QuoteOrder saved = quoteOrderRepository.save(order);
-    if (request.costMatches() != null && !request.costMatches().isEmpty()) {
-      quoteCostMatchService.persistSnapshots(saved, request.costMatches());
+    if (QuoteStatusSupport.normalize(order.getStatus()) == QuoteStatus.DRAFT
+        && request.costMatches() != null
+        && !request.costMatches().isEmpty()) {
+      quoteCostMatchService.replaceSnapshots(saved, request.costMatches());
     }
     return quoteQueryService.getById(user, saved.getId());
   }
 
   @Transactional
   public void delete(SysUser user, Long id) {
-    QuoteOrder order = requireEditableDraft(user, id);
+    QuoteOrder order = requireDeletable(user, id);
     quoteOrderRepository.delete(order);
   }
 
@@ -99,29 +105,22 @@ public class QuoteCommandService {
             .findWithLinesById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
     quoteQueryService.assertReadable(user, order);
-    if (order.getStatus() == QuoteStatus.VOIDED
-        || order.getStatus() == QuoteStatus.LOST
-        || order.getStatus() == QuoteStatus.WON) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "当前状态不可编辑");
-    }
-    if (order.getStatus() != QuoteStatus.DRAFT
-        && order.getStatus() != QuoteStatus.EFFECTIVE
-        && order.getStatus() != QuoteStatus.FOLLOWING
-        && order.getStatus() != QuoteStatus.SENT
-        && order.getStatus() != QuoteStatus.PENDING) {
+    quoteAccessService.assertOperable(user, order);
+    if (!QuoteStatusSupport.isEditable(order.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "当前状态不可编辑");
     }
     return order;
   }
 
-  private QuoteOrder requireEditableDraft(SysUser user, Long id) {
+  private QuoteOrder requireDeletable(SysUser user, Long id) {
     QuoteOrder order =
         quoteOrderRepository
             .findWithLinesById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
     quoteQueryService.assertReadable(user, order);
-    if (order.getStatus() != QuoteStatus.DRAFT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿状态可编辑或删除");
+    quoteAccessService.assertOperable(user, order);
+    if (!QuoteStatusSupport.isDeletable(order.getStatus())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿或已作废报价可删除");
     }
     return order;
   }
@@ -192,17 +191,29 @@ public class QuoteCommandService {
     order.setZipCode(trimToNull(request.zipCode()));
     order.setCity(trimToNull(request.city()));
     order.setState(trimToNull(request.state()));
+    order.setPickUpAddress(trimToNull(request.pickUpAddress()));
     order.setPor(trimToNull(request.por()));
     order.setPol(trimToNull(request.pol()));
     order.setPod(trimToNull(request.pod()));
-    order.setOfUsd(trimToNull(request.ofUsd()));
+    order.setOfUsd(trimToNull(request.oceanFreight()));
     order.setSsl(trimToNull(request.ssl()));
-    order.setTruckingNonOakUsd(request.truckingNonOakUsd());
+    order.setTruckingFee(request.truckingFee());
+    order.setNsLift(request.nsLift());
+    order.setChassis(request.chassis());
+    order.setWaiting(request.waiting());
+    order.setRedeliveryFee(request.redeliveryFee());
+    order.setTruckRemark(trimToNull(request.truckRemark()));
+    order.setTruckingNonOakUsd(
+        request.truckingNonOakUsd() != null ? request.truckingNonOakUsd() : request.truckingFee());
     order.setTruckingOakUsd(request.truckingOakUsd());
     order.setFmNonOak(request.fmNonOak());
     order.setFmOak(request.fmOak());
+    order.setFumigationEnabled(Boolean.TRUE.equals(request.fumigationEnabled()));
     order.setDocUsd(trimToNull(request.docUsd()));
+    order.setCargoInsurancePremium(trimToNull(request.cargoInsurancePremium()));
+    order.setCargoAgentFee(trimToNull(request.cargoAgentFee()));
     order.setCargoMaxWeightTon(trimToNull(request.cargoMaxWeightTon()));
+    order.setCifAmount(request.cifAmount());
     order.setSheetRemark(trimToNull(request.sheetRemark()));
     if (request.followUpBy() != null) {
       order.setFollowUpBy(request.followUpBy());

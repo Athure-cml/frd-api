@@ -2,8 +2,6 @@ package com.furuiduo.quote.quote.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.EnumSet;
-import java.util.Set;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,18 +14,11 @@ import com.furuiduo.quote.quote.entity.QuoteOrderLine;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteNoGenerator;
+import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 
 @Service
 public class QuoteWorkflowService {
-
-  private static final Set<QuoteStatus> EDITABLE =
-      EnumSet.of(
-          QuoteStatus.DRAFT,
-          QuoteStatus.EFFECTIVE,
-          QuoteStatus.FOLLOWING,
-          QuoteStatus.SENT,
-          QuoteStatus.PENDING);
 
   private final QuoteOrderRepository quoteOrderRepository;
   private final QuoteAccessService quoteAccessService;
@@ -45,50 +36,93 @@ public class QuoteWorkflowService {
     this.quoteQueryService = quoteQueryService;
   }
 
+  /** 草稿 → 待审批 */
   @Transactional
-  public QuoteDetailResponse submitEffective(SysUser user, Long id) {
-    QuoteOrder order = requireOrder(user, id);
-    if (order.getStatus() != QuoteStatus.DRAFT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿可提交生效");
+  public QuoteDetailResponse submitForApproval(SysUser user, Long id) {
+    QuoteOrder order = requireOperableOrder(user, id);
+    if (QuoteStatusSupport.normalize(order.getStatus()) != QuoteStatus.DRAFT) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿可提交审批");
     }
-    order.setStatus(QuoteStatus.EFFECTIVE);
+    order.setStatus(QuoteStatus.PENDING_APPROVAL);
     order.setSubmittedAt(LocalDateTime.now());
     order.setUpdatedAt(LocalDateTime.now());
     return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
   }
 
+  /** 待审批 → 已发送 */
   @Transactional
-  public QuoteDetailResponse markFollowing(SysUser user, Long id) {
+  public QuoteDetailResponse markSent(SysUser user, Long id) {
     QuoteOrder order = requireOrder(user, id);
-    if (order.getStatus() != QuoteStatus.EFFECTIVE && order.getStatus() != QuoteStatus.SENT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已生效报价可标记跟进中");
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status != QuoteStatus.PENDING_APPROVAL) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待审批报价可发送");
     }
-    order.setStatus(QuoteStatus.FOLLOWING);
+    order.setStatus(QuoteStatus.SENT);
     order.setFollowUpBy(user.getId());
     order.setFollowUpByName(user.getRealName());
     order.setUpdatedAt(LocalDateTime.now());
     return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
   }
 
+  /** 待审批 → 草稿（取消审批） */
+  @Transactional
+  public QuoteDetailResponse cancelApproval(SysUser user, Long id) {
+    QuoteOrder order = requireOperableOrder(user, id);
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status != QuoteStatus.PENDING_APPROVAL) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待审批报价可取消审批");
+    }
+    order.setStatus(QuoteStatus.DRAFT);
+    order.setSubmittedAt(null);
+    order.setUpdatedAt(LocalDateTime.now());
+    return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
+  }
+
+  /** 已发送 → 已拒绝 */
+  @Transactional
+  public QuoteDetailResponse reject(SysUser user, Long id) {
+    QuoteOrder order = requireOrder(user, id);
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status != QuoteStatus.SENT) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已发送报价可拒绝");
+    }
+    order.setStatus(QuoteStatus.REJECTED);
+    order.setUpdatedAt(LocalDateTime.now());
+    return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
+  }
+
+  /** 已发送 → 已成交 */
   @Transactional
   public QuoteDetailResponse markWon(SysUser user, Long id) {
     QuoteOrder order = requireOrder(user, id);
-    if (order.getStatus() == QuoteStatus.VOIDED || order.getStatus() == QuoteStatus.WON) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "当前状态不可成交");
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status == QuoteStatus.WON) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已成交");
+    }
+    if (QuoteStatusSupport.isAbandoned(status)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "已放弃的报价不可成交");
+    }
+    if (status != QuoteStatus.SENT) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已发送报价可标记成交");
     }
     order.setStatus(QuoteStatus.WON);
     order.setUpdatedAt(LocalDateTime.now());
     return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
   }
 
+  /** 作废 → 已作废 */
   @Transactional
   public QuoteDetailResponse voidQuote(SysUser user, Long id) {
-    QuoteOrder order = requireOrder(user, id);
-    if (order.getStatus() == QuoteStatus.VOIDED || order.getStatus() == QuoteStatus.LOST) {
+    QuoteOrder order = requireOperableOrder(user, id);
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status == QuoteStatus.VOIDED) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已作废");
     }
-    if (order.getStatus() == QuoteStatus.WON) {
+    if (status == QuoteStatus.WON) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "已成交报价不可作废");
+    }
+    if (QuoteStatusSupport.isAbandoned(status)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已放弃");
     }
     order.setStatus(QuoteStatus.VOIDED);
     order.setUpdatedAt(LocalDateTime.now());
@@ -141,7 +175,7 @@ public class QuoteWorkflowService {
   }
 
   public boolean isEditable(QuoteStatus status) {
-    return EDITABLE.contains(status);
+    return QuoteStatusSupport.isEditable(status);
   }
 
   private QuoteOrder requireOrder(SysUser user, Long id) {
@@ -153,14 +187,22 @@ public class QuoteWorkflowService {
     return order;
   }
 
+  private QuoteOrder requireOperableOrder(SysUser user, Long id) {
+    QuoteOrder order = requireOrder(user, id);
+    quoteAccessService.assertOperable(user, order);
+    return order;
+  }
+
   private void refreshExpiredStatus(QuoteOrder order) {
     if (order.getValidUntil() == null) {
       return;
     }
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
     if (order.getValidUntil().isBefore(LocalDate.now())
-        && order.getStatus() != QuoteStatus.VOIDED
-        && order.getStatus() != QuoteStatus.LOST
-        && order.getStatus() != QuoteStatus.WON) {
+        && status != QuoteStatus.VOIDED
+        && status != QuoteStatus.REJECTED
+        && status != QuoteStatus.WON
+        && status != QuoteStatus.EXPIRED) {
       order.setStatus(QuoteStatus.EXPIRED);
     }
   }
@@ -169,17 +211,27 @@ public class QuoteWorkflowService {
     target.setZipCode(source.getZipCode());
     target.setCity(source.getCity());
     target.setState(source.getState());
+    target.setPickUpAddress(source.getPickUpAddress());
     target.setPor(source.getPor());
     target.setPol(source.getPol());
     target.setPod(source.getPod());
     target.setOfUsd(source.getOfUsd());
     target.setSsl(source.getSsl());
+    target.setTruckingFee(source.getTruckingFee());
+    target.setNsLift(source.getNsLift());
+    target.setChassis(source.getChassis());
+    target.setWaiting(source.getWaiting());
+    target.setRedeliveryFee(source.getRedeliveryFee());
+    target.setTruckRemark(source.getTruckRemark());
     target.setTruckingNonOakUsd(source.getTruckingNonOakUsd());
     target.setTruckingOakUsd(source.getTruckingOakUsd());
     target.setFmNonOak(source.getFmNonOak());
     target.setFmOak(source.getFmOak());
     target.setDocUsd(source.getDocUsd());
+    target.setCargoInsurancePremium(source.getCargoInsurancePremium());
+    target.setCargoAgentFee(source.getCargoAgentFee());
     target.setCargoMaxWeightTon(source.getCargoMaxWeightTon());
+    target.setCifAmount(source.getCifAmount());
     target.setSheetRemark(source.getSheetRemark());
   }
 }

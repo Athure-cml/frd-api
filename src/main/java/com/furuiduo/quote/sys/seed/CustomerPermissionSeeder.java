@@ -51,10 +51,6 @@ public class CustomerPermissionSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (permissionRepository.count() == 0) {
-      return;
-    }
-
     Map<String, SysPermission> customerPermissions = ensureCustomerPermissions();
     for (SysRole role : roleRepository.findAll()) {
       if (grantCustomerPermissions(role, customerPermissions)) {

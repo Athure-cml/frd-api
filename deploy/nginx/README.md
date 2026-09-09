@@ -129,7 +129,7 @@ curl http://127.0.0.1/api/hello
 
 **不能**再出现 `onrender.com`。
 
-默认账号：`vben` / `123456`
+默认账号：`Arture` / `123456`
 
 ---
 

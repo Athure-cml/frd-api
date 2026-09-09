@@ -19,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.PartyImportCodeKind;
+import com.furuiduo.quote.common.PartyImportContext;
+import com.furuiduo.quote.common.PartyImportSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
 import com.furuiduo.quote.common.PartyReorderSupport;
@@ -150,13 +153,15 @@ public class CustomerCommandService {
   @Transactional
   public CostImportResult importExcel(SysUser user, MultipartFile file, boolean dryRun)
       throws IOException {
+    PartyImportContext importContext =
+        PartyImportContext.fromDbCodes(customerRepository.findAllCodes());
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        (row) -> validateImportRow(row, seenNames),
-        (rowNum, row) -> upsertImported(user, row),
+        (row) -> validateImportRow(row, seenNames, importContext),
+        (rowNum, row) -> upsertImported(user, row, importContext),
         dryRun);
   }
 
@@ -203,13 +208,20 @@ public class CustomerCommandService {
     }
   }
 
-  private void upsertImported(SysUser user, ImportRow row) {
+  private void upsertImported(SysUser user, ImportRow row, PartyImportContext importContext) {
     String name = PartyMasterExcelSupport.normalizeName(row.name());
-    Customer customer = resolveForImport(row.code(), name);
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.CUSTOMER, row.code());
+    Customer customer = resolveForImport(importCode, name, importContext);
     boolean creating = customer.getId() == null;
     if (creating) {
       assertNameAvailable(name, null);
-      customer.setCode(customerCodeGenerator.next());
+      if (importCode != null) {
+        customer.setCode(importCode);
+        importContext.reserveAssignedCode(importCode);
+      } else {
+        customer.setCode(importContext.allocateGenerated(customerCodeGenerator::next));
+      }
       customer.setCreatedBy(user.getId());
       customer.setCreatedByName(user.getRealName());
       customer.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -233,12 +245,12 @@ public class CustomerCommandService {
   /**
    * 仅当编码命中时更新；名称已存在且编码未命中则拒绝，避免重复导入被当成成功。
    */
-  private Customer resolveForImport(String code, String name) {
-    if (code != null && !code.isBlank()) {
-      Customer byCode = customerRepository.findByCode(code.trim()).orElse(null);
-      if (byCode != null) {
-        return byCode;
-      }
+  private Customer resolveForImport(
+      String importCode, String name, PartyImportContext importContext) {
+    if (importCode != null && importContext.isPreExisting(importCode)) {
+      return customerRepository
+          .findByCode(importCode)
+          .orElseThrow(() -> new IllegalStateException("编码不存在：" + importCode));
     }
     if (customerRepository.existsByNameNormalized(name, null)) {
       throw new IllegalArgumentException("客户名称已存在：" + name + "（如需更新请填写正确编码）");
@@ -282,7 +294,8 @@ public class CustomerCommandService {
         PartyMasterExcelSupport.parseStatusCell(statusRaw));
   }
 
-  private String validateImportRow(ImportRow row, Set<String> seenNames) {
+  private String validateImportRow(
+      ImportRow row, Set<String> seenNames, PartyImportContext importContext) {
     if (row.name() == null || row.name().isBlank()) {
       return "名称不能为空";
     }
@@ -292,6 +305,24 @@ public class CustomerCommandService {
     String key = PartyMasterExcelSupport.nameKey(row.name());
     if (!seenNames.add(key)) {
       return "名称与文件中其他行重复";
+    }
+    String codeError =
+        PartyImportSupport.validateImportCode(
+            PartyImportCodeKind.CUSTOMER, row.code(), importContext, null);
+    if (codeError != null) {
+      return codeError;
+    }
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.CUSTOMER, row.code());
+    if (importCode != null
+        && !importContext.isPreExisting(importCode)
+        && customerRepository.existsByNameNormalized(
+            PartyMasterExcelSupport.normalizeName(row.name()), null)) {
+      return "客户名称已存在：" + row.name() + "（如需更新请填写正确编码）";
+    }
+    if (importCode == null && customerRepository.existsByNameNormalized(
+        PartyMasterExcelSupport.normalizeName(row.name()), null)) {
+      return "客户名称已存在：" + row.name();
     }
     return null;
   }

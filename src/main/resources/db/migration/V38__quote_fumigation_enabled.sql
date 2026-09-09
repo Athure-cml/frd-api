@@ -1,0 +1,2 @@
+ALTER TABLE quote_order
+    ADD COLUMN IF NOT EXISTS fumigation_enabled BOOLEAN NOT NULL DEFAULT FALSE;

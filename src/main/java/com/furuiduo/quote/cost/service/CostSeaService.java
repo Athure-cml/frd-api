@@ -2,11 +2,13 @@ package com.furuiduo.quote.cost.service;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -27,15 +29,20 @@ import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
+import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
 import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
+import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
+import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
+import com.furuiduo.quote.cost.support.CostGridSort;
+import com.furuiduo.quote.cost.support.CostHighlightListFilter;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
@@ -96,7 +103,13 @@ public class CostSeaService {
       String freightValidDate,
       String freightEffDate,
       String status,
-      String remark) {
+      String remark,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return new PageResult<>(List.of(), 0);
+    }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String p = SearchText.orEmpty(por);
@@ -111,26 +124,169 @@ public class CostSeaService {
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
     boolean filterDates = !fed.isEmpty() || !fvd.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseSea(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
 
-    if (!filterStatus && !filterDates) {
+    if (!memoryPath) {
       var pageable =
-          PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostSea> result = repository.search(p, pl, pd, s, ct, a, rm, pageable);
+          PageRequest.of(safePage - 1, safePageSize, CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      Page<CostSea> result =
+          repository.search(p, pl, pd, s, ct, a, rm, restrict, idParams, pageable);
       return new PageResult<>(
           result.getContent().stream().map(FreightCostResponse::fromSea).toList(),
           result.getTotalElements());
     }
 
-    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostSea> filtered =
-        repository.search(p, pl, pd, s, ct, a, rm, pageable).getContent().stream()
+        CostHighlightListFilter.filterByIds(
+            findMatchingSea(
+                por,
+                pol,
+                pod,
+                ssl,
+                containerType,
+                agent,
+                freightValidDate,
+                freightEffDate,
+                status,
+                remark,
+                sort),
+            restrictToIds,
+            CostSea::getId);
+    return paginate(filtered, safePage, safePageSize);
+  }
+
+  /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
+  public List<Long> listIds(
+      String por,
+      String pol,
+      String pod,
+      String ssl,
+      String containerType,
+      String agent,
+      String freightValidDate,
+      String freightEffDate,
+      String status,
+      String remark,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return List.of();
+    }
+    String p = SearchText.orEmpty(por);
+    String pl = SearchText.orEmpty(pol);
+    String pd = SearchText.orEmpty(pod);
+    String s = SearchText.orEmpty(ssl);
+    String ct = SearchText.orEmpty(containerType);
+    String a = SearchText.orEmpty(agent);
+    String rm = SearchText.orEmpty(remark);
+    String fvd = SearchText.orEmpty(freightValidDate);
+    String fed = SearchText.orEmpty(freightEffDate);
+    String statusFilter = status;
+    boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+    boolean filterDates = !fed.isEmpty() || !fvd.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseSea(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
+
+    if (!memoryPath) {
+      var pageable = Pageable.unpaged(CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      return repository
+          .search(p, pl, pd, s, ct, a, rm, restrict, idParams, pageable)
+          .getContent()
+          .stream()
+          .map(CostSea::getId)
+          .toList();
+    }
+    return CostHighlightListFilter.filterByIds(
+            findMatchingSea(
+                por,
+                pol,
+                pod,
+                ssl,
+                containerType,
+                agent,
+                freightValidDate,
+                freightEffDate,
+                status,
+                remark,
+                sort),
+            restrictToIds,
+            CostSea::getId)
+        .stream()
+        .map(CostSea::getId)
+        .toList();
+  }
+
+  private List<CostSea> findMatchingSea(
+      String por,
+      String pol,
+      String pod,
+      String ssl,
+      String containerType,
+      String agent,
+      String freightValidDate,
+      String freightEffDate,
+      String status,
+      String remark,
+      CostGridSort.Parsed sort) {
+    String p = SearchText.orEmpty(por);
+    String pl = SearchText.orEmpty(pol);
+    String pd = SearchText.orEmpty(pod);
+    String s = SearchText.orEmpty(ssl);
+    String ct = SearchText.orEmpty(containerType);
+    String a = SearchText.orEmpty(agent);
+    String rm = SearchText.orEmpty(remark);
+    String fvd = SearchText.orEmpty(freightValidDate);
+    String fed = SearchText.orEmpty(freightEffDate);
+    String statusFilter = status;
+    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
+    List<CostSea> items =
+        repository
+            .search(p, pl, pd, s, ct, a, rm, false, List.of(-1L), pageable)
+            .getContent()
+            .stream()
             .filter(item -> matchesSeaDateSearch(item, fed, fvd))
             .filter(
                 item ->
                     CostValidityStatus.matchesFilter(
                         item.getStatus(), statusFilter, item.getFreightValidDate()))
             .toList();
-    return paginate(filtered, safePage, safePageSize);
+    if (sort != null) {
+      return items.stream().sorted(CostGridSort.seaComparator(sort)).toList();
+    }
+    return items;
+  }
+
+  private List<CostSea> findMatchingSeaFromCriteria(Map<String, Object> criteria) {
+    return findMatchingSea(
+        CostBatchCriteriaMaps.string(criteria, "por"),
+        CostBatchCriteriaMaps.string(criteria, "pol"),
+        CostBatchCriteriaMaps.string(criteria, "pod"),
+        CostBatchCriteriaMaps.string(criteria, "ssl"),
+        CostBatchCriteriaMaps.string(criteria, "containerType"),
+        CostBatchCriteriaMaps.string(criteria, "agent"),
+        CostBatchCriteriaMaps.string(criteria, "freightValidDate"),
+        CostBatchCriteriaMaps.string(criteria, "freightEffDate"),
+        CostBatchCriteriaMaps.string(criteria, "status"),
+        CostBatchCriteriaMaps.string(criteria, "remark"),
+        null);
+  }
+
+  private List<Long> resolveSeaBatchIds(
+      List<Long> ids, Map<String, Object> searchCriteria, List<Long> excludeIds) {
+    return CostBatchIdResolver.resolve(
+        ids,
+        searchCriteria,
+        excludeIds,
+        () ->
+            findMatchingSeaFromCriteria(searchCriteria).stream()
+                .map(CostSea::getId)
+                .toList());
   }
 
   public FreightCostResponse getById(Long id) {
@@ -167,43 +323,61 @@ public class CostSeaService {
 
   @Transactional
   public void batchDelete(CostBatchDeleteRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveSeaBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return;
     }
-    repository.deleteAllById(request.ids());
+    repository.deleteAllById(ids);
   }
 
   @Transactional
-  public int batchCopy(CostSeaBatchCopyRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
-      return 0;
+  public CostSeaBatchCopyResult batchCopy(CostSeaBatchCopyRequest request) {
+    List<Long> ids =
+        resolveSeaBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
+      return new CostSeaBatchCopyResult(0, List.of());
     }
     boolean applyOverrides = Boolean.TRUE.equals(request.applyOverrides());
     if (applyOverrides && !hasAnySeaCopyOverride(request)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写一项要统一修改的字段");
     }
+    boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    List<FreightCostResponse> items = new ArrayList<>();
     int created = 0;
-    for (Long id : request.ids()) {
+    for (Long id : ids) {
       CostSea source = requireEntity(id);
       CostSea copy = copyOf(source);
       if (applyOverrides) {
         applySeaCopyOverrides(copy, request);
       }
-      copy.touch();
-      repository.save(copy);
-      created++;
+      if (previewOnly) {
+        items.add(FreightCostResponse.fromSea(copy));
+      } else {
+        copy.touch();
+        items.add(FreightCostResponse.fromSea(repository.save(copy)));
+        created++;
+      }
     }
-    return created;
+    if (previewOnly) {
+      created = items.size();
+    }
+    return new CostSeaBatchCopyResult(created, items);
   }
 
   @Transactional
   public int batchUpdate(CostBatchUpdateRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveSeaBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return 0;
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
     int updated = 0;
-    for (Long id : request.ids()) {
+    for (Long id : ids) {
       CostSea entity = requireEntity(id);
 
       if (fields.containsKey("freight")) {
@@ -339,6 +513,8 @@ public class CostSeaService {
                   SearchText.orEmpty(containerType),
                   SearchText.orEmpty(agent),
                   SearchText.orEmpty(remark),
+                  false,
+                  List.of(-1L),
                   pageable)
               .getContent();
       if (filterStatus || filterDates) {
@@ -637,6 +813,21 @@ public class CostSeaService {
     if (request.othersValidDate() != null && !request.othersValidDate().isBlank()) {
       copy.setOthersValidDate(request.othersValidDate().trim());
     }
+    if (request.ebs() != null) {
+      copy.setEbs(request.ebs());
+    }
+    if (request.ebsValidDate() != null && !request.ebsValidDate().isBlank()) {
+      copy.setEbsValidDate(request.ebsValidDate().trim());
+    }
+    if (request.gri() != null) {
+      copy.setGri(request.gri());
+    }
+    if (request.griValidDate() != null && !request.griValidDate().isBlank()) {
+      copy.setGriValidDate(request.griValidDate().trim());
+    }
+    if (request.remark() != null && !request.remark().isBlank()) {
+      copy.setRemark(request.remark().trim());
+    }
 
     Map<String, Object> extra =
         copy.getExtraFields() == null ? new HashMap<>() : new HashMap<>(copy.getExtraFields());
@@ -672,7 +863,12 @@ public class CostSeaService {
         || notBlank(request.bucValidDate())
         || request.others() != null
         || notBlank(request.othersEffDate())
-        || notBlank(request.othersValidDate());
+        || notBlank(request.othersValidDate())
+        || request.ebs() != null
+        || notBlank(request.ebsValidDate())
+        || request.gri() != null
+        || notBlank(request.griValidDate())
+        || notBlank(request.remark());
   }
 
   private boolean notBlank(String value) {

@@ -3,7 +3,9 @@ package com.furuiduo.quote.cost.controller;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,9 +33,13 @@ import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
+import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
+import com.furuiduo.quote.cost.service.CostDeptHighlightService;
 import com.furuiduo.quote.cost.service.CostSeaService;
+import com.furuiduo.quote.cost.support.CostHighlightQuerySupport;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
@@ -48,14 +54,20 @@ public class CostSeaController {
   private final AuthService authService;
   private final PermissionService permissionService;
   private final CostSeaService costSeaService;
+  private final CostDeptHighlightService highlightService;
+  private final CostHighlightQuerySupport highlightQuerySupport;
 
   public CostSeaController(
       AuthService authService,
       PermissionService permissionService,
-      CostSeaService costSeaService) {
+      CostSeaService costSeaService,
+      CostDeptHighlightService highlightService,
+      CostHighlightQuerySupport highlightQuerySupport) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.costSeaService = costSeaService;
+    this.highlightService = highlightService;
+    this.highlightQuerySupport = highlightQuerySupport;
   }
 
   @GetMapping
@@ -75,15 +87,66 @@ public class CostSeaController {
       @RequestParam(required = false) String freightValidDate,
       @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status,
-      @RequestParam(required = false) String remark) {
-    requireView(authService.requireUser(authorization));
+      @RequestParam(required = false) String remark,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly);
     return ApiResponse.ok(
-        costSeaService.list(
-            page,
-            pageSize,
+        highlightService.enrichSeaPage(
+            user,
+            costSeaService.list(
+                page,
+                pageSize,
+                por,
+                polFilter,
+                podFilter,
+                sslFilter,
+                containerType,
+                agent,
+                freightValidDate,
+                freightEffDate,
+                status,
+                remark,
+                sortField,
+                sortOrder,
+                restrictIds)));
+  }
+
+  @GetMapping("/ids")
+  public ApiResponse<List<Long>> listIds(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String por,
+      @RequestParam(required = false) String pol,
+      @RequestParam(required = false) String origin,
+      @RequestParam(required = false) String pod,
+      @RequestParam(required = false) String destination,
+      @RequestParam(required = false) String ssl,
+      @RequestParam(required = false) String carrier,
+      @RequestParam(required = false) String containerType,
+      @RequestParam(required = false) String agent,
+      @RequestParam(required = false) String freightValidDate,
+      @RequestParam(required = false) String freightEffDate,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String remark,
+      @RequestParam(required = false) String sortField,
+      @RequestParam(required = false) String sortOrder,
+      @RequestParam(required = false) Boolean highlightOnly) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    String polFilter = firstNonBlank(pol, origin);
+    String podFilter = firstNonBlank(pod, destination);
+    String sslFilter = firstNonBlank(ssl, carrier);
+    Set<Long> restrictIds =
+        highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly);
+    return ApiResponse.ok(
+        costSeaService.listIds(
             por,
             polFilter,
             podFilter,
@@ -93,7 +156,10 @@ public class CostSeaController {
             freightValidDate,
             freightEffDate,
             status,
-            remark));
+            remark,
+            sortField,
+            sortOrder,
+            restrictIds));
   }
 
   @GetMapping("/{id}")
@@ -148,11 +214,11 @@ public class CostSeaController {
   }
 
   @PostMapping("/batch-copy")
-  public ApiResponse<Map<String, Integer>> batchCopy(
+  public ApiResponse<CostSeaBatchCopyResult> batchCopy(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody CostSeaBatchCopyRequest request) {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(Map.of("created", costSeaService.batchCopy(request)));
+    return ApiResponse.ok(costSeaService.batchCopy(request));
   }
 
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

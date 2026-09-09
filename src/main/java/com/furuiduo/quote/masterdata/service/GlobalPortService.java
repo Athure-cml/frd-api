@@ -137,6 +137,16 @@ public class GlobalPortService {
   }
 
   @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
+  }
+
+  @Transactional
   public CostImportResult importExcel(MultipartFile file, boolean dryRun) throws IOException {
     Set<String> seenBusinessKeys = new HashSet<>();
     return CostExcelSupport.importRows(

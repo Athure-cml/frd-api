@@ -113,7 +113,11 @@ public class AiToolExecutor {
             text(args, "supplier"),
             null,
             null,
-            text(args, "status"));
+            null,
+            text(args, "status"),
+            null,
+            null,
+            null);
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
     for (RoadCostResponse row : page.items()) {
@@ -158,7 +162,10 @@ public class AiToolExecutor {
             null,
             null,
             text(args, "status"),
-            text(args, "remark"));
+            text(args, "remark"),
+            null,
+            null,
+            null);
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
     for (FreightCostResponse row : page.items()) {
@@ -189,7 +196,16 @@ public class AiToolExecutor {
     require(user, PermissionCodes.COST_FUMIGATION_VIEW, "缺少熏蒸成本查看权限");
     PageResult<FumigationCostResponse> page =
         costFumigationService.list(
-            1, 8, text(args, "region"), text(args, "station"), null, null, text(args, "status"));
+            1,
+            8,
+            text(args, "region"),
+            text(args, "station"),
+            null,
+            null,
+            text(args, "status"),
+            null,
+            null,
+            null);
     List<Map<String, Object>> items = new ArrayList<>();
     List<AiCitedCost> cited = new ArrayList<>();
     for (FumigationCostResponse row : page.items()) {

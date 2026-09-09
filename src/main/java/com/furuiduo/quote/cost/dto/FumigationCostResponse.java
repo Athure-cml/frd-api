@@ -24,9 +24,14 @@ public record FumigationCostResponse(
     @Schema(description = "ADDRESS") String address,
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "扩展字段") Map<String, Object> extraFields,
-    @Schema(description = "更新时间") String updatedAt) {
+    @Schema(description = "更新时间") String updatedAt,
+    @Schema(description = "部门常用标记") CostHighlightView highlight) {
 
   public static FumigationCostResponse from(CostFumigation entity) {
+    return from(entity, null);
+  }
+
+  public static FumigationCostResponse from(CostFumigation entity, CostHighlightView highlight) {
     CostStatus status =
         CostValidityStatus.resolve(
             entity.getStatus(), entity.getOutdoorValidity(), entity.getIndoorValidity());
@@ -43,6 +48,25 @@ public record FumigationCostResponse(
         entity.getAddress(),
         status,
         entity.getExtraFields(),
-        QuoteDateTimes.format(entity.getUpdatedAt()));
+        QuoteDateTimes.format(entity.getUpdatedAt()),
+        highlight);
+  }
+
+  public FumigationCostResponse withHighlight(CostHighlightView highlight) {
+    return new FumigationCostResponse(
+        id,
+        region,
+        station,
+        outdoorNonOak,
+        outdoorOak,
+        outdoorValidity,
+        indoorNonOak,
+        indoorOak,
+        indoorValidity,
+        address,
+        status,
+        extraFields,
+        updatedAt,
+        highlight);
   }
 }

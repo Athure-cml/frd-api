@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.SearchText;
@@ -26,6 +27,7 @@ import com.furuiduo.quote.quote.entity.QuoteCostSnapshot;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
+import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
 import com.furuiduo.quote.quote.support.QuoteCostSnapshotMapper;
 
 @Service
@@ -68,24 +70,21 @@ public class QuoteCostMatchService {
             SearchText.orEmpty(roadPor(request)),
             SearchText.orEmpty(request.pol()),
             SearchText.orEmpty(roadSupplier(request)));
-    if (!roads.isEmpty()) {
-      matches.add(QuoteCostSnapshotMapper.fromRoad(roads.getFirst(), keys));
-    }
+    QuoteCostMatchSupport.firstActiveRoad(roads)
+        .ifPresent(road -> matches.add(QuoteCostSnapshotMapper.fromRoad(road, keys)));
 
     List<CostSea> seas =
         costSeaRepository.matchByRoute(
             SearchText.orEmpty(request.pol()),
             SearchText.orEmpty(request.pod()),
             SearchText.orEmpty(seaSsl(request)));
-    if (!seas.isEmpty()) {
-      matches.add(QuoteCostSnapshotMapper.fromSea(seas.getFirst(), keys));
-    }
+    QuoteCostMatchSupport.firstActiveSea(seas)
+        .ifPresent(sea -> matches.add(QuoteCostSnapshotMapper.fromSea(sea, keys)));
 
     List<CostFumigation> fums =
         costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
-    if (!fums.isEmpty()) {
-      matches.add(QuoteCostSnapshotMapper.fromFumigation(fums.getFirst(), keys));
-    }
+    QuoteCostMatchSupport.firstActiveFumigation(fums)
+        .ifPresent(fum -> matches.add(QuoteCostSnapshotMapper.fromFumigation(fum, keys)));
 
     if (matches.isEmpty()) {
       return new QuoteMatchCostsResponse(false, emptySuggested(), List.of());
@@ -96,40 +95,37 @@ public class QuoteCostMatchService {
 
   private QuoteMatchCostsResponse matchByType(
       QuoteMatchCostsRequest request, Map<String, Object> keys, QuoteCostType type) {
+    List<CostRoad> roads =
+        costRoadRepository.matchByRoute(
+            SearchText.orEmpty(request.zipCode()),
+            SearchText.orEmpty(request.city()),
+            SearchText.orEmpty(request.state()),
+            SearchText.orEmpty(roadPor(request)),
+            SearchText.orEmpty(request.pol()),
+            SearchText.orEmpty(roadSupplier(request)));
+
     QuoteCostMatchItemDto match =
         switch (type) {
-          case ROAD -> {
-            List<CostRoad> roads =
-                costRoadRepository.matchByRoute(
-                    SearchText.orEmpty(request.zipCode()),
-                    SearchText.orEmpty(request.city()),
-                    SearchText.orEmpty(request.state()),
-                    SearchText.orEmpty(roadPor(request)),
-                    SearchText.orEmpty(request.pol()),
-                    SearchText.orEmpty(roadSupplier(request)));
-            if (roads.isEmpty()) {
-              yield null;
-            }
-            yield QuoteCostSnapshotMapper.fromRoad(roads.getFirst(), keys);
-          }
+          case ROAD ->
+              QuoteCostMatchSupport.firstActiveRoad(roads)
+                  .map(road -> QuoteCostSnapshotMapper.fromRoad(road, keys))
+                  .orElse(null);
           case SEA -> {
             List<CostSea> seas =
                 costSeaRepository.matchByRoute(
                     SearchText.orEmpty(request.pol()),
                     SearchText.orEmpty(request.pod()),
                     SearchText.orEmpty(seaSsl(request)));
-            if (seas.isEmpty()) {
-              yield null;
-            }
-            yield QuoteCostSnapshotMapper.fromSea(seas.getFirst(), keys);
+            yield QuoteCostMatchSupport.firstActiveSea(seas)
+                .map(sea -> QuoteCostSnapshotMapper.fromSea(sea, keys))
+                .orElse(null);
           }
           case FUMIGATION -> {
             List<CostFumigation> fums =
                 costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
-            if (fums.isEmpty()) {
-              yield null;
-            }
-            yield QuoteCostSnapshotMapper.fromFumigation(fums.getFirst(), keys);
+            yield QuoteCostMatchSupport.firstActiveFumigation(fums)
+                .map(fum -> QuoteCostSnapshotMapper.fromFumigation(fum, keys))
+                .orElse(null);
           }
         };
     if (match == null) {
@@ -137,6 +133,15 @@ public class QuoteCostMatchService {
     }
     return new QuoteMatchCostsResponse(
         true, buildSuggested(List.of(match)), List.of(match));
+  }
+
+  @Transactional
+  public void replaceSnapshots(QuoteOrder order, List<QuoteCostMatchItemDto> matches) {
+    if (matches == null || matches.isEmpty()) {
+      return;
+    }
+    quoteCostSnapshotRepository.deleteByQuoteOrderId(order.getId());
+    persistSnapshots(order, matches);
   }
 
   public void persistSnapshots(QuoteOrder order, List<QuoteCostMatchItemDto> matches) {
@@ -181,12 +186,22 @@ public class QuoteCostMatchService {
   }
 
   private QuoteSheetFieldsDto buildSuggested(List<QuoteCostMatchItemDto> matches) {
-    String ofUsd = null;
+    String zipCode = null;
+    String city = null;
+    String state = null;
+    String pickUpAddress = null;
+    String por = null;
+    String pol = null;
+    String pod = null;
+    String oceanFreight = null;
     String ssl = null;
-    BigDecimal truckingNonOak = null;
+    BigDecimal truckingFee = null;
+    BigDecimal nsLift = null;
+    BigDecimal chassis = null;
+    BigDecimal waiting = null;
+    BigDecimal redeliveryFee = null;
+    String truckRemark = null;
     BigDecimal truckingOak = null;
-    BigDecimal fmNonOak = null;
-    BigDecimal fmOak = null;
 
     for (QuoteCostMatchItemDto item : matches) {
       Map<String, Object> snap = item.snapshot();
@@ -199,7 +214,7 @@ public class QuoteCostMatchService {
           rate = formatOfRateFromSnapshot(snap);
         }
         if (rate != null && !String.valueOf(rate).isBlank()) {
-          ofUsd = String.valueOf(rate);
+          oceanFreight = String.valueOf(rate);
         }
         Object carrier = snap.get("supplier");
         if (carrier == null || String.valueOf(carrier).isBlank()) {
@@ -211,23 +226,75 @@ public class QuoteCostMatchService {
         if (carrier != null && !String.valueOf(carrier).isBlank()) {
           ssl = String.valueOf(carrier);
         }
+        pod = firstNonBlank(pod, text(snap.get("pod")));
+        pol = firstNonBlank(pol, text(snap.get("pol")));
+        por = firstNonBlank(por, text(snap.get("por")));
       }
       if ("ROAD".equals(item.costType())) {
-        truckingNonOak = toBigDecimal(snap.get("allInNoFm"));
+        zipCode = firstNonBlank(zipCode, text(snap.get("zipCode")));
+        city = firstNonBlank(city, text(snap.get("city")));
+        state = firstNonBlank(state, text(snap.get("state")));
+        pickUpAddress = firstNonBlank(pickUpAddress, text(snap.get("logYardNameAddress")));
+        por = firstNonBlank(por, text(snap.get("por")));
+        pol = firstNonBlank(pol, text(snap.get("pol")));
+        truckingFee = toBigDecimal(snap.get("allInNoFm"));
         truckingOak = toBigDecimal(snap.get("allInFmOneWay"));
+        nsLift = toBigDecimal(snap.get("nsLift"));
+        chassis = toBigDecimal(snap.get("chassis"));
+        waiting = toBigDecimal(snap.get("waitingFee"));
+        redeliveryFee = toBigDecimal(snap.get("redelivery"));
+        truckRemark = firstNonBlank(truckRemark, text(snap.get("remark")));
       }
     }
 
     return new QuoteSheetFieldsDto(
-        null, null, null, null, null, null, ofUsd, ssl,
-        truckingNonOak, truckingOak, fmNonOak, fmOak,
-        null, null, null);
+        zipCode,
+        city,
+        state,
+        pickUpAddress,
+        por,
+        pol,
+        pod,
+        oceanFreight,
+        ssl,
+        truckingFee,
+        nsLift,
+        chassis,
+        waiting,
+        redeliveryFee,
+        truckRemark,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        truckingFee,
+        truckingOak,
+        null,
+        null);
   }
 
   private QuoteSheetFieldsDto emptySuggested() {
     return new QuoteSheetFieldsDto(
-        null, null, null, null, null, null, null, null,
-        null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null);
+  }
+
+  private String text(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value).trim();
+    return text.isEmpty() ? null : text;
+  }
+
+  private String firstNonBlank(String current, String next) {
+    if (current != null && !current.isBlank()) {
+      return current;
+    }
+    return next;
   }
 
   private boolean hasAnyKey(QuoteMatchCostsRequest request) {

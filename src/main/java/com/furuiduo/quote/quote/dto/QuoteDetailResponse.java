@@ -30,6 +30,7 @@ public record QuoteDetailResponse(
     @Schema(description = "是否已过期") boolean expired,
     @Schema(description = "是否已作废") boolean voided,
     @Schema(description = "是否可编辑") boolean editable,
+    @Schema(description = "当前用户是否可操作（创建人或超级管理员）") boolean operable,
     @Schema(description = "业务表字段") QuoteSheetFieldsDto sheet,
     @Schema(description = "创建人ID") Long createdBy,
     @Schema(description = "创建人") String createdByName,
@@ -42,20 +43,16 @@ public record QuoteDetailResponse(
     @Schema(description = "跟进记录") List<QuoteFollowUpResponse> followUps) {
 
   public static QuoteDetailResponse from(QuoteOrder order) {
-    return from(order, List.of(), List.of());
+    return from(order, List.of(), List.of(), false);
   }
 
   public static QuoteDetailResponse from(
       QuoteOrder order,
       List<QuoteCostMatchItemDto> costSnapshots,
-      List<QuoteFollowUpResponse> followUps) {
+      List<QuoteFollowUpResponse> followUps,
+      boolean operable) {
     String status = QuoteStatusSupport.displayStatus(order.getStatus());
-    boolean editable =
-        order.getStatus() == com.furuiduo.quote.quote.entity.QuoteStatus.DRAFT
-            || order.getStatus() == com.furuiduo.quote.quote.entity.QuoteStatus.EFFECTIVE
-            || order.getStatus() == com.furuiduo.quote.quote.entity.QuoteStatus.FOLLOWING
-            || order.getStatus() == com.furuiduo.quote.quote.entity.QuoteStatus.SENT
-            || order.getStatus() == com.furuiduo.quote.quote.entity.QuoteStatus.PENDING;
+    boolean editable = QuoteStatusSupport.isEditable(order.getStatus());
     return new QuoteDetailResponse(
         order.getId(),
         order.getQuoteNo(),
@@ -75,6 +72,7 @@ public record QuoteDetailResponse(
         QuoteStatusSupport.isExpired(order),
         QuoteStatusSupport.isVoided(order),
         editable,
+        operable,
         QuoteSheetFieldsDto.from(order),
         order.getCreatedBy(),
         order.getCreatedByName(),

@@ -1,0 +1,1 @@
+ALTER TABLE quote_order ADD COLUMN IF NOT EXISTS cif_amount DECIMAL(14, 2);

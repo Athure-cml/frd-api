@@ -26,4 +26,6 @@ public interface SysUserRepository extends JpaRepository<SysUser, Long> {
   long countByDepartment_Id(Long departmentId);
 
   long countByRoles_Code(String roleCode);
+
+  long countByStatus(Integer status);
 }

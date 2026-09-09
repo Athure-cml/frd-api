@@ -14,7 +14,7 @@ mvn spring-boot:run
 可通过环境变量覆盖：`SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD`。
 
 服务地址 `http://localhost:8080`，健康检查 `GET /hello`。  
-首次启动会自动执行 Flyway 迁移并初始化演示账号（工号 `vben`，密码 `123456`）。
+首次启动会自动执行 Flyway 迁移并初始化系统账号（工号 `Arture`，密码 `123456`）。
 
 ### AI 助手（通义千问）
 

@@ -1,5 +1,7 @@
 package com.furuiduo.quote.shippingline.dto;
 
+import java.time.LocalDate;
+
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
 import com.furuiduo.quote.shippingline.entity.ShippingLine;
 
@@ -14,6 +16,8 @@ public record ShippingLineResponse(
     @Schema(description = "联系人") String contactName,
     @Schema(description = "电话") String phone,
     @Schema(description = "邮箱") String email,
+    @Schema(description = "约号") String contractNo,
+    @Schema(description = "有效期") LocalDate validUntil,
     @Schema(description = "备注") String remark,
     @Schema(description = "状态") Integer status,
     @Schema(description = "创建人") String createdByName,
@@ -30,6 +34,8 @@ public record ShippingLineResponse(
         entity.getContactName(),
         entity.getPhone(),
         entity.getEmail(),
+        entity.getContractNo(),
+        entity.getValidUntil(),
         entity.getRemark(),
         entity.getStatus(),
         entity.getCreatedByName(),

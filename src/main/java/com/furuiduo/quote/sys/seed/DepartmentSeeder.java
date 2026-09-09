@@ -37,10 +37,6 @@ public class DepartmentSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (departmentRepository.count() == 0) {
-      return;
-    }
-
     for (DeptDef def : DEPARTMENTS) {
       departmentRepository
           .findByCode(def.code())

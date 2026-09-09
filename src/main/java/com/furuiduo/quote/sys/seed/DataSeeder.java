@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.DataScope;
-import com.furuiduo.quote.sys.entity.PermissionType;
 import com.furuiduo.quote.sys.entity.SysDepartment;
 import com.furuiduo.quote.sys.entity.SysPermission;
 import com.furuiduo.quote.sys.entity.SysRole;
@@ -28,8 +27,11 @@ import com.furuiduo.quote.sys.repository.SysUserRepository;
 import com.furuiduo.quote.user.PasswordStrengthEvaluator;
 
 @Component
-@Order(900)
+@Order(50)
 public class DataSeeder implements ApplicationRunner {
+
+  /** 新建库默认超级管理员账号（仅 user 表为空时初始化）。 */
+  public static final String BOOTSTRAP_ADMIN_USERNAME = "Arture";
 
   private static final String DEFAULT_AVATAR =
       "https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp";
@@ -56,7 +58,7 @@ public class DataSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (userRepository.existsByUsername("vben")) {
+    if (userRepository.count() > 0) {
       return;
     }
 
@@ -96,78 +98,7 @@ public class DataSeeder implements ApplicationRunner {
   }
 
   private Map<String, SysPermission> seedPermissions() {
-    record PermDef(String code, String name, PermissionType type, int sort) {}
-
-    List<PermDef> defs =
-        List.of(
-            new PermDef(PermissionCodes.SYS_DEPT_VIEW, "查看部门", PermissionType.API, 10),
-            new PermDef(PermissionCodes.SYS_DEPT_MANAGE, "管理部门", PermissionType.API, 11),
-            new PermDef(PermissionCodes.SYS_USER_VIEW, "查看用户", PermissionType.API, 12),
-            new PermDef(PermissionCodes.SYS_USER_MANAGE, "管理用户", PermissionType.API, 13),
-            new PermDef(PermissionCodes.SYS_ROLE_VIEW, "查看角色", PermissionType.API, 14),
-            new PermDef(PermissionCodes.SYS_ROLE_MANAGE, "管理角色", PermissionType.API, 15),
-            new PermDef(
-                PermissionCodes.SYS_OPERATION_LOG_VIEW, "操作日志-查看", PermissionType.API, 16),
-            new PermDef(PermissionCodes.DASHBOARD_VIEW, "报价分析", PermissionType.MENU, 20),
-            new PermDef(PermissionCodes.COST_ROAD_VIEW, "卡车成本-查看", PermissionType.API, 30),
-            new PermDef(PermissionCodes.COST_ROAD_EDIT, "卡车成本-编辑", PermissionType.API, 31),
-            new PermDef(PermissionCodes.COST_SEA_VIEW, "海运成本-查看", PermissionType.API, 32),
-            new PermDef(PermissionCodes.COST_SEA_EDIT, "海运成本-编辑", PermissionType.API, 33),
-            new PermDef(PermissionCodes.COST_FUMIGATION_VIEW, "熏蒸成本-查看", PermissionType.API, 34),
-            new PermDef(PermissionCodes.COST_FUMIGATION_EDIT, "熏蒸成本-编辑", PermissionType.API, 35),
-            new PermDef(
-                PermissionCodes.COST_ROAD_TEMPLATE_VIEW, "卡车模板-查看", PermissionType.API, 36),
-            new PermDef(
-                PermissionCodes.COST_ROAD_TEMPLATE_EDIT, "卡车模板-编辑", PermissionType.API, 37),
-            new PermDef(
-                PermissionCodes.COST_ROAD_TEMPLATE_DELETE, "卡车模板-删除", PermissionType.API, 38),
-            new PermDef(
-                PermissionCodes.COST_SEA_TEMPLATE_VIEW, "海运模板-查看", PermissionType.API, 39),
-            new PermDef(
-                PermissionCodes.COST_SEA_TEMPLATE_EDIT, "海运模板-编辑", PermissionType.API, 40),
-            new PermDef(
-                PermissionCodes.COST_SEA_TEMPLATE_DELETE, "海运模板-删除", PermissionType.API, 41),
-            new PermDef(
-                PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW, "熏蒸模板-查看", PermissionType.API, 42),
-            new PermDef(
-                PermissionCodes.COST_FUMIGATION_TEMPLATE_EDIT, "熏蒸模板-编辑", PermissionType.API, 43),
-            new PermDef(
-                PermissionCodes.COST_FUMIGATION_TEMPLATE_DELETE, "熏蒸模板-删除", PermissionType.API, 44),
-            new PermDef(PermissionCodes.QUOTE_VIEW, "报价单-查看", PermissionType.API, 50),
-            new PermDef(PermissionCodes.QUOTE_CREATE, "报价单-新建", PermissionType.API, 51),
-            new PermDef(PermissionCodes.QUOTE_EDIT, "报价单-编辑", PermissionType.API, 52),
-            new PermDef(PermissionCodes.QUOTE_SUBMIT, "报价单-提交", PermissionType.API, 53),
-            new PermDef(PermissionCodes.QUOTE_APPROVE, "报价单-审批", PermissionType.API, 54),
-            new PermDef(PermissionCodes.QUOTE_EXPORT, "报价单-导出", PermissionType.API, 55),
-            new PermDef(PermissionCodes.QUOTE_DELETE, "报价单-删除", PermissionType.API, 56),
-            new PermDef(PermissionCodes.CUSTOMER_VIEW, "客户-查看", PermissionType.API, 45),
-            new PermDef(PermissionCodes.CUSTOMER_CREATE, "客户-新建", PermissionType.API, 46),
-            new PermDef(PermissionCodes.CUSTOMER_EDIT, "客户-编辑", PermissionType.API, 47),
-            new PermDef(PermissionCodes.CUSTOMER_DELETE, "客户-删除", PermissionType.API, 48),
-            new PermDef(PermissionCodes.CURRENCY_VIEW, "币种-查看", PermissionType.API, 49),
-            new PermDef(PermissionCodes.CURRENCY_MANAGE, "币种-管理", PermissionType.API, 50),
-            new PermDef(PermissionCodes.EXCHANGE_RATE_VIEW, "汇率-查看", PermissionType.API, 51),
-            new PermDef(PermissionCodes.EXCHANGE_RATE_MANAGE, "汇率-管理", PermissionType.API, 52),
-            new PermDef(PermissionCodes.REPORT_VIEW, "报表-查看", PermissionType.API, 60),
-            new PermDef(PermissionCodes.REPORT_EXPORT, "报表-导出", PermissionType.API, 61));
-
-    Map<String, SysPermission> map = new LinkedHashMap<>();
-    for (PermDef def : defs) {
-      SysPermission permission =
-          permissionRepository
-              .findByCode(def.code())
-              .orElseGet(
-                  () -> {
-                    SysPermission created = new SysPermission();
-                    created.setCode(def.code());
-                    created.setName(def.name());
-                    created.setType(def.type());
-                    created.setSort(def.sort());
-                    return permissionRepository.save(created);
-                  });
-      map.put(def.code(), permission);
-    }
-    return map;
+    return PermissionCatalog.ensureAll(permissionRepository);
   }
 
   private Map<String, SysRole> seedRoles(Map<String, SysPermission> permissions) {
@@ -193,6 +124,8 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.SYS_USER_MANAGE,
                 PermissionCodes.SYS_ROLE_VIEW,
                 PermissionCodes.SYS_OPERATION_LOG_VIEW,
+                PermissionCodes.SYS_ANNOUNCEMENT_VIEW,
+                PermissionCodes.SYS_ANNOUNCEMENT_MANAGE,
                 PermissionCodes.DASHBOARD_VIEW,
                 PermissionCodes.COST_ROAD_VIEW,
                 PermissionCodes.COST_ROAD_EDIT,
@@ -390,40 +323,10 @@ public class DataSeeder implements ApplicationRunner {
     String encodedPassword = passwordEncoder.encode(rawPassword);
 
     createUser(
-        "vben",
+        BOOTSTRAP_ADMIN_USERNAME,
         "系统管理员",
-        departments.get("CS"),
+        departments.get("GMO"),
         Set.of(roles.get("super_admin")),
-        encodedPassword,
-        rawPassword);
-    createUser(
-        "cs001", "客服-张三", departments.get("CS"), Set.of(roles.get("sales")), encodedPassword, rawPassword);
-    createUser(
-        "doc001",
-        "单证-李四",
-        departments.get("DOC"),
-        Set.of(roles.get("doc_clerk")),
-        encodedPassword,
-        rawPassword);
-    createUser(
-        "ops001",
-        "海外-王五",
-        departments.get("OPS"),
-        Set.of(roles.get("overseas_operator")),
-        encodedPassword,
-        rawPassword);
-    createUser(
-        "bkg001",
-        "订舱-赵六",
-        departments.get("BKG"),
-        Set.of(roles.get("booker")),
-        encodedPassword,
-        rawPassword);
-    createUser(
-        "fin001",
-        "财务-钱七",
-        departments.get("FIN"),
-        Set.of(roles.get("finance")),
         encodedPassword,
         rawPassword);
   }

@@ -70,6 +70,16 @@ public class ContainerTypeService {
     repository.delete(requireEntity(id));
   }
 
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
+  }
+
   private MdContainerType requireEntity(Long id) {
     return repository
         .findById(id)

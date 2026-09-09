@@ -34,6 +34,7 @@ import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
+import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
 
@@ -136,7 +137,7 @@ public class DashboardService {
 
     long followUp =
         dashboardQueryRepository.countByStatuses(
-            scope, List.of("FOLLOWING", "EFFECTIVE", "PENDING", "SENT"));
+            scope, List.of("PENDING_APPROVAL", "SENT", "PENDING", "EFFECTIVE", "FOLLOWING"));
     long followUpTrend =
         countFollowUpUpdatedBetween(scope, todayStart, tomorrow)
             - countFollowUpUpdatedBetween(scope, yesterdayStart, todayStart);
@@ -304,23 +305,25 @@ public class DashboardService {
   }
 
   private WorkspaceTodoDto toTodo(QuoteOrder order) {
-    QuoteStatus status = order.getStatus();
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
     String todoType =
         switch (status) {
           case DRAFT -> "completeDraft";
+          case PENDING_APPROVAL -> "approveQuote";
           case WON -> "confirmWon";
-          case LOST, EXPIRED, VOIDED -> "archiveLost";
+          case REJECTED, EXPIRED, VOIDED -> "archiveLost";
           default -> "followSent";
         };
     String priority =
         switch (status) {
           case DRAFT -> "medium";
-          case FOLLOWING, PENDING -> "urgent";
-          case EFFECTIVE, SENT -> "high";
+          case PENDING_APPROVAL -> "urgent";
+          case SENT -> "high";
           case WON -> "high";
           default -> "medium";
         };
-    boolean done = status == QuoteStatus.WON || status == QuoteStatus.VOIDED;
+    boolean done =
+        status == QuoteStatus.WON || QuoteStatusSupport.isAbandoned(status);
     return new WorkspaceTodoDto(
         order.getId(),
         order.getQuoteNo(),
@@ -332,12 +335,12 @@ public class DashboardService {
   }
 
   private WorkspacePipelineDto toPipeline(QuoteOrder order) {
-    QuoteStatus status = order.getStatus();
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
     int progress =
         switch (status) {
-          case DRAFT -> 25;
-          case FOLLOWING, PENDING -> 50;
-          case EFFECTIVE, SENT -> 72;
+          case DRAFT -> 20;
+          case PENDING_APPROVAL -> 45;
+          case SENT -> 75;
           case WON -> 100;
           default -> 40;
         };
@@ -388,6 +391,6 @@ public class DashboardService {
   private long countFollowUpUpdatedBetween(
       DashboardScopeParams scope, LocalDateTime from, LocalDateTime to) {
     return dashboardQueryRepository.countByStatusesUpdatedBetween(
-        scope, List.of("FOLLOWING", "EFFECTIVE", "PENDING", "SENT"), from, to);
+        scope, List.of("PENDING_APPROVAL", "SENT", "PENDING", "EFFECTIVE", "FOLLOWING"), from, to);
   }
 }

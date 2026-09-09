@@ -35,11 +35,16 @@ public record FreightCostResponse(
     @Schema(description = "备注") String remark,
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "自定义字段值") Map<String, Object> extraFields,
-    @Schema(description = "更新时间") String updatedAt) {
+    @Schema(description = "更新时间") String updatedAt,
+    @Schema(description = "部门常用标记") CostHighlightView highlight) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
   public static FreightCostResponse fromSea(CostSea entity) {
+    return fromSea(entity, null);
+  }
+
+  public static FreightCostResponse fromSea(CostSea entity, CostHighlightView highlight) {
     CostStatus status =
         CostValidityStatus.resolve(entity.getStatus(), entity.getFreightValidDate());
     return new FreightCostResponse(
@@ -66,7 +71,37 @@ public record FreightCostResponse(
         entity.getRemark(),
         status,
         migrateSeaExtraFields(entity.getExtraFields()),
-        entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER));
+        entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER),
+        highlight);
+  }
+
+  public FreightCostResponse withHighlight(CostHighlightView highlight) {
+    return new FreightCostResponse(
+        id,
+        por,
+        pol,
+        pod,
+        cnShortName,
+        enProductName,
+        containerType,
+        freight,
+        freightValidDate,
+        buc,
+        bucValidDate,
+        ebs,
+        ebsValidDate,
+        gri,
+        griValidDate,
+        others,
+        othersValidDate,
+        allIn,
+        ssl,
+        agent,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight);
   }
 
   private static Map<String, Object> migrateSeaExtraFields(Map<String, Object> extraFields) {

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -31,9 +32,13 @@ import com.furuiduo.quote.cost.dto.FumigationCostSaveRequest;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
+import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
+import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
+import com.furuiduo.quote.cost.support.CostGridSort;
+import com.furuiduo.quote.cost.support.CostHighlightListFilter;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
@@ -73,7 +78,13 @@ public class CostFumigationService {
       String station,
       String outdoorValidity,
       String indoorValidity,
-      String status) {
+      String status,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return new PageResult<>(List.of(), 0);
+    }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String r = SearchText.orEmpty(region);
@@ -83,19 +94,85 @@ public class CostFumigationService {
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
     boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseFumigation(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
 
-    if (!filterStatus && !filterDates) {
+    if (!memoryPath) {
       var pageable =
-          PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostFumigation> result = repository.search(r, st, pageable);
+          PageRequest.of(safePage - 1, safePageSize, CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      Page<CostFumigation> result = repository.search(r, st, restrict, idParams, pageable);
       return new PageResult<>(
           result.getContent().stream().map(FumigationCostResponse::from).toList(),
           result.getTotalElements());
     }
 
-    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostFumigation> filtered =
-        repository.search(r, st, pageable).getContent().stream()
+        CostHighlightListFilter.filterByIds(
+            findMatchingFumigation(
+                region, station, outdoorValidity, indoorValidity, status, sort),
+            restrictToIds,
+            CostFumigation::getId);
+    return paginate(filtered, safePage, safePageSize);
+  }
+
+  /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
+  public List<Long> listIds(
+      String region,
+      String station,
+      String outdoorValidity,
+      String indoorValidity,
+      String status,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return List.of();
+    }
+    String r = SearchText.orEmpty(region);
+    String st = SearchText.orEmpty(station);
+    String ov = SearchText.orEmpty(outdoorValidity);
+    String iv = SearchText.orEmpty(indoorValidity);
+    String statusFilter = status;
+    boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+    boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseFumigation(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
+
+    if (!memoryPath) {
+      var pageable = Pageable.unpaged(CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      return repository.search(r, st, restrict, idParams, pageable).getContent().stream()
+          .map(CostFumigation::getId)
+          .toList();
+    }
+    return CostHighlightListFilter.filterByIds(
+            findMatchingFumigation(
+                region, station, outdoorValidity, indoorValidity, status, sort),
+            restrictToIds,
+            CostFumigation::getId)
+        .stream()
+        .map(CostFumigation::getId)
+        .toList();
+  }
+
+  private List<CostFumigation> findMatchingFumigation(
+      String region,
+      String station,
+      String outdoorValidity,
+      String indoorValidity,
+      String status,
+      CostGridSort.Parsed sort) {
+    String r = SearchText.orEmpty(region);
+    String st = SearchText.orEmpty(station);
+    String ov = SearchText.orEmpty(outdoorValidity);
+    String iv = SearchText.orEmpty(indoorValidity);
+    String statusFilter = status;
+    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
+    List<CostFumigation> items =
+        repository.search(r, st, false, List.of(-1L), pageable).getContent().stream()
             .filter(item -> matchesFumigationDateSearch(item, ov, iv))
             .filter(
                 item ->
@@ -105,7 +182,32 @@ public class CostFumigationService {
                         item.getOutdoorValidity(),
                         item.getIndoorValidity()))
             .toList();
-    return paginate(filtered, safePage, safePageSize);
+    if (sort != null) {
+      return items.stream().sorted(CostGridSort.fumigationComparator(sort)).toList();
+    }
+    return items;
+  }
+
+  private List<CostFumigation> findMatchingFumigationFromCriteria(Map<String, Object> criteria) {
+    return findMatchingFumigation(
+        CostBatchCriteriaMaps.string(criteria, "region"),
+        CostBatchCriteriaMaps.string(criteria, "station"),
+        CostBatchCriteriaMaps.string(criteria, "outdoorValidity"),
+        CostBatchCriteriaMaps.string(criteria, "indoorValidity"),
+        CostBatchCriteriaMaps.string(criteria, "status"),
+        null);
+  }
+
+  private List<Long> resolveFumigationBatchIds(
+      List<Long> ids, Map<String, Object> searchCriteria, List<Long> excludeIds) {
+    return CostBatchIdResolver.resolve(
+        ids,
+        searchCriteria,
+        excludeIds,
+        () ->
+            findMatchingFumigationFromCriteria(searchCriteria).stream()
+                .map(CostFumigation::getId)
+                .toList());
   }
 
   public FumigationCostResponse getById(Long id) {
@@ -142,20 +244,26 @@ public class CostFumigationService {
 
   @Transactional
   public void batchDelete(CostBatchDeleteRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveFumigationBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return;
     }
-    repository.deleteAllById(request.ids());
+    repository.deleteAllById(ids);
   }
 
   @Transactional
   public int batchUpdate(CostBatchUpdateRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveFumigationBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return 0;
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
     int updated = 0;
-    for (Long id : request.ids()) {
+    for (Long id : ids) {
       CostFumigation entity = requireEntity(id);
       if (fields.containsKey("address")) {
         entity.setAddress(asString(fields.get("address")));
@@ -223,6 +331,8 @@ public class CostFumigationService {
               .search(
                   SearchText.orEmpty(region),
                   SearchText.orEmpty(station),
+                  false,
+                  List.of(-1L),
                   pageable)
               .getContent();
       if (filterStatus || filterDates) {

@@ -3,11 +3,14 @@ package com.furuiduo.quote.cost.service;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.springframework.data.domain.Page;
@@ -23,22 +26,28 @@ import org.springframework.web.server.ResponseStatusException;
 import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
+import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyRequest;
+import com.furuiduo.quote.cost.dto.CostRoadBatchCopyResult;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.dto.RoadCostSaveRequest;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
+import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
+import com.furuiduo.quote.cost.support.CostGridSort;
+import com.furuiduo.quote.cost.support.CostHighlightListFilter;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
+import com.furuiduo.quote.cost.support.CostTemplateLayouts;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.cost.support.RoadAllInFormulaEvaluator;
 import com.furuiduo.quote.masterdata.dto.DestZipResolveItemResponse;
@@ -52,6 +61,10 @@ public class CostRoadService {
   public static final String EXTRA_RENEWED_FROM = "cf_road_renewed_from";
   /** 源行记录续期后新行 id */
   public static final String EXTRA_RENEWED_TO = "cf_road_renewed_to";
+
+  private static final String ROAD_YARD_STORAGE = "cf_road_yard_storage";
+  private static final String ROAD_EXTRA_CHASSIS = "cf_road_extra_chassis";
+  private static final String ROAD_REMARK = CostTemplateLayouts.ROAD_REMARK;
 
   private static final String[] EXPORT_HEADERS = {
     "ZIP CODE",
@@ -110,8 +123,15 @@ public class CostRoadService {
       String pol,
       String supplier,
       BigDecimal redelivery,
+      String effectiveDate,
       String validDate,
-      String status) {
+      String status,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return new PageResult<>(List.of(), 0);
+    }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String z = SearchText.orEmpty(zipCode);
@@ -121,29 +141,177 @@ public class CostRoadService {
     String pl = SearchText.orEmpty(pol);
     String sup = SearchText.orEmpty(supplier);
     String vd = SearchText.orEmpty(validDate);
+    String ed = SearchText.orEmpty(effectiveDate);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
-    boolean filterDates = !vd.isEmpty();
+    boolean filterDates = !vd.isEmpty() || !ed.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseRoad(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
 
-    if (!filterStatus && !filterDates) {
+    if (!memoryPath) {
       var pageable =
-          PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Direction.DESC, "id"));
-      Page<CostRoad> result = repository.search(z, c, st, p, pl, sup, redelivery, pageable);
+          PageRequest.of(safePage - 1, safePageSize, CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      Page<CostRoad> result =
+          repository.search(z, c, st, p, pl, sup, redelivery, restrict, idParams, pageable);
       return new PageResult<>(
           result.getContent().stream().map(RoadCostResponse::from).toList(),
           result.getTotalElements());
     }
 
-    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostRoad> filtered =
-        repository.search(z, c, st, p, pl, sup, redelivery, pageable).getContent().stream()
-            .filter(item -> CostDateSearchFilter.matchesValidTo(item.getValidDate(), vd))
+        CostHighlightListFilter.filterByIds(
+            findMatchingRoads(
+                zipCode,
+                city,
+                state,
+                por,
+                pol,
+                supplier,
+                redelivery,
+                effectiveDate,
+                validDate,
+                status,
+                sort),
+            restrictToIds,
+            CostRoad::getId);
+    return paginate(filtered, safePage, safePageSize);
+  }
+
+  /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
+  public List<Long> listIds(
+      String zipCode,
+      String city,
+      String state,
+      String por,
+      String pol,
+      String supplier,
+      BigDecimal redelivery,
+      String effectiveDate,
+      String validDate,
+      String status,
+      String sortField,
+      String sortOrder,
+      Set<Long> restrictToIds) {
+    if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
+      return List.of();
+    }
+    String z = SearchText.orEmpty(zipCode);
+    String c = SearchText.orEmpty(city);
+    String st = SearchText.orEmpty(state);
+    String p = SearchText.orEmpty(por);
+    String pl = SearchText.orEmpty(pol);
+    String sup = SearchText.orEmpty(supplier);
+    String vd = SearchText.orEmpty(validDate);
+    String ed = SearchText.orEmpty(effectiveDate);
+    String statusFilter = status;
+    boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+    boolean filterDates = !vd.isEmpty() || !ed.isEmpty();
+    CostGridSort.Parsed sort = CostGridSort.parseRoad(sortField, sortOrder);
+    boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
+
+    if (!memoryPath) {
+      var pageable = Pageable.unpaged(CostGridSort.jpaSort(sort));
+      boolean restrict = restrictToIds != null;
+      List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
+      return repository
+          .search(z, c, st, p, pl, sup, redelivery, restrict, idParams, pageable)
+          .getContent()
+          .stream()
+          .map(CostRoad::getId)
+          .toList();
+    }
+    return CostHighlightListFilter.filterByIds(
+            findMatchingRoads(
+                zipCode,
+                city,
+                state,
+                por,
+                pol,
+                supplier,
+                redelivery,
+                effectiveDate,
+                validDate,
+                status,
+                sort),
+            restrictToIds,
+            CostRoad::getId)
+        .stream()
+        .map(CostRoad::getId)
+        .toList();
+  }
+
+  private List<CostRoad> findMatchingRoads(
+      String zipCode,
+      String city,
+      String state,
+      String por,
+      String pol,
+      String supplier,
+      BigDecimal redelivery,
+      String effectiveDate,
+      String validDate,
+      String status,
+      CostGridSort.Parsed sort) {
+    String z = SearchText.orEmpty(zipCode);
+    String c = SearchText.orEmpty(city);
+    String st = SearchText.orEmpty(state);
+    String p = SearchText.orEmpty(por);
+    String pl = SearchText.orEmpty(pol);
+    String sup = SearchText.orEmpty(supplier);
+    String ed = SearchText.orEmpty(effectiveDate);
+    String vd = SearchText.orEmpty(validDate);
+    String statusFilter = status;
+    var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
+    List<CostRoad> items =
+        repository
+            .search(z, c, st, p, pl, sup, redelivery, false, List.of(-1L), pageable)
+            .getContent()
+            .stream()
+            .filter(item -> matchesRoadDateSearch(item, ed, vd))
             .filter(
                 item ->
-                    CostValidityStatus.matchesFilter(
-                        item.getStatus(), statusFilter, item.getValidDate()))
+                    CostValidityStatus.matchesFilterRoad(
+                        item.getStatus(), statusFilter, item.getExtraFields(), item.getValidDate()))
             .toList();
-    return paginate(filtered, safePage, safePageSize);
+    if (sort != null) {
+      return items.stream().sorted(CostGridSort.roadComparator(sort)).toList();
+    }
+    return items;
+  }
+
+  private boolean matchesRoadDateSearch(CostRoad item, String effectiveDate, String validDate) {
+    String eff =
+        CostDateSearchFilter.readExtraText(item.getExtraFields(), CostValidityStatus.ROAD_EFFECTIVE_FIELD);
+    return CostDateSearchFilter.matchesRange(eff, item.getValidDate(), effectiveDate, validDate);
+  }
+
+  private List<CostRoad> findMatchingRoadsFromCriteria(Map<String, Object> criteria) {
+    return findMatchingRoads(
+        CostBatchCriteriaMaps.string(criteria, "zipCode"),
+        CostBatchCriteriaMaps.string(criteria, "city"),
+        CostBatchCriteriaMaps.string(criteria, "state"),
+        CostBatchCriteriaMaps.string(criteria, "por"),
+        CostBatchCriteriaMaps.string(criteria, "pol"),
+        CostBatchCriteriaMaps.string(criteria, "supplier"),
+        CostBatchCriteriaMaps.decimal(criteria, "redelivery"),
+        CostBatchCriteriaMaps.string(criteria, "effectiveDate"),
+        CostBatchCriteriaMaps.string(criteria, "validDate"),
+        CostBatchCriteriaMaps.string(criteria, "status"),
+        null);
+  }
+
+  private List<Long> resolveRoadBatchIds(
+      List<Long> ids, Map<String, Object> searchCriteria, List<Long> excludeIds) {
+    return CostBatchIdResolver.resolve(
+        ids,
+        searchCriteria,
+        excludeIds,
+        () ->
+            findMatchingRoadsFromCriteria(searchCriteria).stream()
+                .map(CostRoad::getId)
+                .toList());
   }
 
   public RoadCostResponse getById(Long id) {
@@ -198,7 +366,9 @@ public class CostRoadService {
     sourceExtras.put(EXTRA_RENEWED_TO, created.id());
     source.setExtraFields(sourceExtras);
     source.setValidDate(previousValidText);
-    source.setStatus(CostValidityStatus.resolve(CostStatus.active, previousValidText));
+    source.setStatus(
+        CostValidityStatus.resolveRoad(
+            CostStatus.active, source.getExtraFields(), previousValidText));
     source.touch();
     repository.save(source);
     return created;
@@ -280,45 +450,28 @@ public class CostRoadService {
 
   @Transactional
   public void batchDelete(CostBatchDeleteRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveRoadBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return;
     }
-    repository.deleteAllById(request.ids());
+    repository.deleteAllById(ids);
   }
 
   @Transactional
   public int batchUpdate(CostBatchUpdateRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
+    List<Long> ids =
+        resolveRoadBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
       return 0;
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
     int updated = 0;
-    for (Long id : request.ids()) {
+    for (Long id : ids) {
       CostRoad entity = requireEntity(id);
-      boolean fscChanged = false;
-      if (fields.containsKey("fsc")) {
-        entity.setFsc(asDecimal(fields.get("fsc")));
-        fscChanged = true;
-      }
-      if (fields.containsKey("validDate")) {
-        entity.setValidDate(asString(fields.get("validDate")));
-        entity.setStatus(CostValidityStatus.resolve(CostStatus.active, entity.getValidDate()));
-      }
-      // 兼容旧批量字段
-      if (fields.containsKey("remark")) {
-        entity.setRemark(asString(fields.get("remark")));
-      }
-      if (fields.containsKey("supplier")) {
-        entity.setSupplier(asString(fields.get("supplier")));
-      }
-      if (fields.containsKey("baseFreight")) {
-        entity.setBaseFreight(asDecimal(fields.get("baseFreight")));
-      }
-      if (fscChanged
-          || fields.containsKey("supplier")
-          || fields.containsKey("baseFreight")) {
-        applyAllInFormulas(entity);
-      }
+      applyRoadFieldOverrides(entity, fields);
       if (fields.containsKey("supplier")) {
         validateMasterRefs(entity);
       }
@@ -329,40 +482,162 @@ public class CostRoadService {
     return updated;
   }
 
+  private void applyRoadFieldOverrides(CostRoad entity, Map<String, Object> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return;
+    }
+    boolean fscChanged = false;
+    boolean formulaInputChanged = false;
+    if (fields.containsKey("fsc")) {
+      entity.setFsc(asDecimal(fields.get("fsc")));
+      fscChanged = true;
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("validDate")) {
+      entity.setValidDate(asString(fields.get("validDate")));
+    }
+    if (fields.containsKey("chassis")) {
+      entity.setChassis(asDecimal(fields.get("chassis")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("triTandemAxle")) {
+      entity.setTriTandemAxle(asDecimal(fields.get("triTandemAxle")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("split")) {
+      entity.setSplit(asDecimal(fields.get("split")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("stopOff")) {
+      entity.setStopOff(asDecimal(fields.get("stopOff")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("waitingFee")) {
+      entity.setWaitingFee(asDecimal(fields.get("waitingFee")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("redelivery")) {
+      entity.setRedelivery(asDecimal(fields.get("redelivery")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("prepull")) {
+      entity.setPrepull(asDecimal(fields.get("prepull")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("nsLift")) {
+      entity.setNsLift(asDecimal(fields.get("nsLift")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("otherFee")) {
+      entity.setOtherFee(asDecimal(fields.get("otherFee")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("remark")) {
+      entity.setRemark(asString(fields.get("remark")));
+    }
+    if (fields.containsKey("supplier")) {
+      entity.setSupplier(asString(fields.get("supplier")));
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey("baseFreight")) {
+      entity.setBaseFreight(asDecimal(fields.get("baseFreight")));
+      formulaInputChanged = true;
+    }
+    Map<String, Object> extra =
+        entity.getExtraFields() == null
+            ? new HashMap<>()
+            : new HashMap<>(entity.getExtraFields());
+    boolean extraChanged = false;
+    if (fields.containsKey(ROAD_YARD_STORAGE)) {
+      extra.put(ROAD_YARD_STORAGE, asDecimal(fields.get(ROAD_YARD_STORAGE)));
+      extraChanged = true;
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey(ROAD_EXTRA_CHASSIS)) {
+      extra.put(ROAD_EXTRA_CHASSIS, asDecimal(fields.get(ROAD_EXTRA_CHASSIS)));
+      extraChanged = true;
+      formulaInputChanged = true;
+    }
+    if (fields.containsKey(ROAD_REMARK)) {
+      extra.put(ROAD_REMARK, asString(fields.get(ROAD_REMARK)));
+      extraChanged = true;
+    }
+    if (fields.containsKey(CostValidityStatus.ROAD_EFFECTIVE_FIELD)) {
+      extra.put(
+          CostValidityStatus.ROAD_EFFECTIVE_FIELD,
+          asString(fields.get(CostValidityStatus.ROAD_EFFECTIVE_FIELD)));
+      extraChanged = true;
+    }
+    if (extraChanged) {
+      entity.setExtraFields(extra);
+    }
+    if (fields.containsKey("validDate")
+        || fields.containsKey(CostValidityStatus.ROAD_EFFECTIVE_FIELD)) {
+      entity.setStatus(
+          CostValidityStatus.resolveRoad(
+              CostStatus.active, entity.getExtraFields(), entity.getValidDate()));
+    }
+    if (fscChanged
+        || formulaInputChanged
+        || fields.containsKey("supplier")
+        || fields.containsKey("baseFreight")) {
+      applyAllInFormulas(entity);
+    }
+  }
+
+  private boolean hasAnyRoadFieldOverride(Map<String, Object> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return false;
+    }
+    for (Object value : fields.values()) {
+      if (value == null) {
+        continue;
+      }
+      if (value instanceof String text) {
+        if (!text.isBlank()) {
+          return true;
+        }
+      } else {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Transactional
-  public int batchCopy(CostRoadBatchCopyRequest request) {
-    if (request.ids() == null || request.ids().isEmpty()) {
-      return 0;
+  public CostRoadBatchCopyResult batchCopy(CostRoadBatchCopyRequest request) {
+    List<Long> ids =
+        resolveRoadBatchIds(
+            request.ids(), request.searchCriteria(), request.excludeIds());
+    if (ids.isEmpty()) {
+      return new CostRoadBatchCopyResult(0, List.of());
     }
     boolean applyOverrides = Boolean.TRUE.equals(request.applyOverrides());
-    if (applyOverrides
-        && request.fsc() == null
-        && (request.validDate() == null || request.validDate().isBlank())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写燃油或有效期");
+    Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
+    if (applyOverrides && !hasAnyRoadFieldOverride(fields)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写一项要统一修改的字段");
     }
+    boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    List<RoadCostResponse> items = new ArrayList<>();
     int created = 0;
-    for (Long id : request.ids()) {
+    for (Long id : ids) {
       CostRoad source = requireEntity(id);
       CostRoad copy = copyOf(source);
       if (applyOverrides) {
-        boolean fscChanged = false;
-        if (request.fsc() != null) {
-          copy.setFsc(request.fsc());
-          fscChanged = true;
-        }
-        if (request.validDate() != null && !request.validDate().isBlank()) {
-          copy.setValidDate(request.validDate().trim());
-        }
-        copy.setStatus(CostValidityStatus.resolve(CostStatus.active, copy.getValidDate()));
-        if (fscChanged) {
-          applyAllInFormulas(copy);
-        }
+        applyRoadFieldOverrides(copy, fields);
       }
-      copy.touch();
-      repository.save(copy);
-      created++;
+      if (previewOnly) {
+        items.add(RoadCostResponse.from(copy));
+      } else {
+        copy.touch();
+        items.add(RoadCostResponse.from(repository.save(copy)));
+        created++;
+      }
     }
-    return created;
+    if (previewOnly) {
+      created = items.size();
+    }
+    return new CostRoadBatchCopyResult(created, items);
   }
 
   private CostRoad copyOf(CostRoad source) {
@@ -441,6 +716,7 @@ public class CostRoadService {
       String pol,
       String supplier,
       BigDecimal redelivery,
+      String effectiveDate,
       String validDate,
       String status,
       Long templateId,
@@ -454,8 +730,9 @@ public class CostRoadService {
     } else {
       String statusFilter = status;
       boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
+      String ed = SearchText.orEmpty(effectiveDate);
       String vd = SearchText.orEmpty(validDate);
-      boolean filterDates = !vd.isEmpty();
+      boolean filterDates = !vd.isEmpty() || !ed.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       items =
           repository
@@ -467,16 +744,18 @@ public class CostRoadService {
                   SearchText.orEmpty(pol),
                   SearchText.orEmpty(supplier),
                   redelivery,
+                  false,
+                  List.of(-1L),
                   pageable)
               .getContent();
       if (filterStatus || filterDates) {
         items =
             items.stream()
-                .filter(item -> CostDateSearchFilter.matchesValidTo(item.getValidDate(), vd))
+                .filter(item -> matchesRoadDateSearch(item, ed, vd))
                 .filter(
                     item ->
-                        CostValidityStatus.matchesFilter(
-                            item.getStatus(), statusFilter, item.getValidDate()))
+                        CostValidityStatus.matchesFilterRoad(
+                            item.getStatus(), statusFilter, item.getExtraFields(), item.getValidDate()))
                 .sorted(Comparator.comparing(CostRoad::getId))
                 .toList();
       }
@@ -576,7 +855,9 @@ public class CostRoadService {
             row, headers, "上下车费", "LIFT", "NS LIFT", "TO LIFT"));
     entity.setOtherFee(
         CostExcelSupport.readDecimalByHeader(row, headers, "其他费", "OTHERS", "OTHER FEE"));
-    entity.setRemark(CostExcelSupport.readByHeader(row, headers, "备注", "REMARK"));
+    entity.setRemark(
+        CostExcelSupport.readByHeader(
+            row, headers, "操作备注", "OPERATION REMARK", "操作 REMARK"));
     entity.setValidDate(
         CostExcelSupport.readByHeader(
             row, headers, "有效期", "VALID TIME", "VALID DATE", "*VALID DATE", "*VALID TIME"));
@@ -594,6 +875,10 @@ public class CostRoadService {
             "LOG YARD"));
     Map<String, Object> extra =
         entity.getExtraFields() == null ? new HashMap<>() : new HashMap<>(entity.getExtraFields());
+    putExtraText(
+        extra,
+        ROAD_REMARK,
+        CostExcelSupport.readByHeader(row, headers, "备注", "REMARK"));
     putExtraDecimal(
         extra,
         "cf_road_yard_storage",
@@ -626,7 +911,9 @@ public class CostRoadService {
     CostTemplateImportSupport.applyCustomFields("road", layout, row, headers, extra);
     overlayRoadTemplateDates(entity, extra, layout, row);
     entity.setExtraFields(extra);
-    entity.setStatus(CostValidityStatus.resolve(CostStatus.active, entity.getValidDate()));
+    entity.setStatus(
+        CostValidityStatus.resolveRoad(
+            CostStatus.active, entity.getExtraFields(), entity.getValidDate()));
     if (isImportRowEmpty(entity)) {
       return null;
     }
@@ -843,11 +1130,13 @@ public class CostRoadService {
     entity.setRemark(request.remark());
     entity.setValidDate(request.validDate());
     entity.setLogYardNameAddress(request.logYardNameAddress());
-    entity.setStatus(CostValidityStatus.resolve(CostStatus.active, request.validDate()));
     // null 表示未传（保留旧值）；空 map 表示整包清空
     if (request.extraFields() != null) {
       entity.setExtraFields(new LinkedHashMap<>(request.extraFields()));
     }
+    entity.setStatus(
+        CostValidityStatus.resolveRoad(
+            CostStatus.active, entity.getExtraFields(), entity.getValidDate()));
   }
 
   private CostRoad requireEntity(Long id) {

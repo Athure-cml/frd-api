@@ -1,5 +1,6 @@
 package com.furuiduo.quote.shippingline.entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.hibernate.annotations.Formula;
@@ -40,6 +41,12 @@ public class ShippingLine {
 
   @Column(length = 128)
   private String email;
+
+  @Column(name = "contract_no", length = 128)
+  private String contractNo;
+
+  @Column(name = "valid_until")
+  private LocalDate validUntil;
 
   @Column(length = 512)
   private String remark;

@@ -4,13 +4,16 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.furuiduo.quote.cost.entity.CostStatus;
 
-/** 根据有效期文本刷新成本状态：过期标 expired；否则 active。 */
+/** 根据生效期、有效期文本刷新成本状态：未生效 / 生效中 / 已过期。 */
 public final class CostValidityStatus {
+
+  public static final String ROAD_EFFECTIVE_FIELD = "cf_road_eff";
 
   private static final Pattern RANGE =
       Pattern.compile(
@@ -38,17 +41,37 @@ public final class CostValidityStatus {
   private CostValidityStatus() {}
 
   public static CostStatus resolve(CostStatus current, String... validityTexts) {
-    // 成本库不再使用草稿；历史 draft 按有效期重算为 active/expired
+    return resolveWithEffective(current, null, validityTexts);
+  }
+
+  public static CostStatus resolveWithEffective(
+      CostStatus current, String effectiveText, String... validityTexts) {
+    // 成本库不再使用草稿；历史 draft 按日期重算
+    LocalDate today = LocalDate.now();
+    LocalDate start = parseEffectiveDate(effectiveText);
+    if (start != null && start.isAfter(today)) {
+      return CostStatus.pending;
+    }
     LocalDate end = latestEndDate(validityTexts);
-    if (end != null && end.isBefore(LocalDate.now())) {
+    if (end != null && end.isBefore(today)) {
       return CostStatus.expired;
     }
     return CostStatus.active;
   }
 
-  /** 列表/导出筛选：空则不过滤；按「有效期推算后的状态」匹配。 */
+  public static CostStatus resolveRoad(
+      CostStatus current, Map<String, Object> extraFields, String validDate) {
+    return resolveWithEffective(current, roadEffective(extraFields), validDate);
+  }
+
   public static boolean matchesFilter(
       CostStatus current, String statusFilter, String... validityTexts) {
+    return matchesFilterWithEffective(current, statusFilter, null, validityTexts);
+  }
+
+  /** 列表/导出筛选：空则不过滤；按「生效期+有效期推算后的状态」匹配。 */
+  public static boolean matchesFilterWithEffective(
+      CostStatus current, String statusFilter, String effectiveText, String... validityTexts) {
     if (statusFilter == null || statusFilter.isBlank()) {
       return true;
     }
@@ -58,7 +81,36 @@ public final class CostValidityStatus {
     } catch (IllegalArgumentException ex) {
       return false;
     }
-    return resolve(current, validityTexts) == expected;
+    return resolveWithEffective(current, effectiveText, validityTexts) == expected;
+  }
+
+  public static boolean matchesFilterRoad(
+      CostStatus current, String statusFilter, Map<String, Object> extraFields, String validDate) {
+    return matchesFilterWithEffective(
+        current, statusFilter, roadEffective(extraFields), validDate);
+  }
+
+  public static String roadEffective(Map<String, Object> extraFields) {
+    return extraFieldText(extraFields, ROAD_EFFECTIVE_FIELD);
+  }
+
+  public static String extraFieldText(Map<String, Object> extraFields, String key) {
+    if (extraFields == null || key == null) {
+      return null;
+    }
+    Object value = extraFields.get(key);
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value).trim();
+    return text.isEmpty() || "null".equalsIgnoreCase(text) ? null : text;
+  }
+
+  private static LocalDate parseEffectiveDate(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    return tryParseRangeStart(raw);
   }
 
   private static LocalDate latestEndDate(String... validityTexts) {

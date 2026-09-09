@@ -2,6 +2,7 @@ package com.furuiduo.quote.exchangerate.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,16 @@ public class ExchangeRateCommandService {
   @Transactional
   public void delete(Long id) {
     exchangeRateRepository.delete(requireEntity(id));
+  }
+
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
   }
 
   private ExchangeRate requireEntity(Long id) {

@@ -46,10 +46,6 @@ public class AiPermissionSeeder implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (permissionRepository.count() == 0) {
-      return;
-    }
-
     Map<String, SysPermission> permissions = ensurePermissions();
     for (SysRole role : roleRepository.findAll()) {
       if (grantPermissions(role, permissions)) {

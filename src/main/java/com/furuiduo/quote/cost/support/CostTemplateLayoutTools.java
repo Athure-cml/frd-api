@@ -56,8 +56,62 @@ public final class CostTemplateLayoutTools {
     }
     if ("road".equals(mode)) {
       next = ensureRoadFeeUnitFields(next);
+      next = ensureRoadRemarkField(next);
     }
     return next;
+  }
+
+  private static CostTableTemplateLayout ensureRoadRemarkField(CostTableTemplateLayout layout) {
+    if (layout == null) {
+      return null;
+    }
+    String remarkField = CostTemplateLayouts.ROAD_REMARK;
+    List<String> order = new ArrayList<>(CostFieldCatalog.resolveFieldKeys(layout));
+    Map<String, CostTableCustomFieldDef> customByField = new LinkedHashMap<>();
+    if (layout.customFields() != null) {
+      for (CostTableCustomFieldDef def : layout.customFields()) {
+        if (def != null && def.field() != null) {
+          customByField.put(def.field(), def);
+        }
+      }
+    }
+    Map<String, CostTableFieldOverride> overrides =
+        layout.fieldOverrides() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(layout.fieldOverrides());
+
+    boolean changed = false;
+    if (order.contains(remarkField) && !customByField.containsKey(remarkField)) {
+      customByField.put(
+          remarkField, new CostTableCustomFieldDef(remarkField, "REMARK", null, "text"));
+      changed = true;
+    }
+    CostTableFieldOverride remarkOverride = overrides.get("remark");
+    if (remarkOverride == null
+        || remarkOverride.title() == null
+        || remarkOverride.title().isBlank()
+        || "REMARK".equalsIgnoreCase(remarkOverride.title().trim())) {
+      overrides.put("remark", mergeOverrideTitle(remarkOverride, "操作备注"));
+      changed = true;
+    }
+    CostTableFieldOverride extraRemarkOverride = overrides.get(remarkField);
+    if (order.contains(remarkField)
+        && (extraRemarkOverride == null
+            || extraRemarkOverride.title() == null
+            || extraRemarkOverride.title().isBlank())) {
+      overrides.put(remarkField, mergeOverrideTitle(extraRemarkOverride, "REMARK"));
+      changed = true;
+    }
+
+    if (!changed) {
+      return layout;
+    }
+    return new CostTableTemplateLayout(
+        layout.groups(),
+        order,
+        overrides,
+        order,
+        new ArrayList<>(customByField.values()));
   }
 
   private record RoadFeeUnitPair(String amountField, String unitField, String unitTitle) {}

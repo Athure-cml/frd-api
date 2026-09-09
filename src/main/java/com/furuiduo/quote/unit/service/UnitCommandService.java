@@ -1,6 +1,7 @@
 package com.furuiduo.quote.unit.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,16 @@ public class UnitCommandService {
   public void delete(Long id) {
     Unit unit = requireEntity(id);
     unitRepository.delete(unit);
+  }
+
+  @Transactional
+  public void batchDelete(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return;
+    }
+    for (Long id : ids) {
+      delete(id);
+    }
   }
 
   private Unit requireEntity(Long id) {

@@ -13,4 +13,6 @@ public interface QuoteCostSnapshotRepository extends JpaRepository<QuoteCostSnap
 
   List<QuoteCostSnapshot> findByQuoteOrderIdAndCostTypeOrderByCreatedAtDesc(
       Long quoteId, QuoteCostType costType);
+
+  void deleteByQuoteOrderId(Long quoteOrderId);
 }

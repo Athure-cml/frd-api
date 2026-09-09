@@ -6,6 +6,7 @@ import java.util.Map;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
+import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 
@@ -67,6 +68,11 @@ public final class QuoteCostSnapshotMapper {
     map.put("remark", road.getRemark());
     map.put("validDate", road.getValidDate());
     map.put("logYardNameAddress", road.getLogYardNameAddress());
+    map.put(
+        "status",
+        CostValidityStatus.resolveRoad(
+                road.getStatus(), road.getExtraFields(), road.getValidDate())
+            .name());
     if (road.getExtraFields() != null && !road.getExtraFields().isEmpty()) {
       map.put("extraFields", road.getExtraFields());
     }
@@ -96,6 +102,9 @@ public final class QuoteCostSnapshotMapper {
     map.put("ssl", sea.getSsl());
     map.put("agent", sea.getAgent());
     map.put("remark", sea.getRemark());
+    map.put(
+        "status",
+        CostValidityStatus.resolve(sea.getStatus(), sea.getFreightValidDate()).name());
     if (sea.getExtraFields() != null && !sea.getExtraFields().isEmpty()) {
       map.put("extraFields", sea.getExtraFields());
     }
@@ -115,6 +124,11 @@ public final class QuoteCostSnapshotMapper {
     map.put("indoorValidity", fum.getIndoorValidity());
     map.put("address", fum.getAddress());
     map.put("updatedAt", fum.getUpdatedAt() != null ? fum.getUpdatedAt().toString() : null);
+    map.put(
+        "status",
+        CostValidityStatus.resolve(
+                fum.getStatus(), fum.getOutdoorValidity(), fum.getIndoorValidity())
+            .name());
     if (fum.getExtraFields() != null && !fum.getExtraFields().isEmpty()) {
       map.put("extraFields", fum.getExtraFields());
     }

@@ -149,7 +149,8 @@ public final class CostDataExcelExporter {
       case "logYardNameAddress" -> item.getLogYardNameAddress();
       case "status" ->
           formatStatusLabel(
-              CostValidityStatus.resolve(item.getStatus(), item.getValidDate()));
+              CostValidityStatus.resolveRoad(
+                  item.getStatus(), item.getExtraFields(), item.getValidDate()));
       default -> null;
     };
   }
@@ -218,6 +219,7 @@ public final class CostDataExcelExporter {
     }
     return switch (status) {
       case active -> "生效中";
+      case pending -> "未生效";
       case draft -> "草稿";
       case expired -> "已过期";
     };

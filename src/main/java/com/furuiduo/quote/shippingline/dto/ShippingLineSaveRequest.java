@@ -1,5 +1,7 @@
 package com.furuiduo.quote.shippingline.dto;
 
+import java.time.LocalDate;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "船公司保存")
@@ -9,5 +11,7 @@ public record ShippingLineSaveRequest(
     @Schema(description = "联系人") String contactName,
     @Schema(description = "电话") String phone,
     @Schema(description = "邮箱") String email,
+    @Schema(description = "约号") String contractNo,
+    @Schema(description = "有效期") LocalDate validUntil,
     @Schema(description = "备注") String remark,
     @Schema(description = "状态 1启用 0停用") Integer status) {}

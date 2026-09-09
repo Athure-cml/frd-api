@@ -1,7 +1,9 @@
 package com.furuiduo.quote.shippingline.service;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -19,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.PartyImportCodeKind;
+import com.furuiduo.quote.common.PartyImportContext;
+import com.furuiduo.quote.common.PartyImportSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
 import com.furuiduo.quote.common.PartyReorderSupport;
@@ -27,6 +32,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
+import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.shippingline.dto.ShippingLineResponse;
 import com.furuiduo.quote.shippingline.dto.ShippingLineSaveRequest;
 import com.furuiduo.quote.shippingline.entity.ShippingLine;
@@ -38,8 +44,11 @@ import com.furuiduo.quote.sys.entity.SysUser;
 public class ShippingLineCommandService {
 
   private static final String[] EXPORT_HEADERS = {
-    "编码", "名称", "简称", "联系人", "电话", "邮箱", "备注", "状态"
+    "编码", "名称", "简称", "联系人", "电话", "邮箱", "约号", "有效期", "备注", "状态"
   };
+
+  private static final DateTimeFormatter EXPORT_DATE_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
   private final ShippingLineRepository repository;
   private final ShippingLineCodeGenerator codeGenerator;
@@ -131,13 +140,15 @@ public class ShippingLineCommandService {
   @Transactional
   public CostImportResult importExcel(SysUser user, MultipartFile file, boolean dryRun)
       throws IOException {
+    PartyImportContext importContext =
+        PartyImportContext.fromDbCodes(repository.findAllCodes());
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         EXPORT_HEADERS,
         this::mapImportRow,
-        (row) -> validateImportRow(row, seenNames),
-        (rowNum, row) -> upsertImported(user, row),
+        (row) -> validateImportRow(row, seenNames, importContext),
+        (rowNum, row) -> upsertImported(user, row, importContext),
         dryRun);
   }
 
@@ -176,8 +187,14 @@ public class ShippingLineCommandService {
             .setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContactName()));
         row.createCell(4).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
         row.createCell(5).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
-        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
-        row.createCell(7).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
+        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContractNo()));
+        row.createCell(7)
+            .setCellValue(
+                item.getValidUntil() == null
+                    ? ""
+                    : item.getValidUntil().format(EXPORT_DATE_FORMATTER));
+        row.createCell(8).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
+        row.createCell(9).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
@@ -185,13 +202,20 @@ public class ShippingLineCommandService {
     }
   }
 
-  private void upsertImported(SysUser user, ImportRow row) {
+  private void upsertImported(SysUser user, ImportRow row, PartyImportContext importContext) {
     String name = PartyMasterExcelSupport.normalizeName(row.name());
-    ShippingLine entity = resolveForImport(row.code(), name);
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.SHIPPING_LINE, row.code());
+    ShippingLine entity = resolveForImport(importCode, name, importContext);
     boolean creating = entity.getId() == null;
     if (creating) {
       assertNameAvailable(name, null);
-      entity.setCode(codeGenerator.next());
+      if (importCode != null) {
+        entity.setCode(importCode);
+        importContext.reserveAssignedCode(importCode);
+      } else {
+        entity.setCode(importContext.allocateGenerated(codeGenerator::next));
+      }
       entity.setCreatedBy(user.getId());
       entity.setCreatedByName(user.getRealName());
       entity.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -203,6 +227,8 @@ public class ShippingLineCommandService {
     entity.setContactName(PartyMasterExcelSupport.trimToNull(row.contactName()));
     entity.setPhone(PartyMasterExcelSupport.trimToNull(row.phone()));
     entity.setEmail(PartyMasterExcelSupport.trimToNull(row.email()));
+    entity.setContractNo(PartyMasterExcelSupport.trimToNull(row.contractNo()));
+    entity.setValidUntil(row.validUntil());
     entity.setRemark(PartyMasterExcelSupport.trimToNull(row.remark()));
     entity.setStatus(
         PartyMasterExcelSupport.resolveStatus(row.status(), creating ? null : entity.getStatus()));
@@ -211,12 +237,12 @@ public class ShippingLineCommandService {
   }
 
   /** 仅当编码命中时更新；名称已存在且编码未命中则拒绝。 */
-  private ShippingLine resolveForImport(String code, String name) {
-    if (code != null && !code.isBlank()) {
-      ShippingLine byCode = repository.findByCode(code.trim()).orElse(null);
-      if (byCode != null) {
-        return byCode;
-      }
+  private ShippingLine resolveForImport(
+      String importCode, String name, PartyImportContext importContext) {
+    if (importCode != null && importContext.isPreExisting(importCode)) {
+      return repository
+          .findByCode(importCode)
+          .orElseThrow(() -> new IllegalStateException("编码不存在：" + importCode));
     }
     if (repository.existsByNameNormalized(name, null)) {
       throw new IllegalArgumentException("船公司名称已存在：" + name + "（如需更新请填写正确编码）");
@@ -234,6 +260,9 @@ public class ShippingLineCommandService {
         CostExcelSupport.readByHeader(row, headers, "联系人", "Contact", "Contact Name");
     String phone = CostExcelSupport.readByHeader(row, headers, "电话", "Phone", "Mobile");
     String email = CostExcelSupport.readByHeader(row, headers, "邮箱", "Email");
+    String contractNo = CostExcelSupport.readByHeader(row, headers, "约号", "Contract No", "ContractNo");
+    String validUntilRaw =
+        CostExcelSupport.readByHeader(row, headers, "有效期", "Valid Until", "ValidUntil");
     String remark = CostExcelSupport.readByHeader(row, headers, "备注", "Remark");
     String statusRaw = CostExcelSupport.readByHeader(row, headers, "状态", "Status");
     if (code.isBlank()
@@ -242,6 +271,8 @@ public class ShippingLineCommandService {
         && contactName.isBlank()
         && phone.isBlank()
         && email.isBlank()
+        && contractNo.isBlank()
+        && validUntilRaw.isBlank()
         && remark.isBlank()
         && statusRaw.isBlank()) {
       return null;
@@ -253,20 +284,44 @@ public class ShippingLineCommandService {
         contactName,
         phone,
         email,
+        contractNo,
+        validUntilRaw,
         remark,
         PartyMasterExcelSupport.parseStatusCell(statusRaw));
   }
 
-  private String validateImportRow(ImportRow row, Set<String> seenNames) {
+  private String validateImportRow(
+      ImportRow row, Set<String> seenNames, PartyImportContext importContext) {
     if (row.name() == null || row.name().isBlank()) {
       return "名称不能为空";
     }
     if (row.status() != null && row.status().isUnrecognized()) {
       return "状态无效（请填启用/停用或 1/0）";
     }
+    if (row.validUntilRaw() != null
+        && !row.validUntilRaw().isBlank()
+        && CostValidityStatus.tryParseDate(row.validUntilRaw()) == null) {
+      return "有效期格式无效（请填 yyyy/MM/dd）";
+    }
     String key = PartyMasterExcelSupport.nameKey(row.name());
     if (!seenNames.add(key)) {
       return "名称与文件中其他行重复";
+    }
+    String codeError =
+        PartyImportSupport.validateImportCode(
+            PartyImportCodeKind.SHIPPING_LINE, row.code(), importContext, null);
+    if (codeError != null) {
+      return codeError;
+    }
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.SHIPPING_LINE, row.code());
+    String name = PartyMasterExcelSupport.normalizeName(row.name());
+    if (importCode != null && !importContext.isPreExisting(importCode)) {
+      if (repository.existsByNameNormalized(name, null)) {
+        return "船公司名称已存在：" + name + "（如需更新请填写正确编码）";
+      }
+    } else if (importCode == null && repository.existsByNameNormalized(name, null)) {
+      return "船公司名称已存在：" + name;
     }
     return null;
   }
@@ -293,6 +348,8 @@ public class ShippingLineCommandService {
     entity.setContactName(PartyMasterExcelSupport.trimToNull(request.contactName()));
     entity.setPhone(PartyMasterExcelSupport.trimToNull(request.phone()));
     entity.setEmail(PartyMasterExcelSupport.trimToNull(request.email()));
+    entity.setContractNo(PartyMasterExcelSupport.trimToNull(request.contractNo()));
+    entity.setValidUntil(request.validUntil());
     entity.setRemark(PartyMasterExcelSupport.trimToNull(request.remark()));
     entity.setStatus(request.status());
     entity.setUpdatedAt(LocalDateTime.now());
@@ -305,6 +362,16 @@ public class ShippingLineCommandService {
       String contactName,
       String phone,
       String email,
+      String contractNo,
+      String validUntilRaw,
       String remark,
-      StatusCell status) {}
+      StatusCell status) {
+
+    LocalDate validUntil() {
+      if (validUntilRaw == null || validUntilRaw.isBlank()) {
+        return null;
+      }
+      return CostValidityStatus.tryParseDate(validUntilRaw);
+    }
+  }
 }

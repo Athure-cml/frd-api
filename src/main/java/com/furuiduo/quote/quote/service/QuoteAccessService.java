@@ -47,4 +47,20 @@ public class QuoteAccessService {
     }
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该报价单");
   }
+
+  public boolean isSuperAdmin(SysUser user) {
+    return permissionService.getRoleCodes(user).contains("super_admin");
+  }
+
+  public boolean canOperate(SysUser user, QuoteOrder order) {
+    return isSuperAdmin(user) || user.getId().equals(order.getCreatedBy());
+  }
+
+  /** 单据生命周期操作：仅创建人或超级管理员 */
+  public void assertOperable(SysUser user, QuoteOrder order) {
+    assertReadable(user, order);
+    if (!canOperate(user, order)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅创建人或超级管理员可操作");
+    }
+  }
 }

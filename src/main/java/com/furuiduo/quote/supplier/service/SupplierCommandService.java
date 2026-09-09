@@ -20,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.common.PartyImportCodeKind;
+import com.furuiduo.quote.common.PartyImportContext;
+import com.furuiduo.quote.common.PartyImportSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport;
 import com.furuiduo.quote.common.PartyMasterExcelSupport.StatusCell;
 import com.furuiduo.quote.common.PartyReorderSupport;
@@ -152,13 +155,15 @@ public class SupplierCommandService {
   public CostImportResult importExcel(
       SysUser user, MultipartFile file, String category, boolean dryRun) throws IOException {
     String normalized = resolveCategory(category);
+    PartyImportContext importContext =
+        PartyImportContext.fromDbCodes(supplierRepository.findAllCodes());
     Set<String> seenNames = new HashSet<>();
     return CostExcelSupport.importRows(
         file,
         exportHeaders(normalized),
         (row) -> mapImportRow(row, normalized),
-        (row) -> validateImportRow(row, seenNames, normalized),
-        (rowNum, row) -> upsertImported(user, row, normalized),
+        (row) -> validateImportRow(row, seenNames, normalized, importContext),
+        (rowNum, row) -> upsertImported(user, row, normalized, importContext),
         dryRun);
   }
 
@@ -229,17 +234,25 @@ public class SupplierCommandService {
     }
   }
 
-  private void upsertImported(SysUser user, ImportRow row, String category) {
+  private void upsertImported(
+      SysUser user, ImportRow row, String category, PartyImportContext importContext) {
     if (row.typeError() != null) {
       throw new IllegalArgumentException(row.typeError());
     }
     String name = PartyMasterExcelSupport.normalizeName(row.name());
-    Supplier supplier = resolveForImport(row.code(), name, category);
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.SUPPLIER, row.code());
+    Supplier supplier = resolveForImport(importCode, name, category, importContext);
     boolean creating = supplier.getId() == null;
     if (creating) {
       assertNameAvailable(category, name, null);
       supplier.setCategory(category);
-      supplier.setCode(supplierCodeGenerator.next(category));
+      if (importCode != null) {
+        supplier.setCode(importCode);
+        importContext.reserveAssignedCode(importCode);
+      } else {
+        supplier.setCode(importContext.allocateGenerated(() -> supplierCodeGenerator.next(category)));
+      }
       supplier.setCreatedBy(user.getId());
       supplier.setCreatedByName(user.getRealName());
       supplier.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -283,12 +296,14 @@ public class SupplierCommandService {
     supplierRepository.save(supplier);
   }
 
-  private Supplier resolveForImport(String code, String name, String category) {
-    if (code != null && !code.isBlank()) {
-      Supplier byCode = supplierRepository.findByCode(code.trim()).orElse(null);
-      if (byCode != null) {
-        return byCode;
-      }
+  private Supplier resolveForImport(
+      String importCode, String name, String category, PartyImportContext importContext) {
+    if (importCode != null && importContext.isPreExisting(importCode)) {
+      Supplier byCode =
+          supplierRepository
+              .findByCode(importCode)
+              .orElseThrow(() -> new IllegalStateException("编码不存在：" + importCode));
+      return byCode;
     }
     if (supplierRepository.existsByCategoryAndNameNormalized(category, name, null)) {
       throw new IllegalArgumentException("供应商名称已存在：" + name + "（如需更新请填写正确编码）");
@@ -362,7 +377,11 @@ public class SupplierCommandService {
         typeError);
   }
 
-  private String validateImportRow(ImportRow row, Set<String> seenNames, String category) {
+  private String validateImportRow(
+      ImportRow row,
+      Set<String> seenNames,
+      String category,
+      PartyImportContext importContext) {
     if (row.typeError() != null) {
       return row.typeError();
     }
@@ -376,20 +395,26 @@ public class SupplierCommandService {
     if (!seenNames.add(key)) {
       return "名称与文件中其他行重复";
     }
-    return validateImportConflict(row, category);
+    String codeError =
+        PartyImportSupport.validateImportCode(
+            PartyImportCodeKind.SUPPLIER, row.code(), importContext, category);
+    if (codeError != null) {
+      return codeError;
+    }
+    return validateImportConflict(row, category, importContext);
   }
 
-  private String validateImportConflict(ImportRow row, String category) {
-    String code = PartyMasterExcelSupport.trimToNull(row.code());
-    if (code != null) {
-      Supplier byCode = supplierRepository.findByCode(code).orElse(null);
-      if (byCode != null) {
-        if (!category.equals(byCode.getCategory())) {
-          return "编码已存在于其他供应商分类，无法导入到"
-              + SupplierCategories.displayName(category);
-        }
-        return null;
+  private String validateImportConflict(
+      ImportRow row, String category, PartyImportContext importContext) {
+    String importCode =
+        PartyImportSupport.normalizeImportCode(PartyImportCodeKind.SUPPLIER, row.code());
+    if (importCode != null && importContext.isPreExisting(importCode)) {
+      Supplier byCode = supplierRepository.findByCode(importCode).orElse(null);
+      if (byCode != null && !category.equals(byCode.getCategory())) {
+        return "编码已存在于其他供应商分类，无法导入到"
+            + SupplierCategories.displayName(category);
       }
+      return null;
     }
     String name = PartyMasterExcelSupport.normalizeName(row.name());
     if (supplierRepository.existsByCategoryAndNameNormalized(category, name, null)) {

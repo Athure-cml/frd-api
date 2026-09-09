@@ -94,7 +94,10 @@ public class QuoteQueryService {
             pageable);
 
     return new PageResult<>(
-        result.getContent().stream().map(QuoteListItem::from).toList(), result.getTotalElements());
+        result.getContent().stream()
+            .map(order -> QuoteListItem.from(order, quoteAccessService.canOperate(user, order)))
+            .toList(),
+        result.getTotalElements());
   }
 
   /** 导出用：按列表同款筛选条件返回实体（无筛选即权限范围内全部）。 */
@@ -147,7 +150,8 @@ public class QuoteQueryService {
     return QuoteDetailResponse.from(
         order,
         quoteCostMatchService.listSnapshots(id, null),
-        quoteFollowUpService.list(user, id));
+        quoteFollowUpService.list(user, id),
+        quoteAccessService.canOperate(user, order));
   }
 
   public PageResult<com.furuiduo.quote.sys.dto.OperationLogResponse> listOperationLogs(
