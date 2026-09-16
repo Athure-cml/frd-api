@@ -108,6 +108,15 @@ public final class RoadAllInFormulaEvaluator {
 
   private RoadAllInFormulaEvaluator() {}
 
+  public static boolean hasAnyFormula(Supplier supplier) {
+    if (supplier == null) {
+      return false;
+    }
+    return hasFormulaText(supplier.getNonFumigationPackageFormula())
+        || hasFormulaText(supplier.getFumigationNonOakPackageFormula())
+        || hasFormulaText(supplier.getFumigationOakPackageFormula());
+  }
+
   public static void applySupplierFormulas(CostRoad entity, Supplier supplier) {
     applySupplierFormulas(entity, supplier, false);
   }
@@ -201,6 +210,10 @@ public final class RoadAllInFormulaEvaluator {
 
   private static BigDecimal nullToZero(BigDecimal value) {
     return value == null ? BigDecimal.ZERO : value;
+  }
+
+  private static boolean hasFormulaText(String formula) {
+    return formula != null && !formula.isBlank();
   }
 
   private static AliasMatch matchFieldAt(String src, int index) {

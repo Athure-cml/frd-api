@@ -27,6 +27,7 @@ import com.furuiduo.quote.quote.entity.QuoteCostSnapshot;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
+import com.furuiduo.quote.quote.support.QuoteCostMatchKeys;
 import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
 import com.furuiduo.quote.quote.support.QuoteCostSnapshotMapper;
 
@@ -62,27 +63,30 @@ public class QuoteCostMatchService {
 
     List<QuoteCostMatchItemDto> matches = new ArrayList<>();
 
-    List<CostRoad> roads =
-        costRoadRepository.matchByRoute(
-            SearchText.orEmpty(request.zipCode()),
-            SearchText.orEmpty(request.city()),
-            SearchText.orEmpty(request.state()),
-            SearchText.orEmpty(roadPor(request)),
-            SearchText.orEmpty(request.pol()),
-            SearchText.orEmpty(roadSupplier(request)));
-    QuoteCostMatchSupport.firstActiveRoad(roads)
-        .ifPresent(road -> matches.add(QuoteCostSnapshotMapper.fromRoad(road, keys)));
+    if (QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+      List<CostRoad> roads =
+          costRoadRepository.matchByRoute(
+              SearchText.orEmpty(request.zipCode()),
+              SearchText.orEmpty(request.city()),
+              SearchText.orEmpty(request.state()),
+              "",
+              "",
+              SearchText.orEmpty(roadSupplier(request)));
+      QuoteCostMatchSupport.firstActiveRoad(roads)
+          .ifPresent(road -> matches.add(QuoteCostSnapshotMapper.fromRoad(road, keys)));
+    }
 
     List<CostSea> seas =
         costSeaRepository.matchByRoute(
-            SearchText.orEmpty(request.pol()),
+            SearchText.orEmpty(QuoteCostMatchKeys.seaPor(request)),
             SearchText.orEmpty(request.pod()),
             SearchText.orEmpty(seaSsl(request)));
-    QuoteCostMatchSupport.firstActiveSea(seas)
+    QuoteCostMatchSupport.firstActiveSeaByPol(seas, QuoteCostMatchKeys.seaPol(request))
         .ifPresent(sea -> matches.add(QuoteCostSnapshotMapper.fromSea(sea, keys)));
 
     List<CostFumigation> fums =
-        costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
+        costFumigationRepository.matchByStation(
+            SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
     QuoteCostMatchSupport.firstActiveFumigation(fums)
         .ifPresent(fum -> matches.add(QuoteCostSnapshotMapper.fromFumigation(fum, keys)));
 
@@ -95,34 +99,39 @@ public class QuoteCostMatchService {
 
   private QuoteMatchCostsResponse matchByType(
       QuoteMatchCostsRequest request, Map<String, Object> keys, QuoteCostType type) {
-    List<CostRoad> roads =
-        costRoadRepository.matchByRoute(
-            SearchText.orEmpty(request.zipCode()),
-            SearchText.orEmpty(request.city()),
-            SearchText.orEmpty(request.state()),
-            SearchText.orEmpty(roadPor(request)),
-            SearchText.orEmpty(request.pol()),
-            SearchText.orEmpty(roadSupplier(request)));
-
     QuoteCostMatchItemDto match =
         switch (type) {
-          case ROAD ->
-              QuoteCostMatchSupport.firstActiveRoad(roads)
-                  .map(road -> QuoteCostSnapshotMapper.fromRoad(road, keys))
-                  .orElse(null);
+          case ROAD -> {
+            if (!QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+              yield null;
+            }
+            List<CostRoad> roads =
+                costRoadRepository.matchByRoute(
+                    SearchText.orEmpty(request.zipCode()),
+                    SearchText.orEmpty(request.city()),
+                    SearchText.orEmpty(request.state()),
+                    "",
+                    "",
+                    SearchText.orEmpty(roadSupplier(request)));
+            yield QuoteCostMatchSupport.firstActiveRoad(roads)
+                .map(road -> QuoteCostSnapshotMapper.fromRoad(road, keys))
+                .orElse(null);
+          }
           case SEA -> {
             List<CostSea> seas =
                 costSeaRepository.matchByRoute(
-                    SearchText.orEmpty(request.pol()),
+                    SearchText.orEmpty(QuoteCostMatchKeys.seaPor(request)),
                     SearchText.orEmpty(request.pod()),
                     SearchText.orEmpty(seaSsl(request)));
-            yield QuoteCostMatchSupport.firstActiveSea(seas)
+            yield QuoteCostMatchSupport.firstActiveSeaByPol(
+                    seas, QuoteCostMatchKeys.seaPol(request))
                 .map(sea -> QuoteCostSnapshotMapper.fromSea(sea, keys))
                 .orElse(null);
           }
           case FUMIGATION -> {
             List<CostFumigation> fums =
-                costFumigationRepository.matchByPort(SearchText.orEmpty(request.pod()));
+                costFumigationRepository.matchByStation(
+                    SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
             yield QuoteCostMatchSupport.firstActiveFumigation(fums)
                 .map(fum -> QuoteCostSnapshotMapper.fromFumigation(fum, keys))
                 .orElse(null);
@@ -243,7 +252,9 @@ public class QuoteCostMatchService {
         chassis = toBigDecimal(snap.get("chassis"));
         waiting = toBigDecimal(snap.get("waitingFee"));
         redeliveryFee = toBigDecimal(snap.get("redelivery"));
-        truckRemark = firstNonBlank(truckRemark, text(snap.get("remark")));
+        truckRemark =
+            firstNonBlank(
+                truckRemark, QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(snap));
       }
     }
 
@@ -270,6 +281,7 @@ public class QuoteCostMatchService {
         null,
         null,
         null,
+        null,
         truckingFee,
         truckingOak,
         null,
@@ -279,7 +291,7 @@ public class QuoteCostMatchService {
   private QuoteSheetFieldsDto emptySuggested() {
     return new QuoteSheetFieldsDto(
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-        null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null);
   }
 
   private String text(Object value) {
@@ -305,7 +317,8 @@ public class QuoteCostMatchService {
         || isNotBlank(request.city())
         || isNotBlank(request.state())
         || isNotBlank(request.zipCode())
-        || isNotBlank(request.ssl());
+        || isNotBlank(request.ssl())
+        || isNotBlank(request.fumigationPoint());
   }
 
   private Map<String, Object> buildMatchKeys(QuoteMatchCostsRequest request) {
@@ -317,16 +330,10 @@ public class QuoteCostMatchService {
     putIfPresent(keys, "pol", request.pol());
     putIfPresent(keys, "supplier", roadSupplier(request));
     putIfPresent(keys, "por", request.por());
+    putIfPresent(keys, "fumigationPoint", request.fumigationPoint());
+    putIfPresent(keys, "station", QuoteCostMatchKeys.fumigationStation(request));
     putIfPresent(keys, "ssl", seaSsl(request));
     return keys;
-  }
-
-  /** 卡车 POR=接货城市；兼容旧入参 city */
-  private String roadPor(QuoteMatchCostsRequest request) {
-    if (isNotBlank(request.por())) {
-      return request.por();
-    }
-    return request.city();
   }
 
   /** 卡车成本库按 supplier 匹配；兼容旧入参 por/zipCode */

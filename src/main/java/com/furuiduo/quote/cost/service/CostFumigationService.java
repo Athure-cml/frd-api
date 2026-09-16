@@ -71,6 +71,11 @@ public class CostFumigationService {
     this.masterRefValidator = masterRefValidator;
   }
 
+  /** 熏蒸成本库 STATION 去重列表，供报价单熏蒸点下拉使用。 */
+  public List<String> listDistinctStations() {
+    return repository.findDistinctStations();
+  }
+
   public PageResult<FumigationCostResponse> list(
       int page,
       int pageSize,

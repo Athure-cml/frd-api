@@ -16,10 +16,21 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
   @Query(
       """
       SELECT f FROM CostFumigation f WHERE
-      (:pod = '' OR UPPER(TRIM(f.region)) = UPPER(:pod))
+      (:station = '' OR UPPER(TRIM(f.station)) = UPPER(:station))
       ORDER BY f.updatedAt DESC
       """)
-  List<CostFumigation> matchByPort(@Param("pod") String pod);
+  List<CostFumigation> matchByStation(@Param("station") String station);
+
+  @Query(
+      value =
+          """
+          SELECT DISTINCT TRIM(station) AS station
+          FROM cost_fumigation
+          WHERE station IS NOT NULL AND TRIM(station) <> ''
+          ORDER BY station
+          """,
+      nativeQuery = true)
+  List<String> findDistinctStations();
 
   @Query(
       """

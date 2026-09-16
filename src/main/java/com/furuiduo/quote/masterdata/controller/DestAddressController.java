@@ -31,6 +31,7 @@ import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.dto.DestAddressTreeNodeResponse;
+import com.furuiduo.quote.masterdata.dto.DestCityOptionResponse;
 import com.furuiduo.quote.masterdata.dto.DestCityResponse;
 import com.furuiduo.quote.masterdata.dto.DestCitySaveRequest;
 import com.furuiduo.quote.masterdata.dto.DestZipResolveItemRequest;
@@ -88,6 +89,19 @@ public class DestAddressController {
       @RequestParam(defaultValue = "50") int limit) {
     requireSelect(authService.requireUser(authorization));
     return ApiResponse.ok(destAddressService.listCityNameOptions(keyword, limit));
+  }
+
+  @Operation(
+      summary = "城市+州下拉（供报价 CITY 等选用）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/cities/state-options")
+  public ApiResponse<List<DestCityOptionResponse>> cityStateOptions(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String stateCode,
+      @RequestParam(defaultValue = "50") int limit) {
+    requireSelect(authService.requireUser(authorization));
+    return ApiResponse.ok(destAddressService.listCityStateOptions(keyword, stateCode, limit));
   }
 
   @Operation(

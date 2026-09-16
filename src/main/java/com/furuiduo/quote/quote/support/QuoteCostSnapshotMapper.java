@@ -66,6 +66,12 @@ public final class QuoteCostSnapshotMapper {
     map.put("nsLift", road.getNsLift());
     map.put("otherFee", road.getOtherFee());
     map.put("remark", road.getRemark());
+    if (road.getExtraFields() != null) {
+      Object roadRemark = road.getExtraFields().get("cf_road_remark");
+      if (roadRemark != null && !String.valueOf(roadRemark).isBlank()) {
+        map.put("cf_road_remark", String.valueOf(roadRemark).trim());
+      }
+    }
     map.put("validDate", road.getValidDate());
     map.put("logYardNameAddress", road.getLogYardNameAddress());
     map.put(

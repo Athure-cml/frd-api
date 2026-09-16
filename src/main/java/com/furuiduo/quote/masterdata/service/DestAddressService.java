@@ -30,6 +30,7 @@ import com.furuiduo.quote.cost.support.CostExcelSupport;
 import com.furuiduo.quote.cost.support.CostRoadZipPlaceholder;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.dto.DestAddressTreeNodeResponse;
+import com.furuiduo.quote.masterdata.dto.DestCityOptionResponse;
 import com.furuiduo.quote.masterdata.dto.DestCityResponse;
 import com.furuiduo.quote.masterdata.dto.DestCitySaveRequest;
 import com.furuiduo.quote.masterdata.dto.DestZipResolveItemRequest;
@@ -215,6 +216,24 @@ public class DestAddressService {
     return cityRepository
         .searchDistinctNames(SearchText.orEmpty(keyword), PageRequest.of(0, size))
         .getContent();
+  }
+
+  /** 报价 CITY 等：按关键词搜索城市，返回 city + stateCode。 */
+  @Transactional(readOnly = true)
+  public List<DestCityOptionResponse> listCityStateOptions(
+      String keyword, String stateCode, int limit) {
+    int size = Math.min(Math.max(limit, 1), 100);
+    String normalizedState = stateCode == null ? "" : stateCode.trim();
+    return cityRepository
+        .searchCityStateOptions(
+            SearchText.orEmpty(keyword), normalizedState, PageRequest.of(0, size))
+        .getContent()
+        .stream()
+        .map(
+            row ->
+                new DestCityOptionResponse(
+                    String.valueOf(row[0]), String.valueOf(row[1])))
+        .toList();
   }
 
   @Transactional(readOnly = true)

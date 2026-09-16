@@ -35,7 +35,8 @@ public class QuoteRuleCommandService {
           "POD_CHINA",
           "POD_NOT_CHINA",
           "BASE_GT",
-          "BASE_LTE");
+          "BASE_LTE",
+          "POR_IN");
 
   private static final Set<String> CALC_TYPES =
       Set.of("COST_PLUS", "FIXED", "CIF_MULTIPLY", "CIF_PERCENT");
@@ -104,6 +105,10 @@ public class QuoteRuleCommandService {
     if (("BASE_GT".equals(conditionType) || "BASE_LTE".equals(conditionType))
         && request.conditionAmount() == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分档条件需填写阈值金额");
+    }
+    if ("POR_IN".equals(conditionType)
+        && (request.remark() == null || request.remark().isBlank())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "POR 列表条件须在备注中填写起运港");
     }
     String calcType = normalizeEnum(request.calcType());
     if (!CALC_TYPES.contains(calcType)) {

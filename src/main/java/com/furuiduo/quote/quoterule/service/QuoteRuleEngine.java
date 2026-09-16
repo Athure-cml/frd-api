@@ -8,7 +8,9 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.furuiduo.quote.quoterule.PorListMatcher;
 import com.furuiduo.quote.quoterule.QuoteRuleContext;
+import com.furuiduo.quote.quoterule.TruckingFeeRounding;
 import com.furuiduo.quote.quoterule.entity.MdQuoteRule;
 import com.furuiduo.quote.quoterule.repository.MdQuoteRuleRepository;
 
@@ -27,9 +29,32 @@ public class QuoteRuleEngine {
     if (base == null) {
       return null;
     }
-    return findFirstMatching(loadActiveRules(), targetField, base, context)
-        .map(rule -> calculateDecimal(rule, base, context))
-        .orElse(base);
+    List<MdQuoteRule> rules = loadActiveRules();
+    boolean porInMatched =
+        rules.stream()
+            .anyMatch(
+                rule ->
+                    targetField.equals(rule.getTargetField())
+                        && "POR_IN".equals(normalize(rule.getConditionType()))
+                        && matchesCondition(rule, base, context));
+
+    BigDecimal result = base;
+    for (MdQuoteRule rule : rules) {
+      if (!targetField.equals(rule.getTargetField())) {
+        continue;
+      }
+      if (porInMatched && "ALWAYS".equals(normalize(rule.getConditionType()))) {
+        continue;
+      }
+      if (!matchesCondition(rule, base, context)) {
+        continue;
+      }
+      result = calculateDecimal(rule, result, context);
+    }
+    if ("TRUCKING_FEE".equals(normalize(targetField))) {
+      return TruckingFeeRounding.apply(result);
+    }
+    return result;
   }
 
   @Transactional(readOnly = true)
@@ -92,8 +117,13 @@ public class QuoteRuleEngine {
           base != null
               && rule.getConditionAmount() != null
               && base.compareTo(rule.getConditionAmount()) <= 0;
+      case "POR_IN" -> porInList(rule, context);
       default -> false;
     };
+  }
+
+  private boolean porInList(MdQuoteRule rule, QuoteRuleContext context) {
+    return PorListMatcher.matches(context.por(), rule.getRemark());
   }
 
   private BigDecimal calculateDecimal(

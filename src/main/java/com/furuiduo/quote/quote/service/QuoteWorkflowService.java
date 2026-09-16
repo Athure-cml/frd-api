@@ -227,6 +227,8 @@ public class QuoteWorkflowService {
     target.setTruckingOakUsd(source.getTruckingOakUsd());
     target.setFmNonOak(source.getFmNonOak());
     target.setFmOak(source.getFmOak());
+    target.setFumigationPoint(source.getFumigationPoint());
+    target.setFumigationEnabled(source.getFumigationEnabled());
     target.setDocUsd(source.getDocUsd());
     target.setCargoInsurancePremium(source.getCargoInsurancePremium());
     target.setCargoAgentFee(source.getCargoAgentFee());

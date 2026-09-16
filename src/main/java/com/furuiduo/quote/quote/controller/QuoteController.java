@@ -25,8 +25,11 @@ import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
+import com.furuiduo.quote.cost.service.CostFumigationService;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
+import com.furuiduo.quote.quote.dto.QuoteApplyCostImportRequest;
+import com.furuiduo.quote.quote.dto.QuoteApplyCostImportResponse;
 import com.furuiduo.quote.quote.dto.QuoteBatchExportRequest;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
@@ -38,6 +41,7 @@ import com.furuiduo.quote.quote.dto.QuoteMatchCostsRequest;
 import com.furuiduo.quote.quote.dto.QuoteMatchCostsResponse;
 import com.furuiduo.quote.quote.dto.QuoteSaveRequest;
 import com.furuiduo.quote.quote.service.QuoteCommandService;
+import com.furuiduo.quote.quote.service.QuoteCostImportApplyService;
 import com.furuiduo.quote.quote.service.QuoteCostMatchService;
 import com.furuiduo.quote.quote.service.QuoteExportService;
 import com.furuiduo.quote.quote.service.QuoteFollowUpService;
@@ -68,6 +72,8 @@ public class QuoteController {
   private final QuoteExportService quoteExportService;
   private final DestAddressService destAddressService;
   private final QuoteSheetGenerateService quoteSheetGenerateService;
+  private final QuoteCostImportApplyService quoteCostImportApplyService;
+  private final CostFumigationService costFumigationService;
 
   public QuoteController(
       AuthService authService,
@@ -79,7 +85,9 @@ public class QuoteController {
       QuoteFollowUpService quoteFollowUpService,
       QuoteExportService quoteExportService,
       DestAddressService destAddressService,
-      QuoteSheetGenerateService quoteSheetGenerateService) {
+      QuoteSheetGenerateService quoteSheetGenerateService,
+      QuoteCostImportApplyService quoteCostImportApplyService,
+      CostFumigationService costFumigationService) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.quoteQueryService = quoteQueryService;
@@ -90,6 +98,8 @@ public class QuoteController {
     this.quoteExportService = quoteExportService;
     this.destAddressService = destAddressService;
     this.quoteSheetGenerateService = quoteSheetGenerateService;
+    this.quoteCostImportApplyService = quoteCostImportApplyService;
+    this.costFumigationService = costFumigationService;
   }
 
   @Operation(
@@ -150,6 +160,17 @@ public class QuoteController {
   }
 
   @Operation(
+      summary = "熏蒸点 STATION 选项（熏蒸成本库去重）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/fumigation-stations")
+  public ApiResponse<List<String>> fumigationStations(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(costFumigationService.listDistinctStations());
+  }
+
+  @Operation(
       summary = "报价单详情",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @GetMapping("/{id}")
@@ -187,6 +208,18 @@ public class QuoteController {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     return ApiResponse.ok(quoteSheetGenerateService.generate(request));
+  }
+
+  @Operation(
+      summary = "引入成本库后按报价规则重算字段",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/apply-cost-import")
+  public ApiResponse<QuoteApplyCostImportResponse> applyCostImport(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody QuoteApplyCostImportRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(quoteCostImportApplyService.apply(request));
   }
 
   @Operation(

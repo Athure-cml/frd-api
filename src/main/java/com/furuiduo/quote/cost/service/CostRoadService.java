@@ -471,7 +471,7 @@ public class CostRoadService {
     int updated = 0;
     for (Long id : ids) {
       CostRoad entity = requireEntity(id);
-      applyRoadFieldOverrides(entity, fields);
+      applyRoadFieldOverrides(entity, fields, false);
       if (fields.containsKey("supplier")) {
         validateMasterRefs(entity);
       }
@@ -483,6 +483,14 @@ public class CostRoadService {
   }
 
   private void applyRoadFieldOverrides(CostRoad entity, Map<String, Object> fields) {
+    applyRoadFieldOverrides(entity, fields, true);
+  }
+
+  /**
+   * @param recalculateAllIn 未显式填写 ALL IN 时，是否按供应商公式重算（批量修改应为 false，保留原值）
+   */
+  private void applyRoadFieldOverrides(
+      CostRoad entity, Map<String, Object> fields, boolean recalculateAllIn) {
     if (fields == null || fields.isEmpty()) {
       return;
     }
@@ -543,6 +551,19 @@ public class CostRoadService {
       entity.setBaseFreight(asDecimal(fields.get("baseFreight")));
       formulaInputChanged = true;
     }
+    boolean allInExplicitlyOverridden =
+        fields.containsKey("allInNoFm")
+            || fields.containsKey("allInFmOneWay")
+            || fields.containsKey("allInFmRound");
+    if (fields.containsKey("allInNoFm")) {
+      entity.setAllInNoFm(asDecimal(fields.get("allInNoFm")));
+    }
+    if (fields.containsKey("allInFmOneWay")) {
+      entity.setAllInFmOneWay(asDecimal(fields.get("allInFmOneWay")));
+    }
+    if (fields.containsKey("allInFmRound")) {
+      entity.setAllInFmRound(asDecimal(fields.get("allInFmRound")));
+    }
     Map<String, Object> extra =
         entity.getExtraFields() == null
             ? new HashMap<>()
@@ -577,10 +598,12 @@ public class CostRoadService {
           CostValidityStatus.resolveRoad(
               CostStatus.active, entity.getExtraFields(), entity.getValidDate()));
     }
-    if (fscChanged
-        || formulaInputChanged
-        || fields.containsKey("supplier")
-        || fields.containsKey("baseFreight")) {
+    if (recalculateAllIn
+        && !allInExplicitlyOverridden
+        && (fscChanged
+            || formulaInputChanged
+            || fields.containsKey("supplier")
+            || fields.containsKey("baseFreight"))) {
       applyAllInFormulas(entity);
     }
   }
@@ -695,10 +718,7 @@ public class CostRoadService {
           if (enrichError != null) {
             return enrichError;
           }
-          String formulaError = tryApplyAllInFormulas(entity, false);
-          if (formulaError != null) {
-            return formulaError;
-          }
+          // 导入：ALL IN / ALL IN FM NON OAK / ALL IN FM OAK 直接使用 Excel 原值，不重算供应商公式
           return validateImportRow(entity, layout);
         },
         (rowNum, entity) -> {
@@ -1094,6 +1114,9 @@ public class CostRoadService {
         .findByCategoryAndNameOrShortName("TRUCK", entity.getSupplier().trim())
         .map(
             supplier -> {
+              if (!onlyIfMissing && !RoadAllInFormulaEvaluator.hasAnyFormula(supplier)) {
+                return null;
+              }
               entity.setSupplier(supplier.getName());
               try {
                 RoadAllInFormulaEvaluator.applySupplierFormulas(

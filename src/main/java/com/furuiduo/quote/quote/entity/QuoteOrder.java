@@ -104,6 +104,9 @@ public class QuoteOrder {
   @Column(name = "fumigation_enabled", nullable = false)
   private Boolean fumigationEnabled = false;
 
+  @Column(name = "fumigation_point", length = 64)
+  private String fumigationPoint;
+
   @Column(name = "doc_usd", length = 64)
   private String docUsd;
 

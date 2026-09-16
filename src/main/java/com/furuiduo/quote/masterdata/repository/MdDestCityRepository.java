@@ -67,6 +67,34 @@ public interface MdDestCityRepository extends JpaRepository<MdDestCity, Long> {
 
   @Query(
       """
+      SELECT c.name, s.code
+      FROM MdDestCity c, MdUsState s
+      WHERE s.id = c.stateId
+        AND (
+          :stateCode = ''
+          OR UPPER(s.code) = UPPER(:stateCode)
+        )
+        AND (
+          :keyword = ''
+          OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
+        )
+      ORDER BY
+        CASE
+          WHEN :keyword <> '' AND UPPER(c.name) = UPPER(:keyword) THEN 0
+          WHEN :keyword <> '' AND UPPER(c.name) LIKE UPPER(CONCAT(:keyword, '%')) THEN 1
+          WHEN :keyword <> '' AND UPPER(c.name) LIKE UPPER(CONCAT('% ', :keyword, '%')) THEN 2
+          ELSE 3
+        END,
+        c.name ASC,
+        s.code ASC
+      """)
+  org.springframework.data.domain.Page<Object[]> searchCityStateOptions(
+      @Param("keyword") String keyword,
+      @Param("stateCode") String stateCode,
+      org.springframework.data.domain.Pageable pageable);
+
+  @Query(
+      """
       SELECT s.code, LOWER(c.name), c.id
       FROM MdDestCity c, MdUsState s
       WHERE s.id = c.stateId

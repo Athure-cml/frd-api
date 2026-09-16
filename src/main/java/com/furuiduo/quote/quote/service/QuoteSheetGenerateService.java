@@ -29,6 +29,7 @@ import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
 import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
+import com.furuiduo.quote.quote.support.QuoteCostMatchKeys;
 import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
 import com.furuiduo.quote.quote.support.QuoteCostSnapshotMapper;
 import com.furuiduo.quote.quoterule.QuoteRuleContext;
@@ -75,35 +76,48 @@ public class QuoteSheetGenerateService {
     String pol = trim(request.pol());
     String pod = trim(request.pod());
 
-    // 必填：POR/POL 与 POD 未选择时不允许生成
-    if (isBlank(por) && isBlank(pol)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POR/POL");
+    // 必填：POR、POL 与 POD 未选择时不允许生成
+    if (isBlank(por)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POR");
+    }
+    if (isBlank(pol)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POL");
     }
     if (isBlank(pod)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POD");
     }
 
-    boolean fumigationEnabled = Boolean.TRUE.equals(request.fumigationEnabled());
+    String fumigationPoint = trim(request.fumigationPoint());
+    boolean fumigationEnabled =
+        !isBlank(fumigationPoint) || Boolean.TRUE.equals(request.fumigationEnabled());
 
     // Date：自动读取系统当前日期，格式 yyyy-MM-dd
     LocalDate quoteDate =
         request.quoteDate() != null ? request.quoteDate() : LocalDate.now();
-    String polForSea = firstNonBlank(pol, por);
+    String polForSea = QuoteCostMatchKeys.seaPol(request);
+    String porForSea = QuoteCostMatchKeys.seaPor(request);
 
     Map<String, Object> matchKeys = new HashMap<>();
     putIfPresent(matchKeys, "por", por);
-    putIfPresent(matchKeys, "pol", polForSea);
+    putIfPresent(matchKeys, "pol", pol);
+    putIfPresent(matchKeys, "fumigationPoint", fumigationPoint);
+    putIfPresent(matchKeys, "station", QuoteCostMatchKeys.fumigationStation(request));
     putIfPresent(matchKeys, "pod", pod);
+    putIfPresent(matchKeys, "city", request.city());
+    putIfPresent(matchKeys, "state", request.state());
+    putIfPresent(matchKeys, "zipCode", request.zipCode());
 
     List<QuoteCostMatchItemDto> matches = new ArrayList<>();
 
     QuoteRuleContext ruleContext =
         new QuoteRuleContext(
-            fumigationEnabled, isChinaPort(pod), request.cifAmount());
+            fumigationEnabled, isChinaPort(pod), request.cifAmount(), por);
 
     String oceanFreight = null;
     String ssl = null;
     BigDecimal truckingFee = null;
+    BigDecimal truckingNonOakUsd = null;
+    BigDecimal truckingOakUsd = null;
     BigDecimal nsLift = null;
     BigDecimal chassis = null;
     BigDecimal waiting = null;
@@ -112,11 +126,11 @@ public class QuoteSheetGenerateService {
     BigDecimal fmNonOakAmount = BigDecimal.ZERO;
     BigDecimal fmOakAmount = BigDecimal.ZERO;
 
-    // 海运费：通过 POL、POD 匹配海运成本库；仅引入生效中；取值 = ALL IN + 50
+    // 海运费：通过 POR、POL、POD 匹配海运成本库；仅引入生效中；取值 = ALL IN + 规则
     List<CostSea> seas =
         costSeaRepository.matchByRoute(
-            SearchText.orEmpty(polForSea), SearchText.orEmpty(pod), "");
-    var activeSea = QuoteCostMatchSupport.firstActiveSea(seas);
+            SearchText.orEmpty(porForSea), SearchText.orEmpty(pod), "");
+    var activeSea = QuoteCostMatchSupport.firstActiveSeaByPol(seas, polForSea);
     if (activeSea.isPresent()) {
       CostSea sea = activeSea.get();
       matches.add(QuoteCostSnapshotMapper.fromSea(sea, matchKeys));
@@ -127,38 +141,48 @@ public class QuoteSheetGenerateService {
       ssl = trim(sea.getSsl());
     }
 
-    // 卡车费：通过 POR 匹配卡车成本库；仅引入生效中；取值 = ALL IN + 100
-    List<CostRoad> roads =
-        costRoadRepository.matchByRoute("", "", "", SearchText.orEmpty(por), "", "");
-    if (roads.isEmpty() && !isBlank(polForSea) && !polForSea.equalsIgnoreCase(por)) {
-      roads =
+    // 卡车费：city/state 均已填时才匹配；熏蒸否取 ALL IN NO FM，熏蒸是取 ALL IN FM NON OAK / OAK
+    if (QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+      List<CostRoad> roads =
           costRoadRepository.matchByRoute(
-              "", "", "", SearchText.orEmpty(polForSea), "", "");
-    }
-    var activeRoad = QuoteCostMatchSupport.firstActiveRoad(roads);
-    if (activeRoad.isPresent()) {
-      CostRoad road = activeRoad.get();
-      matches.add(QuoteCostSnapshotMapper.fromRoad(road, matchKeys));
-      if (road.getAllInNoFm() != null) {
-        truckingFee =
-            quoteRuleEngine.applyDecimalTarget(
-                "TRUCKING_FEE", road.getAllInNoFm(), ruleContext);
+              SearchText.orEmpty(request.zipCode()),
+              SearchText.orEmpty(request.city()),
+              SearchText.orEmpty(request.state()),
+              "",
+              "",
+              "");
+      var activeRoad = QuoteCostMatchSupport.firstActiveRoad(roads);
+      if (activeRoad.isPresent()) {
+        CostRoad road = activeRoad.get();
+        matches.add(QuoteCostSnapshotMapper.fromRoad(road, matchKeys));
+        if (fumigationEnabled) {
+          if (road.getAllInFmOneWay() != null) {
+            truckingNonOakUsd =
+                quoteRuleEngine.applyDecimalTarget(
+                    "TRUCKING_FEE", road.getAllInFmOneWay(), ruleContext);
+          }
+          if (road.getAllInFmRound() != null) {
+            truckingOakUsd =
+                quoteRuleEngine.applyDecimalTarget(
+                    "TRUCKING_FEE", road.getAllInFmRound(), ruleContext);
+          }
+        } else if (road.getAllInNoFm() != null) {
+          truckingFee =
+              quoteRuleEngine.applyDecimalTarget(
+                  "TRUCKING_FEE", road.getAllInNoFm(), ruleContext);
+        }
+        nsLift = road.getNsLift();
+        chassis = resolveExtraChassis(road);
+        waiting = road.getWaitingFee();
+        redeliveryFee = road.getRedelivery();
+        truckRemark = trim(QuoteCostMatchSupport.resolveRoadRemark(road));
       }
-      // 火车上下车费：读取卡车成本库 LIFT（nsLift）
-      nsLift = road.getNsLift();
-      // 额外底盘费：优先读取 extraFields.cf_road_extra_chassis，否则 fallback chassis
-      chassis = resolveExtraChassis(road);
-      // 额外等待费：读取 WAITING（waitingFee）
-      waiting = road.getWaitingFee();
-      // 二次送箱费：读取 REDELIVERY
-      redeliveryFee = road.getRedelivery();
-      // 备注：读取卡车成本库操作备注
-      truckRemark = trim(road.getRemark());
     }
 
     // 熏蒸费：勾选「是否熏蒸」后，仅引入生效中记录，按报价日期匹配 FM-OUTDOOR / FM-INDOOR
     List<CostFumigation> fums =
-        costFumigationRepository.matchByPort(SearchText.orEmpty(pod));
+        costFumigationRepository.matchByStation(
+            SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
     var activeFum = QuoteCostMatchSupport.firstActiveFumigation(fums);
     if (fumigationEnabled && activeFum.isPresent()) {
       CostFumigation fum = activeFum.get();
@@ -180,12 +204,12 @@ public class QuoteSheetGenerateService {
 
     QuoteSheetFieldsDto sheet =
         new QuoteSheetFieldsDto(
-            null,
-            null,
-            null,
+            trim(request.zipCode()),
+            trim(request.city()),
+            trim(request.state()),
             trim(request.pickUpAddress()),
             por,
-            polForSea,
+            pol,
             pod,
             oceanFreight,
             ssl,
@@ -197,13 +221,14 @@ public class QuoteSheetGenerateService {
             truckRemark,
             fmNonOakAmount,
             fmOakAmount,
+            fumigationPoint,
             fumigationEnabled,
             docUsd,
             cargoInsurancePremium,
             cargoAgentFee,
             null,
-            truckingFee,
-            null,
+            truckingNonOakUsd,
+            truckingOakUsd,
             null,
             request.cifAmount());
 

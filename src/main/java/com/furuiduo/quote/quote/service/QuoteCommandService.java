@@ -208,7 +208,8 @@ public class QuoteCommandService {
     order.setTruckingOakUsd(request.truckingOakUsd());
     order.setFmNonOak(request.fmNonOak());
     order.setFmOak(request.fmOak());
-    order.setFumigationEnabled(Boolean.TRUE.equals(request.fumigationEnabled()));
+    order.setFumigationPoint(trimToNull(request.fumigationPoint()));
+    order.setFumigationEnabled(resolveFumigationEnabled(request));
     order.setDocUsd(trimToNull(request.docUsd()));
     order.setCargoInsurancePremium(trimToNull(request.cargoInsurancePremium()));
     order.setCargoAgentFee(trimToNull(request.cargoAgentFee()));
@@ -242,6 +243,13 @@ public class QuoteCommandService {
 
   private BigDecimal defaultDecimal(BigDecimal value, BigDecimal fallback) {
     return value == null ? fallback : value;
+  }
+
+  private boolean resolveFumigationEnabled(QuoteSaveRequest request) {
+    if (trimToNull(request.fumigationPoint()) != null) {
+      return true;
+    }
+    return Boolean.TRUE.equals(request.fumigationEnabled());
   }
 
   private String trimToNull(String value) {
