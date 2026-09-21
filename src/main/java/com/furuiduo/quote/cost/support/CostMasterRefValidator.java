@@ -98,6 +98,10 @@ public class CostMasterRefValidator {
     if (error != null) {
       return error;
     }
+    error = requirePort(entity.getRegion(), "REGION", ROAD_PORT_TYPES);
+    if (error != null) {
+      return error;
+    }
     error = requirePort(entity.getPol(), "POL", ROAD_PORT_TYPES);
     if (error != null) {
       return error;

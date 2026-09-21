@@ -16,5 +16,6 @@ public record FumigationCostSaveRequest(
     @Schema(description = "FM-INDOOR OAK") BigDecimal indoorOak,
     @Schema(description = "FM-INDOOR VALIDITY") String indoorValidity,
     @Schema(description = "ADDRESS") String address,
+    @Schema(description = "备注") String remark,
     @Schema(description = "状态（由有效期自动判定 active/expired，可忽略）") String status,
     @Schema(description = "扩展字段") Map<String, Object> extraFields) {}

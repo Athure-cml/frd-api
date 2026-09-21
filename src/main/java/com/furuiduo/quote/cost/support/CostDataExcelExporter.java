@@ -128,6 +128,7 @@ public final class CostDataExcelExporter {
       case "city" -> item.getCity();
       case "state" -> item.getState();
       case "por" -> item.getPor();
+      case "region" -> item.getRegion();
       case "pol" -> item.getPol();
       case "supplier" -> item.getSupplier();
       case "baseFreight" -> item.getBaseFreight();
@@ -203,6 +204,7 @@ public final class CostDataExcelExporter {
       case "indoorOak" -> item.getIndoorOak();
       case "indoorValidity" -> item.getIndoorValidity();
       case "address" -> item.getAddress();
+      case "remark" -> item.getRemark();
       case "status" ->
           formatStatusLabel(
               CostValidityStatus.resolve(

@@ -25,6 +25,7 @@ public final class CostTemplateExcelSupport {
           Map.entry("city", "CITY"),
           Map.entry("state", "STATE"),
           Map.entry("por", "POR"),
+          Map.entry("region", "REGION"),
           Map.entry("pol", "POL"),
           Map.entry("supplier", "SUPPLIER"),
           Map.entry("baseFreight", "BASE"),
@@ -82,6 +83,7 @@ public final class CostTemplateExcelSupport {
           Map.entry("indoorOak", "FM-INDOOR OAK"),
           Map.entry("indoorValidity", "有效期"),
           Map.entry("address", "ADDRESS"),
+          Map.entry("remark", "REMARK 备注"),
           Map.entry("status", "状态"));
 
   private static final Map<String, String> RAIL_LABELS = copyRailLabels();

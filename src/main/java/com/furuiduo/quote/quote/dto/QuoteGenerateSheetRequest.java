@@ -17,4 +17,5 @@ public record QuoteGenerateSheetRequest(
     @Schema(description = "CIF 货值（用于保险费/代理费计算）") BigDecimal cifAmount,
     @Schema(description = "熏蒸点（熏蒸成本库 STATION，空表示不熏蒸）") String fumigationPoint,
     @Schema(description = "是否启用熏蒸（兼容旧入参，优先看 fumigationPoint）") Boolean fumigationEnabled,
-    @Schema(description = "报价日期，默认系统当日") LocalDate quoteDate) {}
+    @Schema(description = "报价日期，默认系统当日") LocalDate quoteDate,
+    @Schema(description = "已手动引入卡车成本时跳过最低运价匹配") Boolean skipRoadMatch) {}

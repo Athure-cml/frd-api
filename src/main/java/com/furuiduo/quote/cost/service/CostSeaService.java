@@ -338,16 +338,21 @@ public class CostSeaService {
         resolveSeaBatchIds(
             request.ids(), request.searchCriteria(), request.excludeIds());
     if (ids.isEmpty()) {
-      return new CostSeaBatchCopyResult(0, List.of());
+      return new CostSeaBatchCopyResult(0, List.of(), 0);
     }
     boolean applyOverrides = Boolean.TRUE.equals(request.applyOverrides());
     if (applyOverrides && !hasAnySeaCopyOverride(request)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写一项要统一修改的字段");
     }
     boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    int total = ids.size();
+    int previewLimit = resolveBatchCopyPreviewLimit(previewOnly, request.previewLimit());
     List<FreightCostResponse> items = new ArrayList<>();
     int created = 0;
     for (Long id : ids) {
+      if (previewOnly && items.size() >= previewLimit) {
+        break;
+      }
       CostSea source = requireEntity(id);
       CostSea copy = copyOf(source);
       if (applyOverrides) {
@@ -357,14 +362,24 @@ public class CostSeaService {
         items.add(FreightCostResponse.fromSea(copy));
       } else {
         copy.touch();
-        items.add(FreightCostResponse.fromSea(repository.save(copy)));
+        repository.save(copy);
         created++;
       }
     }
     if (previewOnly) {
-      created = items.size();
+      return new CostSeaBatchCopyResult(total, items, total);
     }
-    return new CostSeaBatchCopyResult(created, items);
+    return new CostSeaBatchCopyResult(created, List.of(), total);
+  }
+
+  private static int resolveBatchCopyPreviewLimit(boolean previewOnly, Integer previewLimit) {
+    if (!previewOnly) {
+      return 0;
+    }
+    if (previewLimit == null || previewLimit <= 0) {
+      return 50;
+    }
+    return Math.min(previewLimit, 200);
   }
 
   @Transactional

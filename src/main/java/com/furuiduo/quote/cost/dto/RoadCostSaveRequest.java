@@ -11,6 +11,7 @@ public record RoadCostSaveRequest(
     @Schema(description = "城市") String city,
     @Schema(description = "州") String state,
     @Schema(description = "POR 接货港（港口档案）") String por,
+    @Schema(description = "区域") String region,
     @Schema(description = "POL 装货港（港口档案）") String pol,
     @Schema(description = "供应商") String supplier,
     @Schema(description = "基础运费") BigDecimal baseFreight,

@@ -19,6 +19,7 @@ public final class CostFieldCatalog {
           "city",
           "state",
           "por",
+          "region",
           "pol",
           "supplier",
           "baseFreight",
@@ -72,7 +73,8 @@ public final class CostFieldCatalog {
           "indoorNonOak",
           "indoorOak",
           "indoorValidity",
-          "address");
+          "address",
+          "remark");
 
   private static final Set<String> RAIL_FIELDS =
       Set.of(

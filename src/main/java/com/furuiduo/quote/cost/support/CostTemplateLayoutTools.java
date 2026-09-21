@@ -53,8 +53,10 @@ public final class CostTemplateLayoutTools {
     }
     if ("fumigation".equals(mode)) {
       next = ensureFumigationGroupsIncludeEffDates(next);
+      next = ensureFumigationRemarkField(next);
     }
     if ("road".equals(mode)) {
+      next = ensureRoadRegionField(next);
       next = ensureRoadFeeUnitFields(next);
       next = ensureRoadRemarkField(next);
     }
@@ -112,6 +114,87 @@ public final class CostTemplateLayoutTools {
         overrides,
         order,
         new ArrayList<>(customByField.values()));
+  }
+
+  /** 为已有卡车模板补齐 REGION（位于 POR 与 SUPPLIER 之间，非必填）。 */
+  public static CostTableTemplateLayout ensureRoadRegionField(CostTableTemplateLayout layout) {
+    if (layout == null) {
+      return null;
+    }
+    List<String> order = new ArrayList<>(CostFieldCatalog.resolveFieldKeys(layout));
+    if (order.isEmpty()) {
+      return layout;
+    }
+    Map<String, CostTableFieldOverride> overrides =
+        layout.fieldOverrides() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(layout.fieldOverrides());
+
+    boolean changed = false;
+    if (!order.contains("region")) {
+      int porIndex = order.indexOf("por");
+      int supplierIndex = order.indexOf("supplier");
+      if (porIndex >= 0) {
+        order.add(porIndex + 1, "region");
+        changed = true;
+      } else if (supplierIndex >= 0) {
+        order.add(supplierIndex, "region");
+        changed = true;
+      }
+    }
+    CostTableFieldOverride regionOverride = overrides.get("region");
+    if (regionOverride == null
+        || regionOverride.title() == null
+        || regionOverride.title().isBlank()) {
+      overrides.put("region", mergeOverrideTitle(regionOverride, "REGION"));
+      changed = true;
+    }
+
+    if (!changed) {
+      return layout;
+    }
+    return new CostTableTemplateLayout(
+        layout.groups(), order, overrides, order, layout.customFields());
+  }
+
+  /** 为已有熏蒸模板补齐备注（位于 ADDRESS 之后，非必填）。 */
+  public static CostTableTemplateLayout ensureFumigationRemarkField(
+      CostTableTemplateLayout layout) {
+    if (layout == null) {
+      return null;
+    }
+    List<String> order = new ArrayList<>(CostFieldCatalog.resolveFieldKeys(layout));
+    if (order.isEmpty()) {
+      return layout;
+    }
+    Map<String, CostTableFieldOverride> overrides =
+        layout.fieldOverrides() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(layout.fieldOverrides());
+
+    boolean changed = false;
+    if (!order.contains("remark")) {
+      int addressIndex = order.indexOf("address");
+      if (addressIndex >= 0) {
+        order.add(addressIndex + 1, "remark");
+      } else {
+        order.add("remark");
+      }
+      changed = true;
+    }
+    CostTableFieldOverride remarkOverride = overrides.get("remark");
+    if (remarkOverride == null
+        || remarkOverride.title() == null
+        || remarkOverride.title().isBlank()) {
+      overrides.put("remark", mergeOverrideTitle(remarkOverride, "备注"));
+      changed = true;
+    }
+
+    if (!changed) {
+      return layout;
+    }
+    return new CostTableTemplateLayout(
+        layout.groups(), order, overrides, order, layout.customFields());
   }
 
   private record RoadFeeUnitPair(String amountField, String unitField, String unitTitle) {}

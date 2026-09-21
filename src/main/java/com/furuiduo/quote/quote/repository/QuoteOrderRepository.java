@@ -31,6 +31,8 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:por = '' OR UPPER(TRIM(q.por)) = UPPER(:por))
       AND (:pol = '' OR UPPER(TRIM(q.pol)) = UPPER(:pol))
       AND (:pod = '' OR UPPER(TRIM(q.pod)) = UPPER(:pod))
+      AND (:pickUpAddress = '' OR UPPER(q.pickUpAddress) LIKE UPPER(CONCAT('%', :pickUpAddress, '%')))
+      AND (:fumigationPoint = '' OR UPPER(TRIM(q.fumigationPoint)) = UPPER(:fumigationPoint))
       AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
       AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
       AND (
@@ -50,6 +52,8 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       @Param("por") String por,
       @Param("pol") String pol,
       @Param("pod") String pod,
+      @Param("pickUpAddress") String pickUpAddress,
+      @Param("fumigationPoint") String fumigationPoint,
       @Param("ssl") String ssl,
       @Param("followUpByName") String followUpByName,
       @Param("scopeAll") boolean scopeAll,

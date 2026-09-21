@@ -79,6 +79,7 @@ public final class CostTemplateLayouts {
             "city",
             "state",
             "por",
+            "region",
             "supplier",
             "baseFreight",
             "fsc",
@@ -109,6 +110,7 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("city", titledRequired("CITY"));
     fieldOverrides.put("state", titledRequired("STATE"));
     fieldOverrides.put("por", titledRequired("POR"));
+    fieldOverrides.put("region", titled("REGION"));
     fieldOverrides.put("supplier", titledRequired("SUPPLIER"));
     fieldOverrides.put("baseFreight", titled("BASE"));
     fieldOverrides.put("fsc", titled("FSC"));
@@ -246,7 +248,8 @@ public final class CostTemplateLayouts {
             "indoorOak",
             FUM_INDOOR_EFF,
             "indoorValidity",
-            "address");
+            "address",
+            "remark");
     Map<String, CostTableFieldOverride> fieldOverrides = new java.util.LinkedHashMap<>();
     fieldOverrides.put("region", requiredOverride());
     fieldOverrides.put("station", requiredOverride());
@@ -259,6 +262,7 @@ public final class CostTemplateLayouts {
     fieldOverrides.put(FUM_INDOOR_EFF, requiredOverride());
     fieldOverrides.put("indoorValidity", requiredOverride());
     fieldOverrides.put("address", requiredOverride());
+    fieldOverrides.put("remark", titled("备注"));
 
     List<CostTableCustomFieldDef> customFields =
         List.of(

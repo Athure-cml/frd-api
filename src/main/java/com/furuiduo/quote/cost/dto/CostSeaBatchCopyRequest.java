@@ -27,4 +27,5 @@ public record CostSeaBatchCopyRequest(
     @Schema(description = "GRI") BigDecimal gri,
     @Schema(description = "GRI 有效期") String griValidDate,
     @Schema(description = "备注") String remark,
-    @Schema(description = "仅预览复制结果，不写入数据库") Boolean previewOnly) {}
+    @Schema(description = "仅预览复制结果，不写入数据库") Boolean previewOnly,
+    @Schema(description = "预览时最多返回条数，默认 50") Integer previewLimit) {}

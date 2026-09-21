@@ -56,6 +56,9 @@ public class CostFumigation {
   @Column(length = 512)
   private String address;
 
+  @Column(length = 512)
+  private String remark;
+
   @Enumerated(EnumType.STRING)
   @Column(length = 16)
   private CostStatus status = CostStatus.active;

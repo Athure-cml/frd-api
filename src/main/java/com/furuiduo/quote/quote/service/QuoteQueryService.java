@@ -61,6 +61,8 @@ public class QuoteQueryService {
       String por,
       String pol,
       String pod,
+      String pickUpAddress,
+      String fumigationPoint,
       String ssl,
       String followUpByName) {
     DataScope scope = permissionService.getEffectiveDataScope(user);
@@ -84,6 +86,8 @@ public class QuoteQueryService {
             SearchText.orEmpty(por),
             SearchText.orEmpty(pol),
             SearchText.orEmpty(pod),
+            SearchText.orEmpty(pickUpAddress),
+            SearchText.orEmpty(fumigationPoint),
             SearchText.orEmpty(ssl),
             SearchText.orEmpty(followUpByName),
             scope == DataScope.ALL,
@@ -113,6 +117,8 @@ public class QuoteQueryService {
       String por,
       String pol,
       String pod,
+      String pickUpAddress,
+      String fumigationPoint,
       String ssl,
       String followUpByName) {
     DataScope scope = permissionService.getEffectiveDataScope(user);
@@ -130,6 +136,8 @@ public class QuoteQueryService {
             SearchText.orEmpty(por),
             SearchText.orEmpty(pol),
             SearchText.orEmpty(pod),
+            SearchText.orEmpty(pickUpAddress),
+            SearchText.orEmpty(fumigationPoint),
             SearchText.orEmpty(ssl),
             SearchText.orEmpty(followUpByName),
             scope == DataScope.ALL,

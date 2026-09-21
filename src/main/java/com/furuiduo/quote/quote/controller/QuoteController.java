@@ -120,6 +120,8 @@ public class QuoteController {
       @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String pod,
+      @RequestParam(required = false) String pickUpAddress,
+      @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName) {
     SysUser user = authService.requireUser(authorization);
@@ -139,6 +141,8 @@ public class QuoteController {
             por,
             pol,
             pod,
+            pickUpAddress,
+            fumigationPoint,
             ssl,
             followUpByName));
   }
@@ -373,6 +377,8 @@ public class QuoteController {
       @RequestParam(required = false) String por,
       @RequestParam(required = false) String pol,
       @RequestParam(required = false) String pod,
+      @RequestParam(required = false) String pickUpAddress,
+      @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName) {
     SysUser user = authService.requireUser(authorization);
@@ -391,6 +397,8 @@ public class QuoteController {
             por,
             pol,
             pod,
+            pickUpAddress,
+            fumigationPoint,
             ssl,
             followUpByName);
     return ResponseEntity.ok()

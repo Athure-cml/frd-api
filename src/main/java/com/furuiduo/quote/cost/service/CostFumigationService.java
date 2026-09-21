@@ -55,7 +55,8 @@ public class CostFumigationService {
     "FM-INDOOR NON OAK",
     "FM-INDOOR OAK",
     "FM-INDOOR VALIDITY",
-    "ADDRESS"
+    "ADDRESS",
+    "REMARK 备注"
   };
 
   private final CostFumigationRepository repository;
@@ -273,6 +274,9 @@ public class CostFumigationService {
       if (fields.containsKey("address")) {
         entity.setAddress(asString(fields.get("address")));
       }
+      if (fields.containsKey("remark")) {
+        entity.setRemark(asString(fields.get("remark")));
+      }
       entity.touch();
       repository.save(entity);
       updated++;
@@ -443,7 +447,8 @@ public class CostFumigationService {
         firstNonBlank(
             values.get("indoorValidity"),
             readHeader(row, headers, "FM-INDOOR VALIDITY", "FM INDOOR VALIDITY", "有效期")));
-    entity.setAddress(firstNonBlank(values.get("address"), readHeader(row, headers, "ADDRESS", "备注", "REMARK")));
+    entity.setAddress(firstNonBlank(values.get("address"), readHeader(row, headers, "ADDRESS")));
+    entity.setRemark(firstNonBlank(values.get("remark"), readHeader(row, headers, "REMARK 备注", "备注", "REMARK")));
     entity.setStatus(
         CostValidityStatus.resolve(
             CostStatus.active, entity.getOutdoorValidity(), entity.getIndoorValidity()));
@@ -510,6 +515,9 @@ public class CostFumigationService {
       }
       entity.setIndoorValidity(CostExcelSupport.cellImportText(row.getCell(9)));
       entity.setAddress(CostExcelSupport.cellString(row.getCell(10)));
+      if (row.getLastCellNum() > 11) {
+        entity.setRemark(CostExcelSupport.cellString(row.getCell(11)));
+      }
     } else {
       entity.setOutdoorValidity(CostExcelSupport.cellImportText(row.getCell(4)));
       entity.setIndoorNonOak(CostExcelSupport.cellDecimal(row.getCell(5)));
@@ -551,6 +559,7 @@ public class CostFumigationService {
                   case "indoorOak" -> request.indoorOak();
                   case "indoorValidity" -> request.indoorValidity();
                   case "address" -> request.address();
+                  case "remark" -> request.remark();
                   default ->
                       request.extraFields() == null ? null : request.extraFields().get(field);
                 });
@@ -580,6 +589,7 @@ public class CostFumigationService {
       case "indoorOak" -> entity.getIndoorOak();
       case "indoorValidity" -> entity.getIndoorValidity();
       case "address" -> entity.getAddress();
+      case "remark" -> entity.getRemark();
       default -> null;
     };
   }
@@ -598,6 +608,7 @@ public class CostFumigationService {
     entity.setIndoorOak(request.indoorOak());
     entity.setIndoorValidity(request.indoorValidity());
     entity.setAddress(request.address());
+    entity.setRemark(request.remark());
     entity.setStatus(
         CostValidityStatus.resolve(
             CostStatus.active, request.outdoorValidity(), request.indoorValidity()));

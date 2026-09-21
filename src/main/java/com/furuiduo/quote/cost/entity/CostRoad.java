@@ -42,6 +42,9 @@ public class CostRoad {
   @Column(length = 128)
   private String por;
 
+  @Column(length = 128)
+  private String region;
+
   /** 装货港（港口档案） */
   @Column(length = 128)
   private String pol;

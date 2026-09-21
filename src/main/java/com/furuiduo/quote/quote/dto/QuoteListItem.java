@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
+import com.furuiduo.quote.quote.support.QuoteSheetAllInSupport;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,6 +20,8 @@ public record QuoteListItem(
     @Schema(description = "路线摘要") String routeSummary,
     @Schema(description = "状态") String status,
     @Schema(description = "总金额") BigDecimal totalAmount,
+    @Schema(description = "ALL IN（业务表费用合计）") BigDecimal allIn,
+    @Schema(description = "报价日期") String quoteDate,
     @Schema(description = "币种") String currency,
     @Schema(description = "有效期至") LocalDate validUntil,
     @Schema(description = "跟进人") String followUpByName,
@@ -41,6 +44,8 @@ public record QuoteListItem(
         order.getRouteSummary(),
         QuoteStatusSupport.displayStatus(order.getStatus()),
         order.getTotalAmount(),
+        QuoteSheetAllInSupport.computeAllIn(order),
+        QuoteDateTimes.formatDate(order.getCreatedAt()),
         order.getCurrency(),
         order.getValidUntil(),
         order.getFollowUpByName(),

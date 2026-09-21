@@ -73,6 +73,8 @@ public class QuoteExportService {
       String por,
       String pol,
       String pod,
+      String pickUpAddress,
+      String fumigationPoint,
       String ssl,
       String followUpByName) {
     List<QuoteOrder> orders;
@@ -96,6 +98,8 @@ public class QuoteExportService {
               por,
               pol,
               pod,
+              pickUpAddress,
+              fumigationPoint,
               ssl,
               followUpByName);
     }
@@ -107,7 +111,9 @@ public class QuoteExportService {
 
   /** @deprecated 请使用 {@link #export} */
   public byte[] exportByIds(SysUser user, List<Long> ids) {
-    return export(user, ids, null, null, null, null, null, null, null, null, null, null, null, null);
+    return export(
+        user, ids, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null);
   }
 
   private byte[] writeWorkbook(List<QuoteOrder> orders) {

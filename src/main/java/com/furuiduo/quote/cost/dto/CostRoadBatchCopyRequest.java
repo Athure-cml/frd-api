@@ -14,4 +14,5 @@ public record CostRoadBatchCopyRequest(
     @Schema(description = "是否统一修改可覆盖字段；false 表示原样复制") Boolean applyOverrides,
     @Schema(description = "统一覆盖字段（费用/时间/备注等），仅 applyOverrides=true 时生效")
         Map<String, Object> fields,
-    @Schema(description = "仅预览复制结果，不写入数据库") Boolean previewOnly) {}
+    @Schema(description = "仅预览复制结果，不写入数据库") Boolean previewOnly,
+    @Schema(description = "预览时最多返回条数，默认 50") Integer previewLimit) {}

@@ -126,10 +126,6 @@ public class QuoteCommandService {
   }
 
   private void validateSaveRequest(QuoteSaveRequest request) {
-    if (request.customerId() == null
-        && (request.customerName() == null || request.customerName().isBlank())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择客户");
-    }
     if (request.transportMode() == null || request.transportMode().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "运输方式不能为空");
     }
@@ -147,7 +143,8 @@ public class QuoteCommandService {
       order.setCustomerName(customer.getName());
     } else {
       order.setCustomerId(null);
-      order.setCustomerName(request.customerName().trim());
+      order.setCustomerName(
+          request.customerName() == null ? "" : request.customerName().trim());
     }
     order.setTransportMode(request.parsedTransportMode());
     order.setRouteSummary(trimToNull(request.routeSummary()));

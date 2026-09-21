@@ -135,7 +135,7 @@ public class CostRoadService {
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String z = SearchText.orEmpty(zipCode);
-    String c = SearchText.orEmpty(city);
+    CitySearchParams cityFilter = CitySearchParams.from(city);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
@@ -154,7 +154,18 @@ public class CostRoadService {
       boolean restrict = restrictToIds != null;
       List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
       Page<CostRoad> result =
-          repository.search(z, c, st, p, pl, sup, redelivery, restrict, idParams, pageable);
+          repository.search(
+              z,
+              cityFilter.filterCities(),
+              cityFilter.cities(),
+              st,
+              p,
+              pl,
+              sup,
+              redelivery,
+              restrict,
+              idParams,
+              pageable);
       return new PageResult<>(
           result.getContent().stream().map(RoadCostResponse::from).toList(),
           result.getTotalElements());
@@ -198,7 +209,7 @@ public class CostRoadService {
       return List.of();
     }
     String z = SearchText.orEmpty(zipCode);
-    String c = SearchText.orEmpty(city);
+    CitySearchParams cityFilter = CitySearchParams.from(city);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
@@ -216,7 +227,18 @@ public class CostRoadService {
       boolean restrict = restrictToIds != null;
       List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
       return repository
-          .search(z, c, st, p, pl, sup, redelivery, restrict, idParams, pageable)
+          .search(
+              z,
+              cityFilter.filterCities(),
+              cityFilter.cities(),
+              st,
+              p,
+              pl,
+              sup,
+              redelivery,
+              restrict,
+              idParams,
+              pageable)
           .getContent()
           .stream()
           .map(CostRoad::getId)
@@ -255,7 +277,7 @@ public class CostRoadService {
       String status,
       CostGridSort.Parsed sort) {
     String z = SearchText.orEmpty(zipCode);
-    String c = SearchText.orEmpty(city);
+    CitySearchParams cityFilter = CitySearchParams.from(city);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
@@ -266,7 +288,18 @@ public class CostRoadService {
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostRoad> items =
         repository
-            .search(z, c, st, p, pl, sup, redelivery, false, List.of(-1L), pageable)
+            .search(
+                z,
+                cityFilter.filterCities(),
+                cityFilter.cities(),
+                st,
+                p,
+                pl,
+                sup,
+                redelivery,
+                false,
+                List.of(-1L),
+                pageable)
             .getContent()
             .stream()
             .filter(item -> matchesRoadDateSearch(item, ed, vd))
@@ -279,6 +312,16 @@ public class CostRoadService {
       return items.stream().sorted(CostGridSort.roadComparator(sort)).toList();
     }
     return items;
+  }
+
+  private record CitySearchParams(boolean filterCities, List<String> cities) {
+    private static CitySearchParams from(String city) {
+      List<String> values = SearchText.parseCsvUpper(city);
+      if (values.isEmpty()) {
+        return new CitySearchParams(false, List.of(""));
+      }
+      return new CitySearchParams(true, values);
+    }
   }
 
   private boolean matchesRoadDateSearch(CostRoad item, String effectiveDate, String validDate) {
@@ -394,6 +437,7 @@ public class CostRoadService {
         request.city(),
         request.state(),
         request.por(),
+        request.region(),
         request.pol(),
         request.supplier(),
         request.baseFreight(),
@@ -633,7 +677,7 @@ public class CostRoadService {
         resolveRoadBatchIds(
             request.ids(), request.searchCriteria(), request.excludeIds());
     if (ids.isEmpty()) {
-      return new CostRoadBatchCopyResult(0, List.of());
+      return new CostRoadBatchCopyResult(0, List.of(), 0);
     }
     boolean applyOverrides = Boolean.TRUE.equals(request.applyOverrides());
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
@@ -641,9 +685,14 @@ public class CostRoadService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写一项要统一修改的字段");
     }
     boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    int total = ids.size();
+    int previewLimit = resolveBatchCopyPreviewLimit(previewOnly, request.previewLimit());
     List<RoadCostResponse> items = new ArrayList<>();
     int created = 0;
     for (Long id : ids) {
+      if (previewOnly && items.size() >= previewLimit) {
+        break;
+      }
       CostRoad source = requireEntity(id);
       CostRoad copy = copyOf(source);
       if (applyOverrides) {
@@ -653,14 +702,24 @@ public class CostRoadService {
         items.add(RoadCostResponse.from(copy));
       } else {
         copy.touch();
-        items.add(RoadCostResponse.from(repository.save(copy)));
+        repository.save(copy);
         created++;
       }
     }
     if (previewOnly) {
-      created = items.size();
+      return new CostRoadBatchCopyResult(total, items, total);
     }
-    return new CostRoadBatchCopyResult(created, items);
+    return new CostRoadBatchCopyResult(created, List.of(), total);
+  }
+
+  private static int resolveBatchCopyPreviewLimit(boolean previewOnly, Integer previewLimit) {
+    if (!previewOnly) {
+      return 0;
+    }
+    if (previewLimit == null || previewLimit <= 0) {
+      return 50;
+    }
+    return Math.min(previewLimit, 200);
   }
 
   private CostRoad copyOf(CostRoad source) {
@@ -669,6 +728,7 @@ public class CostRoadService {
     target.setCity(source.getCity());
     target.setState(source.getState());
     target.setPor(source.getPor());
+    target.setRegion(source.getRegion());
     target.setPol(source.getPol());
     target.setSupplier(source.getSupplier());
     target.setBaseFreight(source.getBaseFreight());
@@ -718,7 +778,11 @@ public class CostRoadService {
           if (enrichError != null) {
             return enrichError;
           }
-          // 导入：ALL IN / ALL IN FM NON OAK / ALL IN FM OAK 直接使用 Excel 原值，不重算供应商公式
+          // 供应商有公式则重算 ALL IN；无公式则保留 Excel 原值
+          String formulaError = tryApplyAllInFormulas(entity, false);
+          if (formulaError != null) {
+            return formulaError;
+          }
           return validateImportRow(entity, layout);
         },
         (rowNum, entity) -> {
@@ -754,11 +818,13 @@ public class CostRoadService {
       String vd = SearchText.orEmpty(validDate);
       boolean filterDates = !vd.isEmpty() || !ed.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
+      CitySearchParams cityFilter = CitySearchParams.from(city);
       items =
           repository
               .search(
                   SearchText.orEmpty(zipCode),
-                  SearchText.orEmpty(city),
+                  cityFilter.filterCities(),
+                  cityFilter.cities(),
                   SearchText.orEmpty(state),
                   SearchText.orEmpty(por),
                   SearchText.orEmpty(pol),
@@ -814,6 +880,9 @@ public class CostRoadService {
     entity.setPor(
         CostMasterRefValidator.normalizeToken(
             CostExcelSupport.readByHeader(row, headers, "接货地", "*接货地", "POR", "*POR")));
+    entity.setRegion(
+        CostMasterRefValidator.normalizeToken(
+            CostExcelSupport.readByHeader(row, headers, "区域", "REGION")));
     entity.setPol(
         CostMasterRefValidator.normalizeToken(
             CostExcelSupport.readByHeader(row, headers, "卸货港", "POL", "*POL")));
@@ -1068,6 +1137,7 @@ public class CostRoadService {
       case "city" -> entity.getCity();
       case "state" -> entity.getState();
       case "por" -> entity.getPor();
+      case "region" -> entity.getRegion();
       case "pol" -> entity.getPol();
       case "supplier" -> entity.getSupplier();
       case "baseFreight" -> entity.getBaseFreight();
@@ -1134,6 +1204,7 @@ public class CostRoadService {
     entity.setCity(request.city());
     entity.setState(request.state());
     entity.setPor(request.por());
+    entity.setRegion(request.region());
     entity.setPol(request.pol());
     entity.setSupplier(request.supplier());
     entity.setBaseFreight(request.baseFreight());

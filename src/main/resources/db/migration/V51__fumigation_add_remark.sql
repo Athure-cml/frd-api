@@ -1,0 +1,1 @@
+ALTER TABLE cost_fumigation ADD COLUMN IF NOT EXISTS remark VARCHAR(512);

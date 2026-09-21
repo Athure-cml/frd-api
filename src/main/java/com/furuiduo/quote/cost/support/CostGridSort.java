@@ -83,6 +83,7 @@ public final class CostGridSort {
           "indoorOak",
           "indoorValidity",
           "address",
+          "remark",
           "status",
           "updatedAt");
 
@@ -168,6 +169,7 @@ public final class CostGridSort {
       case "city" -> entity.getCity();
       case "state" -> entity.getState();
       case "por" -> entity.getPor();
+      case "region" -> entity.getRegion();
       case "pol" -> entity.getPol();
       case "supplier" -> entity.getSupplier();
       case "baseFreight" -> entity.getBaseFreight();
@@ -242,6 +244,7 @@ public final class CostGridSort {
       case "indoorOak" -> entity.getIndoorOak();
       case "indoorValidity" -> entity.getIndoorValidity();
       case "address" -> entity.getAddress();
+      case "remark" -> entity.getRemark();
       case "status" -> entity.getStatus() == null ? null : entity.getStatus().name();
       case "updatedAt" -> entity.getUpdatedAt();
       case "id" -> entity.getId();

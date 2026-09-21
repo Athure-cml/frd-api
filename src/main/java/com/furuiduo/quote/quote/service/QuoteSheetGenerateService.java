@@ -141,8 +141,9 @@ public class QuoteSheetGenerateService {
       ssl = trim(sea.getSsl());
     }
 
-    // 卡车费：city/state 均已填时才匹配；熏蒸否取 ALL IN NO FM，熏蒸是取 ALL IN FM NON OAK / OAK
-    if (QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+    // 卡车费：city/state 均已填时才匹配；已手动引入时 skipRoadMatch 跳过
+    if (!Boolean.TRUE.equals(request.skipRoadMatch())
+        && QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
       List<CostRoad> roads =
           costRoadRepository.matchByRoute(
               SearchText.orEmpty(request.zipCode()),

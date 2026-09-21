@@ -37,7 +37,7 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       """
       SELECT r FROM CostRoad r WHERE
       (:zipCode = '' OR LOWER(COALESCE(r.zipCode, '')) LIKE LOWER(CONCAT('%', :zipCode, '%')))
-      AND (:city = '' OR LOWER(COALESCE(r.city, '')) LIKE LOWER(CONCAT('%', :city, '%')))
+      AND (:filterCities = false OR UPPER(TRIM(r.city)) IN :cities)
       AND (:state = '' OR LOWER(COALESCE(r.state, '')) LIKE LOWER(CONCAT('%', :state, '%')))
       AND (:por = '' OR LOWER(COALESCE(r.por, '')) LIKE LOWER(CONCAT('%', :por, '%')))
       AND (:pol = '' OR LOWER(COALESCE(r.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
@@ -47,7 +47,8 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       """)
   Page<CostRoad> search(
       @Param("zipCode") String zipCode,
-      @Param("city") String city,
+      @Param("filterCities") boolean filterCities,
+      @Param("cities") List<String> cities,
       @Param("state") String state,
       @Param("por") String por,
       @Param("pol") String pol,
