@@ -11,7 +11,7 @@ public record RoadCostSaveRequest(
     @Schema(description = "城市") String city,
     @Schema(description = "州") String state,
     @Schema(description = "POR 接货港（港口档案）") String por,
-    @Schema(description = "区域") String region,
+    @Schema(description = "STATION") String station,
     @Schema(description = "POL 装货港（港口档案）") String pol,
     @Schema(description = "供应商") String supplier,
     @Schema(description = "基础运费") BigDecimal baseFreight,
@@ -32,4 +32,5 @@ public record RoadCostSaveRequest(
     @Schema(description = "有效期") String validDate,
     @Schema(description = "堆场地址") String logYardNameAddress,
     @Schema(description = "状态（由有效期自动判定 active/expired，可忽略）") String status,
-    @Schema(description = "自定义字段值") Map<String, Object> extraFields) {}
+    @Schema(description = "自定义字段值") Map<String, Object> extraFields,
+    @Schema(description = "复制常用标记的源记录 ID（单条复制录入时传）") Long copyHighlightFromId) {}

@@ -2,6 +2,7 @@ package com.furuiduo.quote.cost.service;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
@@ -54,6 +56,9 @@ public class CostSeaService {
   private static final String CF_FREIGHT_EFF = "cf_sea_freight_eff";
   private static final String CF_BUNKER_EFF = "cf_sea_bunker_eff";
   private static final String CF_OTHERS_EFF = "cf_sea_others_eff";
+
+  public static final String EXTRA_RENEWED_FROM = "cf_sea_renewed_from";
+  public static final String EXTRA_RENEWED_TO = "cf_sea_renewed_to";
 
   private static final String[] IMPORT_HEADERS = {
     "POR",
@@ -81,14 +86,17 @@ public class CostSeaService {
   private final CostSeaRepository repository;
   private final CostGridTemplateService templateService;
   private final CostMasterRefValidator masterRefValidator;
+  private final CostDeptHighlightService highlightService;
 
   public CostSeaService(
       CostSeaRepository repository,
       CostGridTemplateService templateService,
-      CostMasterRefValidator masterRefValidator) {
+      CostMasterRefValidator masterRefValidator,
+      CostDeptHighlightService highlightService) {
     this.repository = repository;
     this.templateService = templateService;
     this.masterRefValidator = masterRefValidator;
+    this.highlightService = highlightService;
   }
 
   public PageResult<FreightCostResponse> list(
@@ -300,7 +308,9 @@ public class CostSeaService {
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
-    return FreightCostResponse.fromSea(repository.save(entity));
+    CostSea saved = repository.save(entity);
+    copyHighlightsIfRequested(request.copyHighlightFromId(), saved.getId());
+    return FreightCostResponse.fromSea(saved);
   }
 
   @Transactional
@@ -311,6 +321,126 @@ public class CostSeaService {
     validateMasterRefs(entity);
     entity.touch();
     return FreightCostResponse.fromSea(repository.save(entity));
+  }
+
+  /**
+   * 续期：新建一版海运成本，并将源行各段有效期写成「对应新生效期 − 1 天」。
+   * 运费生效期（cf_sea_freight_eff）必填；BUC/OTHERS 生效期若填写则同步回写源行对应有效期。
+   */
+  @Transactional
+  public FreightCostResponse renew(Long sourceId, FreightCostSaveRequest request) {
+    if (sourceId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源记录");
+    }
+    CostSea source = requireEntity(sourceId);
+    Map<String, Object> requestExtra =
+        request.extraFields() == null ? Map.of() : request.extraFields();
+
+    String freightEffRaw =
+        CostDateSearchFilter.readExtraText(
+            requestExtra, CF_FREIGHT_EFF, "cf_seaFreightEff");
+    if (freightEffRaw == null || freightEffRaw.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "续期须填写运费生效期");
+    }
+    LocalDate freightEff = parseRenewDate(freightEffRaw, "运费生效期");
+    validateRenewValidDate(request.freightValidDate(), freightEff);
+
+    String bucEffRaw =
+        CostDateSearchFilter.readExtraText(requestExtra, CF_BUNKER_EFF, "cf_seaBunkerEff");
+    if (bucEffRaw != null && !bucEffRaw.isBlank()) {
+      validateRenewValidDate(
+          request.bucValidDate(), parseRenewDate(bucEffRaw, "BUC 生效期"));
+    }
+    String othersEffRaw =
+        CostDateSearchFilter.readExtraText(requestExtra, CF_OTHERS_EFF, "cf_seaOthersEff");
+    if (othersEffRaw != null && !othersEffRaw.isBlank()) {
+      validateRenewValidDate(
+          request.othersValidDate(), parseRenewDate(othersEffRaw, "OTHERS 生效期"));
+    }
+
+    Map<String, Object> extras =
+        request.extraFields() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(request.extraFields());
+    extras.put(EXTRA_RENEWED_FROM, sourceId);
+    FreightCostResponse created = create(withExtraFields(request, extras));
+
+    if (freightEff != null) {
+      source.setFreightValidDate(freightEff.minusDays(1).toString());
+    }
+    if (bucEffRaw != null && !bucEffRaw.isBlank()) {
+      source.setBucValidDate(parseRenewDate(bucEffRaw, "BUC 生效期").minusDays(1).toString());
+    }
+    if (othersEffRaw != null && !othersEffRaw.isBlank()) {
+      source.setOthersValidDate(
+          parseRenewDate(othersEffRaw, "OTHERS 生效期").minusDays(1).toString());
+    }
+
+    Map<String, Object> sourceExtras =
+        source.getExtraFields() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(source.getExtraFields());
+    sourceExtras.put(EXTRA_RENEWED_TO, created.id());
+    source.setExtraFields(sourceExtras);
+    source.setStatus(
+        CostValidityStatus.resolve(CostStatus.active, source.getFreightValidDate()));
+    source.touch();
+    repository.save(source);
+    copyHighlightsIfRequested(sourceId, created.id());
+    return created;
+  }
+
+  private void copyHighlightsIfRequested(Long sourceCostId, Long targetCostId) {
+    highlightService.copyHighlightsForCost(CostHighlightMode.sea, sourceCostId, targetCostId);
+  }
+
+  private static LocalDate parseRenewDate(String raw, String label) {
+    LocalDate parsed = CostValidityStatus.tryParseDate(raw);
+    if (parsed == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + "格式无法识别：" + raw);
+    }
+    return parsed;
+  }
+
+  private static void validateRenewValidDate(String validRaw, LocalDate effective) {
+    if (validRaw == null || validRaw.isBlank()) {
+      return;
+    }
+    LocalDate valid = CostValidityStatus.tryParseDate(validRaw.trim());
+    if (valid == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "有效期格式无法识别：" + validRaw);
+    }
+    if (valid.isBefore(effective)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "有效期不能早于生效期");
+    }
+  }
+
+  private static FreightCostSaveRequest withExtraFields(
+      FreightCostSaveRequest request, Map<String, Object> extraFields) {
+    return new FreightCostSaveRequest(
+        request.por(),
+        request.pol(),
+        request.pod(),
+        request.cnShortName(),
+        request.enProductName(),
+        request.containerType(),
+        request.freight(),
+        request.freightValidDate(),
+        request.buc(),
+        request.bucValidDate(),
+        request.ebs(),
+        request.ebsValidDate(),
+        request.gri(),
+        request.griValidDate(),
+        request.others(),
+        request.othersValidDate(),
+        request.allIn(),
+        request.ssl(),
+        request.agent(),
+        request.remark(),
+        request.status(),
+        extraFields,
+        request.copyHighlightFromId());
   }
 
   @Transactional
@@ -363,6 +493,7 @@ public class CostSeaService {
       } else {
         copy.touch();
         repository.save(copy);
+        copyHighlightsIfRequested(id, copy.getId());
         created++;
       }
     }

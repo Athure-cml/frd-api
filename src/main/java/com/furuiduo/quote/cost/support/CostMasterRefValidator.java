@@ -98,7 +98,7 @@ public class CostMasterRefValidator {
     if (error != null) {
       return error;
     }
-    error = requirePort(entity.getRegion(), "REGION", ROAD_PORT_TYPES);
+    error = resolveRoadStation(entity);
     if (error != null) {
       return error;
     }
@@ -140,7 +140,25 @@ public class CostMasterRefValidator {
     if (entity == null) {
       return null;
     }
-    return requirePort(entity.getRegion(), "REGION", FUMIGATION_REGION_TYPES);
+    String error = requirePort(entity.getRegion(), "REGION", FUMIGATION_REGION_TYPES);
+    if (error != null) {
+      return error;
+    }
+    return resolveFumigationStation(entity);
+  }
+
+  /** 熏蒸 STATION：关联熏蒸供应商，按全称/简称识别，并回写全称。 */
+  public String resolveFumigationStation(CostFumigation entity) {
+    if (entity == null || isBlank(entity.getStation())) {
+      return null;
+    }
+    String raw = entity.getStation().trim();
+    var found = supplierRepository.findByCategoryAndNameOrShortName("FUMIGATION", raw);
+    if (found.isEmpty()) {
+      return missing("STATION", raw);
+    }
+    entity.setStation(found.get().getName());
+    return null;
   }
 
   private String requireState(String state) {
@@ -287,6 +305,20 @@ public class CostMasterRefValidator {
       }
       extra.put(field, unit.get().getCode());
     }
+    return null;
+  }
+
+  /** 卡车 STATION：关联熏蒸供应商，按全称/简称识别，并回写全称。 */
+  public String resolveRoadStation(CostRoad entity) {
+    if (entity == null || isBlank(entity.getStation())) {
+      return null;
+    }
+    String raw = entity.getStation().trim();
+    var found = supplierRepository.findByCategoryAndNameOrShortName("FUMIGATION", raw);
+    if (found.isEmpty()) {
+      return missing("STATION", raw);
+    }
+    entity.setStation(found.get().getName());
     return null;
   }
 

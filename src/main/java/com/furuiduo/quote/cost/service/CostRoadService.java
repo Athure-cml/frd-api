@@ -35,6 +35,7 @@ import com.furuiduo.quote.cost.dto.CostRoadBatchCopyResult;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.dto.RoadCostSaveRequest;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
@@ -99,18 +100,21 @@ public class CostRoadService {
   private final SupplierRepository supplierRepository;
   private final DestAddressService destAddressService;
   private final CostMasterRefValidator masterRefValidator;
+  private final CostDeptHighlightService highlightService;
 
   public CostRoadService(
       CostRoadRepository repository,
       CostGridTemplateService templateService,
       SupplierRepository supplierRepository,
       DestAddressService destAddressService,
-      CostMasterRefValidator masterRefValidator) {
+      CostMasterRefValidator masterRefValidator,
+      CostDeptHighlightService highlightService) {
     this.repository = repository;
     this.templateService = templateService;
     this.supplierRepository = supplierRepository;
     this.destAddressService = destAddressService;
     this.masterRefValidator = masterRefValidator;
+    this.highlightService = highlightService;
   }
 
   public PageResult<RoadCostResponse> list(
@@ -370,7 +374,9 @@ public class CostRoadService {
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
-    return RoadCostResponse.from(repository.save(entity));
+    CostRoad saved = repository.save(entity);
+    copyHighlightsIfRequested(request.copyHighlightFromId(), saved.getId());
+    return RoadCostResponse.from(saved);
   }
 
   /**
@@ -414,7 +420,12 @@ public class CostRoadService {
             CostStatus.active, source.getExtraFields(), previousValidText));
     source.touch();
     repository.save(source);
+    copyHighlightsIfRequested(sourceId, created.id());
     return created;
+  }
+
+  private void copyHighlightsIfRequested(Long sourceCostId, Long targetCostId) {
+    highlightService.copyHighlightsForCost(CostHighlightMode.road, sourceCostId, targetCostId);
   }
 
   private static void validateRenewValidDate(String validRaw, LocalDate effective) {
@@ -437,7 +448,7 @@ public class CostRoadService {
         request.city(),
         request.state(),
         request.por(),
-        request.region(),
+        request.station(),
         request.pol(),
         request.supplier(),
         request.baseFreight(),
@@ -458,7 +469,8 @@ public class CostRoadService {
         request.validDate(),
         request.logYardNameAddress(),
         request.status(),
-        extraFields);
+        extraFields,
+        request.copyHighlightFromId());
   }
 
   private static String readExtraText(Map<String, Object> extraFields, String key) {
@@ -703,6 +715,7 @@ public class CostRoadService {
       } else {
         copy.touch();
         repository.save(copy);
+        copyHighlightsIfRequested(id, copy.getId());
         created++;
       }
     }
@@ -728,7 +741,7 @@ public class CostRoadService {
     target.setCity(source.getCity());
     target.setState(source.getState());
     target.setPor(source.getPor());
-    target.setRegion(source.getRegion());
+    target.setStation(source.getStation());
     target.setPol(source.getPol());
     target.setSupplier(source.getSupplier());
     target.setBaseFreight(source.getBaseFreight());
@@ -880,9 +893,9 @@ public class CostRoadService {
     entity.setPor(
         CostMasterRefValidator.normalizeToken(
             CostExcelSupport.readByHeader(row, headers, "接货地", "*接货地", "POR", "*POR")));
-    entity.setRegion(
+    entity.setStation(
         CostMasterRefValidator.normalizeToken(
-            CostExcelSupport.readByHeader(row, headers, "区域", "REGION")));
+            CostExcelSupport.readByHeader(row, headers, "区域", "STATION", "REGION")));
     entity.setPol(
         CostMasterRefValidator.normalizeToken(
             CostExcelSupport.readByHeader(row, headers, "卸货港", "POL", "*POL")));
@@ -1137,7 +1150,7 @@ public class CostRoadService {
       case "city" -> entity.getCity();
       case "state" -> entity.getState();
       case "por" -> entity.getPor();
-      case "region" -> entity.getRegion();
+      case "station" -> entity.getStation();
       case "pol" -> entity.getPol();
       case "supplier" -> entity.getSupplier();
       case "baseFreight" -> entity.getBaseFreight();
@@ -1204,7 +1217,7 @@ public class CostRoadService {
     entity.setCity(request.city());
     entity.setState(request.state());
     entity.setPor(request.por());
-    entity.setRegion(request.region());
+    entity.setStation(request.station());
     entity.setPol(request.pol());
     entity.setSupplier(request.supplier());
     entity.setBaseFreight(request.baseFreight());

@@ -79,7 +79,7 @@ public final class CostTemplateLayouts {
             "city",
             "state",
             "por",
-            "region",
+            "station",
             "supplier",
             "baseFreight",
             "fsc",
@@ -110,7 +110,7 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("city", titledRequired("CITY"));
     fieldOverrides.put("state", titledRequired("STATE"));
     fieldOverrides.put("por", titledRequired("POR"));
-    fieldOverrides.put("region", titled("REGION"));
+    fieldOverrides.put("station", titled("STATION"));
     fieldOverrides.put("supplier", titledRequired("SUPPLIER"));
     fieldOverrides.put("baseFreight", titled("BASE"));
     fieldOverrides.put("fsc", titled("FSC"));

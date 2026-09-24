@@ -19,7 +19,7 @@ public final class CostFieldCatalog {
           "city",
           "state",
           "por",
-          "region",
+          "station",
           "pol",
           "supplier",
           "baseFreight",

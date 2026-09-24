@@ -57,6 +57,24 @@ public final class MenuRegistry {
                 .component("/quote/list/index")
                 .meta("icon", "lucide:list")
                 .meta("title", "page.quote.list")
+                .requirePermission(PermissionCodes.QUOTE_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteLibraryRoad", "/quotes/library/road")
+                .component("/quote/library/road/index")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.quote.library.road")
+                .requirePermission(PermissionCodes.QUOTE_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteLibrarySea", "/quotes/library/sea")
+                .component("/quote/library/sea/index")
+                .meta("icon", "lucide:ship")
+                .meta("title", "page.quote.library.sea")
+                .requirePermission(PermissionCodes.QUOTE_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteLibraryFumigation", "/quotes/library/fumigation")
+                .component("/quote/library/fumigation/index")
+                .meta("icon", "lucide:flame")
+                .meta("title", "page.quote.library.fumigation")
                 .requirePermission(PermissionCodes.QUOTE_VIEW));
   }
 

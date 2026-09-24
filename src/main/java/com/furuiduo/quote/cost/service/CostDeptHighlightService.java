@@ -30,6 +30,7 @@ import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
 import com.furuiduo.quote.cost.support.CostHighlightAccessService;
+import com.furuiduo.quote.cost.support.CostHighlightExpirySupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysDepartmentRepository;
 
@@ -41,6 +42,7 @@ public class CostDeptHighlightService {
 
   private final CostDeptHighlightRepository highlightRepository;
   private final CostHighlightAccessService accessService;
+  private final CostHighlightExpirySupport expirySupport;
   private final SysDepartmentRepository departmentRepository;
   private final CostRoadRepository roadRepository;
   private final CostSeaRepository seaRepository;
@@ -49,12 +51,14 @@ public class CostDeptHighlightService {
   public CostDeptHighlightService(
       CostDeptHighlightRepository highlightRepository,
       CostHighlightAccessService accessService,
+      CostHighlightExpirySupport expirySupport,
       SysDepartmentRepository departmentRepository,
       CostRoadRepository roadRepository,
       CostSeaRepository seaRepository,
       CostFumigationRepository fumigationRepository) {
     this.highlightRepository = highlightRepository;
     this.accessService = accessService;
+    this.expirySupport = expirySupport;
     this.departmentRepository = departmentRepository;
     this.roadRepository = roadRepository;
     this.seaRepository = seaRepository;
@@ -99,6 +103,39 @@ public class CostDeptHighlightService {
     return updated;
   }
 
+  /** 复制/续期：将源行全部部门常用标记复制到新记录（源行保留）。 */
+  @Transactional
+  public void copyHighlightsForCost(CostHighlightMode mode, Long sourceCostId, Long targetCostId) {
+    if (sourceCostId == null
+        || targetCostId == null
+        || sourceCostId <= 0
+        || targetCostId <= 0
+        || sourceCostId.equals(targetCostId)) {
+      return;
+    }
+    List<CostDeptHighlight> sources = highlightRepository.findByCostModeAndCostId(mode, sourceCostId);
+    if (sources.isEmpty()) {
+      return;
+    }
+    for (CostDeptHighlight source : sources) {
+      Long deptId = source.getDepartment().getId();
+      if (highlightRepository
+          .findByCostModeAndDepartmentIdAndCostId(mode, deptId, targetCostId)
+          .isPresent()) {
+        continue;
+      }
+      CostDeptHighlight copy = new CostDeptHighlight();
+      copy.setCostMode(mode);
+      copy.setCostId(targetCostId);
+      copy.setDepartment(source.getDepartment());
+      copy.setColor(source.getColor());
+      copy.setRemark(source.getRemark());
+      copy.setMarkedBy(source.getMarkedBy());
+      copy.setAdminShared(source.isAdminShared());
+      highlightRepository.save(copy);
+    }
+  }
+
   @Transactional
   public int unmark(CostHighlightMode mode, SysUser user, List<Long> rawIds) {
     List<Long> ids = RequestIds.distinctPositive(rawIds);
@@ -113,15 +150,26 @@ public class CostDeptHighlightService {
     return ids.size();
   }
 
+  @Transactional
   public Set<Long> visibleHighlightedCostIds(CostHighlightMode mode, SysUser user) {
+    LinkedHashSet<Long> ids = new LinkedHashSet<>();
     if (accessService.isGlobalViewer(user)) {
-      return new LinkedHashSet<>(
+      ids.addAll(
           highlightRepository.findCostIdsByModeAndDeptIds(
               mode, departmentRepository.findAll().stream().map(d -> d.getId()).toList()));
+    } else {
+      Long deptId = accessService.requireDeptId(user);
+      ids.addAll(highlightRepository.findVisibleCostIdsForBusinessUser(mode, deptId));
     }
-    Long deptId = accessService.requireDeptId(user);
-    return new LinkedHashSet<>(
-        highlightRepository.findVisibleCostIdsForBusinessUser(mode, deptId));
+    if (ids.isEmpty()) {
+      return ids;
+    }
+    Set<Long> expired = expirySupport.findExpiredIds(mode, ids);
+    if (!expired.isEmpty()) {
+      highlightRepository.deleteAllByModeAndCostIds(mode, expired);
+      ids.removeAll(expired);
+    }
+    return ids;
   }
 
   public Map<Long, CostHighlightView> buildViewMap(

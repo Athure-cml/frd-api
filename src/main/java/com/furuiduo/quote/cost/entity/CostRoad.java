@@ -42,8 +42,9 @@ public class CostRoad {
   @Column(length = 128)
   private String por;
 
+  /** STATION（熏蒸供应商，存全称） */
   @Column(length = 128)
-  private String region;
+  private String station;
 
   /** 装货港（港口档案） */
   @Column(length = 128)

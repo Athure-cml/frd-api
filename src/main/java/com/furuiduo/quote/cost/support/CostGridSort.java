@@ -23,6 +23,7 @@ public final class CostGridSort {
           "city",
           "state",
           "por",
+          "station",
           "pol",
           "supplier",
           "baseFreight",
@@ -169,7 +170,7 @@ public final class CostGridSort {
       case "city" -> entity.getCity();
       case "state" -> entity.getState();
       case "por" -> entity.getPor();
-      case "region" -> entity.getRegion();
+      case "station" -> entity.getStation();
       case "pol" -> entity.getPol();
       case "supplier" -> entity.getSupplier();
       case "baseFreight" -> entity.getBaseFreight();

@@ -56,7 +56,7 @@ public final class CostTemplateLayoutTools {
       next = ensureFumigationRemarkField(next);
     }
     if ("road".equals(mode)) {
-      next = ensureRoadRegionField(next);
+      next = ensureRoadStationField(next);
       next = ensureRoadFeeUnitFields(next);
       next = ensureRoadRemarkField(next);
     }
@@ -116,8 +116,8 @@ public final class CostTemplateLayoutTools {
         new ArrayList<>(customByField.values()));
   }
 
-  /** 为已有卡车模板补齐 REGION（位于 POR 与 SUPPLIER 之间，非必填）。 */
-  public static CostTableTemplateLayout ensureRoadRegionField(CostTableTemplateLayout layout) {
+  /** 为已有卡车模板补齐 STATION（位于 POR 与 SUPPLIER 之间，非必填）。 */
+  public static CostTableTemplateLayout ensureRoadStationField(CostTableTemplateLayout layout) {
     if (layout == null) {
       return null;
     }
@@ -131,22 +131,34 @@ public final class CostTemplateLayoutTools {
             : new LinkedHashMap<>(layout.fieldOverrides());
 
     boolean changed = false;
-    if (!order.contains("region")) {
+    int legacyRegionIndex = order.indexOf("region");
+    if (legacyRegionIndex >= 0) {
+      order.set(legacyRegionIndex, "station");
+      changed = true;
+    }
+    if (overrides.containsKey("region")) {
+      CostTableFieldOverride legacyOverride = overrides.remove("region");
+      overrides.putIfAbsent("station", legacyOverride);
+      changed = true;
+    }
+    if (!order.contains("station")) {
       int porIndex = order.indexOf("por");
       int supplierIndex = order.indexOf("supplier");
       if (porIndex >= 0) {
-        order.add(porIndex + 1, "region");
+        order.add(porIndex + 1, "station");
         changed = true;
       } else if (supplierIndex >= 0) {
-        order.add(supplierIndex, "region");
+        order.add(supplierIndex, "station");
         changed = true;
       }
     }
-    CostTableFieldOverride regionOverride = overrides.get("region");
-    if (regionOverride == null
-        || regionOverride.title() == null
-        || regionOverride.title().isBlank()) {
-      overrides.put("region", mergeOverrideTitle(regionOverride, "REGION"));
+    CostTableFieldOverride stationOverride = overrides.get("station");
+    String stationTitle =
+        stationOverride == null || stationOverride.title() == null
+            ? ""
+            : stationOverride.title().trim();
+    if (stationTitle.isEmpty() || "REGION".equalsIgnoreCase(stationTitle)) {
+      overrides.put("station", mergeOverrideTitle(stationOverride, "STATION"));
       changed = true;
     }
 

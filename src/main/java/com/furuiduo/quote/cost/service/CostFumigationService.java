@@ -30,6 +30,7 @@ import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.FumigationCostResponse;
 import com.furuiduo.quote.cost.dto.FumigationCostSaveRequest;
 import com.furuiduo.quote.cost.entity.CostFumigation;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
@@ -62,14 +63,17 @@ public class CostFumigationService {
   private final CostFumigationRepository repository;
   private final CostGridTemplateService templateService;
   private final CostMasterRefValidator masterRefValidator;
+  private final CostDeptHighlightService highlightService;
 
   public CostFumigationService(
       CostFumigationRepository repository,
       CostGridTemplateService templateService,
-      CostMasterRefValidator masterRefValidator) {
+      CostMasterRefValidator masterRefValidator,
+      CostDeptHighlightService highlightService) {
     this.repository = repository;
     this.templateService = templateService;
     this.masterRefValidator = masterRefValidator;
+    this.highlightService = highlightService;
   }
 
   /** 熏蒸成本库 STATION 去重列表，供报价单熏蒸点下拉使用。 */
@@ -227,7 +231,12 @@ public class CostFumigationService {
     applySave(entity, request);
     validateMasterRefs(entity);
     entity.touch();
-    return FumigationCostResponse.from(repository.save(entity));
+    CostFumigation saved = repository.save(entity);
+    if (request.copyHighlightFromId() != null) {
+      highlightService.copyHighlightsForCost(
+          CostHighlightMode.fumigation, request.copyHighlightFromId(), saved.getId());
+    }
+    return FumigationCostResponse.from(saved);
   }
 
   @Transactional

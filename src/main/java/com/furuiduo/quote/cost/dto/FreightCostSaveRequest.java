@@ -28,4 +28,5 @@ public record FreightCostSaveRequest(
     @Schema(description = "AGENT 代理") String agent,
     @Schema(description = "备注") String remark,
     @Schema(description = "状态（由有效期自动判定 active/expired，可忽略）") String status,
-    @Schema(description = "自定义字段值") Map<String, Object> extraFields) {}
+    @Schema(description = "自定义字段值") Map<String, Object> extraFields,
+    @Schema(description = "复制常用标记的源记录 ID（单条复制录入时传）") Long copyHighlightFromId) {}

@@ -128,7 +128,7 @@ public final class CostDataExcelExporter {
       case "city" -> item.getCity();
       case "state" -> item.getState();
       case "por" -> item.getPor();
-      case "region" -> item.getRegion();
+      case "station" -> item.getStation();
       case "pol" -> item.getPol();
       case "supplier" -> item.getSupplier();
       case "baseFreight" -> item.getBaseFreight();

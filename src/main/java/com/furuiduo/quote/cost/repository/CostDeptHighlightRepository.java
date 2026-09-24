@@ -22,6 +22,16 @@ public interface CostDeptHighlightRepository extends JpaRepository<CostDeptHighl
   List<CostDeptHighlight> findByCostModeAndCostIdIn(
       @Param("mode") CostHighlightMode costMode, @Param("costIds") Collection<Long> costIds);
 
+  @Query(
+      """
+      SELECT h FROM CostDeptHighlight h
+      JOIN FETCH h.department
+      JOIN FETCH h.markedBy
+      WHERE h.costMode = :mode AND h.costId = :costId
+      """)
+  List<CostDeptHighlight> findByCostModeAndCostId(
+      @Param("mode") CostHighlightMode mode, @Param("costId") Long costId);
+
   Optional<CostDeptHighlight> findByCostModeAndDepartmentIdAndCostId(
       CostHighlightMode costMode, Long departmentId, Long costId);
 

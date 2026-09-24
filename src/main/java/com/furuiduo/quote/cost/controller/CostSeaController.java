@@ -36,6 +36,7 @@ import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FreightCostSaveRequest;
+import com.furuiduo.quote.cost.dto.SeaCostRenewRequest;
 import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.service.CostDeptHighlightService;
 import com.furuiduo.quote.cost.service.CostSeaService;
@@ -185,6 +186,17 @@ public class CostSeaController {
       @RequestBody FreightCostSaveRequest request) {
     requireEdit(authService.requireUser(authorization));
     return ApiResponse.ok(costSeaService.update(id, request));
+  }
+
+  @PostMapping("/renew")
+  public ApiResponse<FreightCostResponse> renew(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody SeaCostRenewRequest request) {
+    requireEdit(authService.requireUser(authorization));
+    if (request == null || request.sourceId() == null || request.record() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "续期参数不完整");
+    }
+    return ApiResponse.ok(costSeaService.renew(request.sourceId(), request.record()));
   }
 
   @DeleteMapping("/{id}")
