@@ -27,7 +27,7 @@ public final class PermissionCatalog {
         new PermDef(PermissionCodes.SYS_OPERATION_LOG_VIEW, "操作日志-查看", PermissionType.API, 16),
         new PermDef(PermissionCodes.SYS_ANNOUNCEMENT_VIEW, "系统公告-查看", PermissionType.API, 17),
         new PermDef(PermissionCodes.SYS_ANNOUNCEMENT_MANAGE, "系统公告-管理", PermissionType.API, 18),
-        new PermDef(PermissionCodes.DASHBOARD_VIEW, "报价分析", PermissionType.MENU, 20),
+        new PermDef(PermissionCodes.DASHBOARD_VIEW, "工作台", PermissionType.MENU, 20),
         new PermDef(PermissionCodes.COST_ROAD_VIEW, "卡车成本-查看", PermissionType.API, 30),
         new PermDef(PermissionCodes.COST_ROAD_EDIT, "卡车成本-编辑", PermissionType.API, 31),
         new PermDef(PermissionCodes.COST_SEA_VIEW, "海运成本-查看", PermissionType.API, 32),
@@ -48,8 +48,38 @@ public final class PermissionCatalog {
         new PermDef(PermissionCodes.QUOTE_EDIT, "报价单-编辑", PermissionType.API, 52),
         new PermDef(PermissionCodes.QUOTE_SUBMIT, "报价单-提交", PermissionType.API, 53),
         new PermDef(PermissionCodes.QUOTE_APPROVE, "报价单-审批", PermissionType.API, 54),
+        new PermDef(PermissionCodes.APPROVAL_CONFIG_VIEW, "审批配置-查看", PermissionType.MENU, 92),
+        new PermDef(
+            PermissionCodes.APPROVAL_CONFIG_MANAGE, "审批配置-管理", PermissionType.API, 93),
         new PermDef(PermissionCodes.QUOTE_EXPORT, "报价单-导出", PermissionType.API, 55),
         new PermDef(PermissionCodes.QUOTE_DELETE, "报价单-删除", PermissionType.API, 56),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, "卡车报价库-查看", PermissionType.MENU, 57),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT, "卡车报价库-编辑", PermissionType.API, 58),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE, "卡车报价库-删除", PermissionType.API, 59),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, "海运报价库-查看", PermissionType.MENU, 60),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_SEA_EDIT, "海运报价库-编辑", PermissionType.API, 61),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_SEA_DELETE, "海运报价库-删除", PermissionType.API, 62),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
+            "熏蒸报价库-查看",
+            PermissionType.MENU,
+            63),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
+            "熏蒸报价库-编辑",
+            PermissionType.API,
+            64),
+        new PermDef(
+            PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE,
+            "熏蒸报价库-删除",
+            PermissionType.API,
+            65),
         new PermDef(PermissionCodes.CUSTOMER_VIEW, "客户-查看", PermissionType.API, 45),
         new PermDef(PermissionCodes.CUSTOMER_CREATE, "客户-新建", PermissionType.API, 46),
         new PermDef(PermissionCodes.CUSTOMER_EDIT, "客户-编辑", PermissionType.API, 47),

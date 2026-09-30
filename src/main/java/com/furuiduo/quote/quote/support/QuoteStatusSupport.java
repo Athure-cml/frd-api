@@ -19,7 +19,10 @@ public final class QuoteStatusSupport {
   private static final Set<QuoteStatus> EDITABLE = EnumSet.of(QuoteStatus.DRAFT);
 
   private static final Set<QuoteStatus> DELETABLE =
-      EnumSet.of(QuoteStatus.DRAFT, QuoteStatus.VOIDED);
+      EnumSet.of(QuoteStatus.DRAFT);
+
+  private static final Set<QuoteStatus> OPEN_REVISION =
+      EnumSet.of(QuoteStatus.DRAFT, QuoteStatus.PENDING_APPROVAL);
 
   private QuoteStatusSupport() {}
 
@@ -34,6 +37,17 @@ public final class QuoteStatusSupport {
       case LOST -> QuoteStatus.REJECTED.name();
       default -> status.name();
     };
+  }
+
+  public static QuoteStatus parseDisplayStatus(String displayStatus) {
+    if (displayStatus == null || displayStatus.isBlank()) {
+      return QuoteStatus.DRAFT;
+    }
+    try {
+      return normalize(QuoteStatus.valueOf(displayStatus));
+    } catch (IllegalArgumentException ex) {
+      return QuoteStatus.DRAFT;
+    }
   }
 
   public static QuoteStatus normalize(QuoteStatus status) {
@@ -61,15 +75,78 @@ public final class QuoteStatusSupport {
     return ABANDONED.contains(normalized);
   }
 
+  public static boolean isSuperseded(QuoteStatus status) {
+    return normalize(status) == QuoteStatus.SUPERSEDED;
+  }
+
+  public static boolean isRevising(QuoteStatus status) {
+    return normalize(status) == QuoteStatus.REVISING;
+  }
+
+  public static boolean isOpenRevisionStatus(QuoteStatus status) {
+    return OPEN_REVISION.contains(normalize(status));
+  }
+
+  public static Long resolveRootQuoteId(QuoteOrder order) {
+    if (order == null) {
+      return null;
+    }
+    if (order.getRootQuoteId() != null) {
+      return order.getRootQuoteId();
+    }
+    return order.getId();
+  }
+
+  public static String revisionLabel(Integer revisionNo) {
+    if (revisionNo == null || revisionNo <= 0) {
+      return null;
+    }
+    return "R" + revisionNo;
+  }
+
   public static boolean isExpired(QuoteOrder order) {
     if (order.getValidUntil() == null) {
       return false;
     }
     QuoteStatus status = normalize(order.getStatus());
-    if (isAbandoned(status) || status == QuoteStatus.WON) {
+    if (isAbandoned(status) || status == QuoteStatus.WON
+        || status == QuoteStatus.SUPERSEDED
+        || status == QuoteStatus.REVISING) {
       return false;
     }
     return order.getValidUntil().isBefore(LocalDate.now());
+  }
+
+  /**
+   * 超过有效期自动作废；历史 EXPIRED 一并转为 VOIDED。
+   *
+   * @return 是否变更了状态
+   */
+  public static boolean applyExpiredAsVoided(QuoteOrder order) {
+    if (order == null) {
+      return false;
+    }
+    QuoteStatus status = normalize(order.getStatus());
+    boolean changed = false;
+    if (status == QuoteStatus.EXPIRED) {
+      order.setStatus(QuoteStatus.VOIDED);
+      changed = true;
+    } else if (order.getValidUntil() != null
+        && order.getValidUntil().isBefore(LocalDate.now())
+        && status != QuoteStatus.VOIDED
+        && status != QuoteStatus.REJECTED
+        && status != QuoteStatus.WON
+        && status != QuoteStatus.SUPERSEDED
+        && status != QuoteStatus.REVISING) {
+      order.setStatus(QuoteStatus.VOIDED);
+      changed = true;
+    }
+    if (changed) {
+      order.setCostRiskActive(false);
+      order.setCostRiskReason(null);
+      order.setCostRiskAt(null);
+    }
+    return changed;
   }
 
   /** 列表/详情「已放弃」样式（拒绝、过期、作废） */

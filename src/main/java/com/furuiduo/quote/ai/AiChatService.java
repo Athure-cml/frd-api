@@ -383,10 +383,18 @@ public class AiChatService {
     List<String> pages = new ArrayList<>();
     if (permissionService.hasPermission(user, PermissionCodes.DASHBOARD_VIEW)) {
       pages.add("workspace");
-      pages.add("analytics");
     }
     if (permissionService.hasPermission(user, PermissionCodes.QUOTE_VIEW)) {
       pages.add("quote_list");
+    }
+    if (permissionService.hasPermission(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW)) {
+      pages.add("quote_library_road");
+    }
+    if (permissionService.hasPermission(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW)) {
+      pages.add("quote_library_sea");
+    }
+    if (permissionService.hasPermission(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW)) {
+      pages.add("quote_library_fumigation");
     }
     if (permissionService.hasPermission(user, PermissionCodes.QUOTE_CREATE)) {
       pages.add("quote_create");

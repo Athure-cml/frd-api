@@ -8,9 +8,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "报价单引入成本后按规则重算字段")
 public record QuoteApplyCostImportRequest(
     @Schema(description = "成本类型 ROAD|SEA|FUMIGATION") String costType,
+    @Schema(description = "报价库/成本库记录 ID") Long costRefId,
     @Schema(description = "成本库记录快照") Map<String, Object> snapshot,
     @Schema(description = "熏蒸点") String fumigationPoint,
     @Schema(description = "是否熏蒸（兼容）") Boolean fumigationEnabled,
+    @Schema(description = "OAK / NON-OAK") String oakType,
     @Schema(description = "POD（规则上下文）") String pod,
     @Schema(description = "POR（规则上下文）") String por,
     @Schema(description = "CIF 货值（规则上下文）") BigDecimal cifAmount,

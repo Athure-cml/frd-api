@@ -9,6 +9,8 @@ public final class QuoteDateTimes {
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
   private static final DateTimeFormatter DATE_FORMATTER =
       DateTimeFormatter.ofPattern("yyyy-MM-dd");
+  private static final DateTimeFormatter SECONDS_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
   private QuoteDateTimes() {}
 
@@ -18,5 +20,9 @@ public final class QuoteDateTimes {
 
   public static String formatDate(LocalDateTime value) {
     return value == null ? null : value.format(DATE_FORMATTER);
+  }
+
+  public static String formatSeconds(LocalDateTime value) {
+    return value == null ? null : value.format(SECONDS_FORMATTER);
   }
 }

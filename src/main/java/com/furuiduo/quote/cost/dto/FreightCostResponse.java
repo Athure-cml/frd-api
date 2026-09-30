@@ -36,7 +36,9 @@ public record FreightCostResponse(
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "自定义字段值") Map<String, Object> extraFields,
     @Schema(description = "更新时间") String updatedAt,
-    @Schema(description = "部门常用标记") CostHighlightView highlight) {
+    @Schema(description = "部门常用标记") CostHighlightView highlight,
+    @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
+    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -72,7 +74,9 @@ public record FreightCostResponse(
         status,
         migrateSeaExtraFields(entity.getExtraFields()),
         entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER),
-        highlight);
+        highlight,
+        false,
+        false);
   }
 
   public FreightCostResponse withHighlight(CostHighlightView highlight) {
@@ -101,7 +105,71 @@ public record FreightCostResponse(
         status,
         extraFields,
         updatedAt,
-        highlight);
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public FreightCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
+    return new FreightCostResponse(
+        id,
+        por,
+        pol,
+        pod,
+        cnShortName,
+        enProductName,
+        containerType,
+        freight,
+        freightValidDate,
+        buc,
+        bucValidDate,
+        ebs,
+        ebsValidDate,
+        gri,
+        griValidDate,
+        others,
+        othersValidDate,
+        allIn,
+        ssl,
+        agent,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public FreightCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
+    return new FreightCostResponse(
+        id,
+        por,
+        pol,
+        pod,
+        cnShortName,
+        enProductName,
+        containerType,
+        freight,
+        freightValidDate,
+        buc,
+        bucValidDate,
+        ebs,
+        ebsValidDate,
+        gri,
+        griValidDate,
+        others,
+        othersValidDate,
+        allIn,
+        ssl,
+        agent,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
   }
 
   private static Map<String, Object> migrateSeaExtraFields(Map<String, Object> extraFields) {

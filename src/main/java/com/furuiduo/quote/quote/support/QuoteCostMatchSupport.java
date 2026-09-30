@@ -9,37 +9,51 @@ import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 
-/** 报价单引入成本：仅匹配/允许「生效中」记录。 */
+/** 报价单引入成本：允许「生效中 / 未生效」，排除已过期。 */
 public final class QuoteCostMatchSupport {
 
   private QuoteCostMatchSupport() {}
 
   public static Optional<CostRoad> firstActiveRoad(List<CostRoad> items) {
-    return items.stream().filter(QuoteCostMatchSupport::isActive).findFirst();
+    return items.stream().filter(QuoteCostMatchSupport::isImportable).findFirst();
   }
 
   public static Optional<CostSea> firstActiveSea(List<CostSea> items) {
-    return items.stream().filter(QuoteCostMatchSupport::isActive).findFirst();
+    return items.stream().filter(QuoteCostMatchSupport::isImportable).findFirst();
   }
 
   public static Optional<CostFumigation> firstActiveFumigation(List<CostFumigation> items) {
-    return items.stream().filter(QuoteCostMatchSupport::isActive).findFirst();
+    return items.stream().filter(QuoteCostMatchSupport::isImportable).findFirst();
   }
 
   public static boolean isActive(CostRoad road) {
-    return CostValidityStatus.resolveRoad(road.getStatus(), road.getExtraFields(), road.getValidDate())
-        == CostStatus.active;
+    return isImportable(road);
   }
 
   public static boolean isActive(CostSea sea) {
-    return CostValidityStatus.resolve(sea.getStatus(), sea.getFreightValidDate())
-        == CostStatus.active;
+    return isImportable(sea);
   }
 
   public static boolean isActive(CostFumigation fum) {
-    return CostValidityStatus.resolve(
-            fum.getStatus(), fum.getOutdoorValidity(), fum.getIndoorValidity())
-        == CostStatus.active;
+    return isImportable(fum);
+  }
+
+  public static boolean isImportable(CostRoad road) {
+    CostStatus status =
+        CostValidityStatus.resolveRoad(road.getStatus(), road.getExtraFields(), road.getValidDate());
+    return status == CostStatus.active || status == CostStatus.pending;
+  }
+
+  public static boolean isImportable(CostSea sea) {
+    CostStatus status = CostValidityStatus.resolve(sea.getStatus(), sea.getFreightValidDate());
+    return status == CostStatus.active || status == CostStatus.pending;
+  }
+
+  public static boolean isImportable(CostFumigation fum) {
+    CostStatus status =
+        CostValidityStatus.resolve(
+            fum.getStatus(), fum.getOutdoorValidity(), fum.getIndoorValidity());
+    return status == CostStatus.active || status == CostStatus.pending;
   }
 
   /** 海运 POL 支持单值或 / 拼接多港。 */
@@ -62,7 +76,7 @@ public final class QuoteCostMatchSupport {
   public static Optional<CostSea> firstActiveSeaByPol(List<CostSea> items, String pol) {
     return items.stream()
         .filter(item -> polMatches(item.getPol(), pol))
-        .filter(QuoteCostMatchSupport::isActive)
+        .filter(QuoteCostMatchSupport::isImportable)
         .findFirst();
   }
 

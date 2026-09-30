@@ -7,6 +7,7 @@ public record AnnouncementResponse(
     @Schema(description = "ID") Long id,
     @Schema(description = "标题") String title,
     @Schema(description = "正文") String content,
+    @Schema(description = "展示方式：MODAL/TICKER/BOTH") String displayType,
     @Schema(description = "状态") String status,
     @Schema(description = "发布时间") String publishedAt,
     @Schema(description = "过期时间") String expiresAt,

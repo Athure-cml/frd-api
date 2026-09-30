@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.furuiduo.quote.quote.entity.QuoteOakType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteTransportMode;
+import com.furuiduo.quote.quote.support.QuoteServiceTypesSupport;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record QuoteSaveRequest(
     @Schema(description = "客户ID") Long customerId,
     @Schema(description = "客户名称") String customerName,
+    @Schema(description = "服务类型（多选）") List<String> serviceTypes,
     @Schema(description = "运输方式") String transportMode,
     @Schema(description = "路线摘要") String routeSummary,
     @Schema(description = "币种") String currency,
@@ -38,6 +41,7 @@ public record QuoteSaveRequest(
     @Schema(description = "FM OAK") BigDecimal fmOak,
     @Schema(description = "熏蒸点") String fumigationPoint,
     @Schema(description = "是否熏蒸") Boolean fumigationEnabled,
+    @Schema(description = "OAK / NON-OAK") String oakType,
     @Schema(description = "DOC FEE") String docUsd,
     @Schema(description = "CARGO INSURANCE PREMIUM") String cargoInsurancePremium,
     @Schema(description = "CARGO AGENT FEE") String cargoAgentFee,
@@ -51,6 +55,17 @@ public record QuoteSaveRequest(
     @Schema(description = "明细行") List<QuoteLineSaveRequest> lines,
     @Schema(description = "成本匹配结果（引入成本库后传入以冻结快照）")
         List<QuoteCostMatchItemDto> costMatches) {
+
+  public List<String> parsedServiceTypes() {
+    return QuoteServiceTypesSupport.normalize(serviceTypes);
+  }
+
+  public QuoteOakType parsedOakType() {
+    if (oakType == null || oakType.isBlank()) {
+      return null;
+    }
+    return QuoteOakType.valueOf(oakType.trim().toUpperCase().replace('-', '_'));
+  }
 
   public QuoteTransportMode parsedTransportMode() {
     return QuoteTransportMode.valueOf(transportMode);
@@ -67,6 +82,7 @@ public record QuoteSaveRequest(
     return new QuoteSaveRequest(
         order.getCustomerId(),
         order.getCustomerName(),
+        QuoteServiceTypesSupport.copyOf(order.getServiceTypes()),
         order.getTransportMode().name(),
         order.getRouteSummary(),
         order.getCurrency(),
@@ -91,6 +107,7 @@ public record QuoteSaveRequest(
         order.getFmOak(),
         order.getFumigationPoint(),
         order.getFumigationEnabled(),
+        order.getOakType() == null ? null : order.getOakType().name(),
         order.getDocUsd(),
         order.getCargoInsurancePremium(),
         order.getCargoAgentFee(),

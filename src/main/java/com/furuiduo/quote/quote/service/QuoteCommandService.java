@@ -19,6 +19,7 @@ import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
 import com.furuiduo.quote.quote.dto.QuoteLineSaveRequest;
 import com.furuiduo.quote.quote.dto.QuoteSaveRequest;
+import com.furuiduo.quote.quote.entity.QuoteOakType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteOrderLine;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
@@ -38,6 +39,9 @@ public class QuoteCommandService {
   private final CurrencyCommandService currencyCommandService;
   private final ExchangeRateResolver exchangeRateResolver;
   private final QuoteCostMatchService quoteCostMatchService;
+  private final QuoteCostRiskService quoteCostRiskService;
+  private final QuoteApprovalLogService quoteApprovalLogService;
+  private final QuoteLibraryUsageService quoteLibraryUsageService;
 
   public QuoteCommandService(
       QuoteOrderRepository quoteOrderRepository,
@@ -47,7 +51,10 @@ public class QuoteCommandService {
       CustomerCommandService customerCommandService,
       CurrencyCommandService currencyCommandService,
       ExchangeRateResolver exchangeRateResolver,
-      QuoteCostMatchService quoteCostMatchService) {
+      QuoteCostMatchService quoteCostMatchService,
+      QuoteCostRiskService quoteCostRiskService,
+      QuoteApprovalLogService quoteApprovalLogService,
+      QuoteLibraryUsageService quoteLibraryUsageService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteQueryService = quoteQueryService;
     this.quoteAccessService = quoteAccessService;
@@ -56,6 +63,9 @@ public class QuoteCommandService {
     this.currencyCommandService = currencyCommandService;
     this.exchangeRateResolver = exchangeRateResolver;
     this.quoteCostMatchService = quoteCostMatchService;
+    this.quoteCostRiskService = quoteCostRiskService;
+    this.quoteApprovalLogService = quoteApprovalLogService;
+    this.quoteLibraryUsageService = quoteLibraryUsageService;
   }
 
   @Transactional
@@ -70,6 +80,12 @@ public class QuoteCommandService {
     order.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
     applySaveRequest(order, request);
     QuoteOrder saved = quoteOrderRepository.save(order);
+    if (saved.getRootQuoteId() == null) {
+      saved.setRootQuoteId(saved.getId());
+      saved.setRevisionNo(0);
+      saved.setCurrentVersion(true);
+      saved = quoteOrderRepository.save(saved);
+    }
     if (request.costMatches() != null && !request.costMatches().isEmpty()) {
       quoteCostMatchService.replaceSnapshots(saved, request.costMatches());
     }
@@ -82,6 +98,7 @@ public class QuoteCommandService {
 
     QuoteOrder order = requireEditable(user, id);
     applySaveRequest(order, request);
+    quoteCostRiskService.clearOnSave(user, order);
     order.setUpdatedAt(LocalDateTime.now());
 
     QuoteOrder saved = quoteOrderRepository.save(order);
@@ -96,7 +113,59 @@ public class QuoteCommandService {
   @Transactional
   public void delete(SysUser user, Long id) {
     QuoteOrder order = requireDeletable(user, id);
-    quoteOrderRepository.delete(order);
+    Long parentId = order.getParentQuoteId();
+    Long rootId = QuoteStatusSupport.resolveRootQuoteId(order);
+    Integer revisionNo = order.getRevisionNo();
+    if (quoteApprovalLogService.hasLogs(id)) {
+      // 有审批记录：软删，保留审批日志；补齐打印快照供审批详情展示
+      quoteApprovalLogService.ensurePrintSnapshots(
+          order, quoteCostMatchService.listSnapshots(id, null));
+      order.setDeletedAt(LocalDateTime.now());
+      order.setUpdatedAt(LocalDateTime.now());
+      quoteOrderRepository.save(order);
+      quoteLibraryUsageService.releaseByQuoteId(id);
+    } else {
+      quoteOrderRepository.delete(order);
+    }
+    restoreParentIfRevisionAbandoned(parentId, rootId, revisionNo);
+  }
+
+  /** 变更草稿删除后，若无其他进行中变更单，将「变更中」的父单恢复为已确认（并保留原有成本风险） */
+  private void restoreParentIfRevisionAbandoned(
+      Long parentId, Long rootId, Integer revisionNo) {
+    if (parentId == null || rootId == null || revisionNo == null || revisionNo <= 0) {
+      return;
+    }
+    boolean openExists =
+        quoteOrderRepository.existsOpenRevision(
+            rootId,
+            0,
+            java.util.EnumSet.of(QuoteStatus.DRAFT, QuoteStatus.PENDING_APPROVAL));
+    if (openExists) {
+      return;
+    }
+    quoteOrderRepository
+        .findById(parentId)
+        .ifPresent(
+            parent -> {
+              if (QuoteStatusSupport.normalize(parent.getStatus()) == QuoteStatus.REVISING) {
+                parent.setStatus(QuoteStatus.SENT);
+                parent.setUpdatedAt(LocalDateTime.now());
+                quoteOrderRepository.save(parent);
+              }
+            });
+  }
+
+  @Transactional
+  public QuoteDetailResponse dismissCostRisk(SysUser user, Long id) {
+    QuoteOrder order =
+        quoteOrderRepository
+            .findWithLinesById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
+    quoteQueryService.assertReadable(user, order);
+    quoteAccessService.assertOperable(user, order);
+    quoteCostRiskService.dismiss(user, id);
+    return quoteQueryService.getById(user, id);
   }
 
   private QuoteOrder requireEditable(SysUser user, Long id) {
@@ -106,6 +175,9 @@ public class QuoteCommandService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
     quoteQueryService.assertReadable(user, order);
     quoteAccessService.assertOperable(user, order);
+    if (order.getDeletedAt() != null) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除，不可编辑");
+    }
     if (!QuoteStatusSupport.isEditable(order.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "当前状态不可编辑");
     }
@@ -119,13 +191,26 @@ public class QuoteCommandService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
     quoteQueryService.assertReadable(user, order);
     quoteAccessService.assertOperable(user, order);
+    if (order.getDeletedAt() != null) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除");
+    }
     if (!QuoteStatusSupport.isDeletable(order.getStatus())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿或已作废报价可删除");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿报价可删除");
     }
     return order;
   }
 
   private void validateSaveRequest(QuoteSaveRequest request) {
+    if (request.serviceTypes() == null || request.serviceTypes().isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择服务类型");
+    }
+    try {
+      if (request.parsedServiceTypes().isEmpty()) {
+        throw new IllegalArgumentException();
+      }
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的服务类型");
+    }
     if (request.transportMode() == null || request.transportMode().isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "运输方式不能为空");
     }
@@ -133,6 +218,21 @@ public class QuoteCommandService {
       request.parsedTransportMode();
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的运输方式");
+    }
+    boolean fumigation =
+        trimToNull(request.fumigationPoint()) != null
+            || Boolean.TRUE.equals(request.fumigationEnabled());
+    if (fumigation) {
+      if (request.oakType() == null || request.oakType().isBlank()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 OAK / NON-OAK");
+      }
+      try {
+        if (request.parsedOakType() == null) {
+          throw new IllegalArgumentException();
+        }
+      } catch (IllegalArgumentException ex) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的 OAK / NON-OAK");
+      }
     }
   }
 
@@ -146,6 +246,7 @@ public class QuoteCommandService {
       order.setCustomerName(
           request.customerName() == null ? "" : request.customerName().trim());
     }
+    order.setServiceTypes(request.parsedServiceTypes());
     order.setTransportMode(request.parsedTransportMode());
     order.setRouteSummary(trimToNull(request.routeSummary()));
     applyCurrencySnapshot(order, request);
@@ -200,13 +301,22 @@ public class QuoteCommandService {
     order.setWaiting(request.waiting());
     order.setRedeliveryFee(request.redeliveryFee());
     order.setTruckRemark(trimToNull(request.truckRemark()));
-    order.setTruckingNonOakUsd(
-        request.truckingNonOakUsd() != null ? request.truckingNonOakUsd() : request.truckingFee());
-    order.setTruckingOakUsd(request.truckingOakUsd());
     order.setFmNonOak(request.fmNonOak());
     order.setFmOak(request.fmOak());
     order.setFumigationPoint(trimToNull(request.fumigationPoint()));
-    order.setFumigationEnabled(resolveFumigationEnabled(request));
+    boolean fumigation = resolveFumigationEnabled(request);
+    order.setFumigationEnabled(fumigation);
+    order.setOakType(fumigation ? request.parsedOakType() : null);
+    if (fumigation && request.parsedOakType() == QuoteOakType.OAK) {
+      order.setTruckingOakUsd(request.truckingFee());
+      order.setTruckingNonOakUsd(null);
+    } else if (fumigation && request.parsedOakType() == QuoteOakType.NON_OAK) {
+      order.setTruckingNonOakUsd(request.truckingFee());
+      order.setTruckingOakUsd(null);
+    } else {
+      order.setTruckingNonOakUsd(request.truckingFee());
+      order.setTruckingOakUsd(null);
+    }
     order.setDocUsd(trimToNull(request.docUsd()));
     order.setCargoInsurancePremium(trimToNull(request.cargoInsurancePremium()));
     order.setCargoAgentFee(trimToNull(request.cargoAgentFee()));

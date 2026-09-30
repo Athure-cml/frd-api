@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.validation.Valid;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.auth.AuthService;
@@ -28,10 +30,14 @@ import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.service.CostFumigationService;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
+import com.furuiduo.quote.quote.dto.QuoteApprovalCommentRequest;
+import com.furuiduo.quote.quote.dto.QuoteApprovalHistoryItem;
+import com.furuiduo.quote.quote.dto.QuoteWithdrawRequest;
 import com.furuiduo.quote.quote.dto.QuoteApplyCostImportRequest;
 import com.furuiduo.quote.quote.dto.QuoteApplyCostImportResponse;
 import com.furuiduo.quote.quote.dto.QuoteBatchExportRequest;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
+import com.furuiduo.quote.quote.dto.QuoteDocFeeResponse;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpResponse;
@@ -39,6 +45,7 @@ import com.furuiduo.quote.quote.dto.QuoteFollowUpSaveRequest;
 import com.furuiduo.quote.quote.dto.QuoteListItem;
 import com.furuiduo.quote.quote.dto.QuoteMatchCostsRequest;
 import com.furuiduo.quote.quote.dto.QuoteMatchCostsResponse;
+import com.furuiduo.quote.quote.dto.QuoteReviseRequest;
 import com.furuiduo.quote.quote.dto.QuoteSaveRequest;
 import com.furuiduo.quote.quote.service.QuoteCommandService;
 import com.furuiduo.quote.quote.service.QuoteCostImportApplyService;
@@ -123,7 +130,8 @@ public class QuoteController {
       @RequestParam(required = false) String pickUpAddress,
       @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
-      @RequestParam(required = false) String followUpByName) {
+      @RequestParam(required = false) String followUpByName,
+      @RequestParam(required = false) String libraryMode) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     return ApiResponse.ok(
@@ -144,7 +152,8 @@ public class QuoteController {
             pickUpAddress,
             fumigationPoint,
             ssl,
-            followUpByName));
+            followUpByName,
+            libraryMode));
   }
 
   @Operation(
@@ -175,6 +184,19 @@ public class QuoteController {
   }
 
   @Operation(
+      summary = "按 POD 自动匹配单证费",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/doc-fee")
+  public ApiResponse<QuoteDocFeeResponse> previewDocFee(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestParam(required = false) String pod) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(
+        new QuoteDocFeeResponse(quoteSheetGenerateService.previewDocFee(pod)));
+  }
+
+  @Operation(
       summary = "报价单详情",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @GetMapping("/{id}")
@@ -194,7 +216,7 @@ public class QuoteController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteMatchCostsRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireView(user);
+    requireCreateOrEdit(user);
     QuoteMatchCostsResponse result = quoteCostMatchService.match(request);
     if (!result.matched()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "无对应成本数据，请先维护成本库");
@@ -210,7 +232,7 @@ public class QuoteController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteGenerateSheetRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireView(user);
+    requireCreateOrEdit(user);
     return ApiResponse.ok(quoteSheetGenerateService.generate(request));
   }
 
@@ -222,7 +244,7 @@ public class QuoteController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteApplyCostImportRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireView(user);
+    requireCreateOrEdit(user);
     return ApiResponse.ok(quoteCostImportApplyService.apply(request));
   }
 
@@ -282,10 +304,12 @@ public class QuoteController {
   @PostMapping("/{id}/send")
   public ApiResponse<QuoteDetailResponse> send(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @PathVariable Long id) {
+      @PathVariable Long id,
+      @RequestBody(required = false) @Valid QuoteApprovalCommentRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireApprove(user);
-    return ApiResponse.ok(quoteWorkflowService.markSent(user, id));
+    String comment = body != null ? body.comment() : null;
+    return ApiResponse.ok(quoteWorkflowService.markSent(user, id, comment));
   }
 
   @Operation(
@@ -294,22 +318,38 @@ public class QuoteController {
   @PostMapping("/{id}/follow")
   public ApiResponse<QuoteDetailResponse> follow(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @PathVariable Long id) {
+      @PathVariable Long id,
+      @RequestBody(required = false) @Valid QuoteApprovalCommentRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireApprove(user);
-    return ApiResponse.ok(quoteWorkflowService.markSent(user, id));
+    String comment = body != null ? body.comment() : null;
+    return ApiResponse.ok(quoteWorkflowService.markSent(user, id, comment));
   }
 
   @Operation(
-      summary = "取消审批",
+      summary = "审批驳回（待审批退回草稿）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/reject-approval")
+  public ApiResponse<QuoteDetailResponse> rejectApproval(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id,
+      @RequestBody @Valid QuoteApprovalCommentRequest body) {
+    SysUser user = authService.requireUser(authorization);
+    requireApprove(user);
+    return ApiResponse.ok(quoteWorkflowService.rejectApproval(user, id, body.comment()));
+  }
+
+  @Operation(
+      summary = "撤回审批",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/cancel-approval")
   public ApiResponse<QuoteDetailResponse> cancelApproval(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @PathVariable Long id) {
+      @PathVariable Long id,
+      @RequestBody @Valid QuoteWithdrawRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireSubmit(user);
-    return ApiResponse.ok(quoteWorkflowService.cancelApproval(user, id));
+    return ApiResponse.ok(quoteWorkflowService.cancelApproval(user, id, body.comment()));
   }
 
   @Operation(
@@ -349,6 +389,18 @@ public class QuoteController {
   }
 
   @Operation(
+      summary = "关闭成本风险警示（人工复核）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/dismiss-cost-risk")
+  public ApiResponse<QuoteDetailResponse> dismissCostRisk(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireEdit(user);
+    return ApiResponse.ok(quoteCommandService.dismissCostRisk(user, id));
+  }
+
+  @Operation(
       summary = "复制新建",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/copy")
@@ -358,6 +410,20 @@ public class QuoteController {
     SysUser user = authService.requireUser(authorization);
     requireCreate(user);
     return ApiResponse.ok(quoteWorkflowService.copyAsNew(user, id));
+  }
+
+  @Operation(
+      summary = "发起变更（已确认报价 → 变更草稿）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/revise")
+  public ApiResponse<QuoteDetailResponse> revise(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id,
+      @Valid @RequestBody QuoteReviseRequest body) {
+    SysUser user = authService.requireUser(authorization);
+    requireCreate(user);
+    requireEdit(user);
+    return ApiResponse.ok(quoteWorkflowService.reviseAsNew(user, id, body));
   }
 
   @Operation(
@@ -427,6 +493,18 @@ public class QuoteController {
                 + URLEncoder.encode("报价单.xlsx", StandardCharsets.UTF_8).replace("+", "%20"))
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
         .body(bytes);
+  }
+
+  @Operation(
+      summary = "报价单审批日志",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/{id}/approval-logs")
+  public ApiResponse<List<QuoteApprovalHistoryItem>> approvalLogs(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(quoteQueryService.listApprovalLogs(user, id));
   }
 
   @Operation(
@@ -524,6 +602,13 @@ public class QuoteController {
 
   private void requireEdit(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.QUOTE_EDIT)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权编辑报价单");
+    }
+  }
+
+  private void requireCreateOrEdit(SysUser user) {
+    if (!permissionService.hasPermission(user, PermissionCodes.QUOTE_CREATE)
+        && !permissionService.hasPermission(user, PermissionCodes.QUOTE_EDIT)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权编辑报价单");
     }
   }

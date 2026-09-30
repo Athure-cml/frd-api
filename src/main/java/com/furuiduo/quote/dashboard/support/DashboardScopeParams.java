@@ -17,4 +17,10 @@ public record DashboardScopeParams(
         deptId,
         user.getId());
   }
+
+  /** 仅当前用户作为创建人的报价单（待办/提醒推送） */
+  public static DashboardScopeParams self(SysUser user) {
+    Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+    return new DashboardScopeParams(false, false, true, deptId, user.getId());
+  }
 }

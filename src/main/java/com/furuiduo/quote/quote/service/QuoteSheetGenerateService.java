@@ -17,6 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.common.SearchText;
+import com.furuiduo.quote.cost.dto.FreightCostResponse;
+import com.furuiduo.quote.cost.dto.FumigationCostResponse;
+import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
@@ -32,6 +35,7 @@ import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
 import com.furuiduo.quote.quote.support.QuoteCostMatchKeys;
 import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
 import com.furuiduo.quote.quote.support.QuoteCostSnapshotMapper;
+import com.furuiduo.quote.quote.support.QuoteRoadAllInSupport;
 import com.furuiduo.quote.quoterule.QuoteRuleContext;
 import com.furuiduo.quote.quoterule.service.QuoteRuleEngine;
 
@@ -57,18 +61,21 @@ public class QuoteSheetGenerateService {
   private final CostFumigationRepository costFumigationRepository;
   private final MdGlobalPortRepository globalPortRepository;
   private final QuoteRuleEngine quoteRuleEngine;
+  private final QuoteLibraryMatchService quoteLibraryMatchService;
 
   public QuoteSheetGenerateService(
       CostRoadRepository costRoadRepository,
       CostSeaRepository costSeaRepository,
       CostFumigationRepository costFumigationRepository,
       MdGlobalPortRepository globalPortRepository,
-      QuoteRuleEngine quoteRuleEngine) {
+      QuoteRuleEngine quoteRuleEngine,
+      QuoteLibraryMatchService quoteLibraryMatchService) {
     this.costRoadRepository = costRoadRepository;
     this.costSeaRepository = costSeaRepository;
     this.costFumigationRepository = costFumigationRepository;
     this.globalPortRepository = globalPortRepository;
     this.quoteRuleEngine = quoteRuleEngine;
+    this.quoteLibraryMatchService = quoteLibraryMatchService;
   }
 
   public QuoteGenerateSheetResponse generate(QuoteGenerateSheetRequest request) {
@@ -76,12 +83,9 @@ public class QuoteSheetGenerateService {
     String pol = trim(request.pol());
     String pod = trim(request.pod());
 
-    // 必填：POR、POL 与 POD 未选择时不允许生成
+    // 必填：POR、POD；POL 可选（海运匹配时用于多 POL 筛选）
     if (isBlank(por)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POR");
-    }
-    if (isBlank(pol)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POL");
     }
     if (isBlank(pod)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 POD");
@@ -126,22 +130,27 @@ public class QuoteSheetGenerateService {
     BigDecimal fmNonOakAmount = BigDecimal.ZERO;
     BigDecimal fmOakAmount = BigDecimal.ZERO;
 
-    // 海运费：通过 POR、POL、POD 匹配海运成本库；仅引入生效中；取值 = ALL IN + 规则
+    // 海运费：匹配报价库（规则 + override 后的 ALL IN）
     List<CostSea> seas =
         costSeaRepository.matchByRoute(
             SearchText.orEmpty(porForSea), SearchText.orEmpty(pod), "");
-    var activeSea = QuoteCostMatchSupport.firstActiveSeaByPol(seas, polForSea);
+    var activeSea =
+        QuoteCostMatchSupport.firstActiveSeaByPol(
+            quoteLibraryMatchService.filterSeaInLibrary(seas), polForSea);
     if (activeSea.isPresent()) {
       CostSea sea = activeSea.get();
-      matches.add(QuoteCostSnapshotMapper.fromSea(sea, matchKeys));
-      BigDecimal allIn = sea.getAllIn();
-      if (allIn != null) {
-        oceanFreight = quoteRuleEngine.formatDecimalTarget("OCEAN_FREIGHT", allIn, ruleContext);
+      var seaMatch = quoteLibraryMatchService.matchSea(sea, matchKeys);
+      if (seaMatch.isPresent()) {
+        matches.add(seaMatch.get());
+        FreightCostResponse libraryRow = quoteLibraryMatchService.loadSeaRow(sea.getId());
+        if (libraryRow.allIn() != null) {
+          oceanFreight = libraryRow.allIn().toPlainString();
+        }
+        ssl = trim(libraryRow.ssl());
       }
-      ssl = trim(sea.getSsl());
     }
 
-    // 卡车费：city/state 均已填时才匹配；已手动引入时 skipRoadMatch 跳过
+    // 卡车费：匹配报价库
     if (!Boolean.TRUE.equals(request.skipRoadMatch())
         && QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
       List<CostRoad> roads =
@@ -152,49 +161,52 @@ public class QuoteSheetGenerateService {
               "",
               "",
               "");
-      var activeRoad = QuoteCostMatchSupport.firstActiveRoad(roads);
+      var activeRoad =
+          QuoteCostMatchSupport.firstActiveRoad(
+              quoteLibraryMatchService.filterRoadInLibrary(roads));
       if (activeRoad.isPresent()) {
         CostRoad road = activeRoad.get();
-        matches.add(QuoteCostSnapshotMapper.fromRoad(road, matchKeys));
-        if (fumigationEnabled) {
-          if (road.getAllInFmOneWay() != null) {
-            truckingNonOakUsd =
-                quoteRuleEngine.applyDecimalTarget(
-                    "TRUCKING_FEE", road.getAllInFmOneWay(), ruleContext);
-          }
-          if (road.getAllInFmRound() != null) {
-            truckingOakUsd =
-                quoteRuleEngine.applyDecimalTarget(
-                    "TRUCKING_FEE", road.getAllInFmRound(), ruleContext);
-          }
-        } else if (road.getAllInNoFm() != null) {
+        var roadMatch = quoteLibraryMatchService.matchRoad(road, matchKeys);
+        if (roadMatch.isPresent()) {
+          matches.add(roadMatch.get());
+          RoadCostResponse libraryRow = quoteLibraryMatchService.loadRoadRow(road.getId());
           truckingFee =
-              quoteRuleEngine.applyDecimalTarget(
-                  "TRUCKING_FEE", road.getAllInNoFm(), ruleContext);
+              QuoteRoadAllInSupport.pick(
+                  libraryRow.allInNoFm(),
+                  libraryRow.allInFmOneWay(),
+                  libraryRow.allInFmRound(),
+                  fumigationEnabled,
+                  request.oakType());
+          nsLift = libraryRow.nsLift();
+          chassis = resolveExtraChassis(libraryRow);
+          waiting = libraryRow.waitingFee();
+          redeliveryFee = libraryRow.redelivery();
+          truckRemark =
+              trim(
+                  QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(
+                      QuoteCostSnapshotMapper.roadSnapshotFromResponse(libraryRow)));
         }
-        nsLift = road.getNsLift();
-        chassis = resolveExtraChassis(road);
-        waiting = road.getWaitingFee();
-        redeliveryFee = road.getRedelivery();
-        truckRemark = trim(QuoteCostMatchSupport.resolveRoadRemark(road));
       }
     }
 
-    // 熏蒸费：勾选「是否熏蒸」后，仅引入生效中记录，按报价日期匹配 FM-OUTDOOR / FM-INDOOR
+    // 熏蒸费：匹配报价库
     List<CostFumigation> fums =
         costFumigationRepository.matchByStation(
             SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
-    var activeFum = QuoteCostMatchSupport.firstActiveFumigation(fums);
+    var activeFum =
+        QuoteCostMatchSupport.firstActiveFumigation(
+            quoteLibraryMatchService.filterFumigationInLibrary(fums));
     if (fumigationEnabled && activeFum.isPresent()) {
       CostFumigation fum = activeFum.get();
-      matches.add(QuoteCostSnapshotMapper.fromFumigation(fum, matchKeys));
-      FumigationRates rates = resolveFumigationRates(fum, quoteDate);
-      BigDecimal nonOakBase =
-          rates.nonOak() != null ? rates.nonOak() : BigDecimal.ZERO;
-      BigDecimal oakBase = rates.oak() != null ? rates.oak() : BigDecimal.ZERO;
-      fmNonOakAmount =
-          quoteRuleEngine.applyDecimalTarget("FM_NON_OAK", nonOakBase, ruleContext);
-      fmOakAmount = quoteRuleEngine.applyDecimalTarget("FM_OAK", oakBase, ruleContext);
+      var fumMatch = quoteLibraryMatchService.matchFumigation(fum, matchKeys);
+      if (fumMatch.isPresent()) {
+        matches.add(fumMatch.get());
+        FumigationCostResponse libraryRow =
+            quoteLibraryMatchService.loadFumigationRow(fum.getId());
+        FumigationRates rates = resolveFumigationRates(libraryRow, quoteDate);
+        fmNonOakAmount = rates.nonOak() != null ? rates.nonOak() : BigDecimal.ZERO;
+        fmOakAmount = rates.oak() != null ? rates.oak() : BigDecimal.ZERO;
+      }
     }
 
     // 单证费、保险费、代理费：按主数据-报价单规则计算
@@ -237,6 +249,12 @@ public class QuoteSheetGenerateService {
         quoteDate.format(DateTimeFormatter.ISO_LOCAL_DATE), sheet, matches);
   }
 
+  public String previewDocFee(String pod) {
+    QuoteRuleContext ruleContext =
+        new QuoteRuleContext(false, isChinaPort(trim(pod)), null, null);
+    return quoteRuleEngine.applyDocFee(ruleContext);
+  }
+
   /** 单证费：POD 对应港口国家为中国则 300，否则 350（美元） */
   private boolean isChinaPort(String pod) {
     List<MdGlobalPort> ports = globalPortRepository.findByNameEnIgnoreCase(pod);
@@ -260,35 +278,33 @@ public class QuoteSheetGenerateService {
     return false;
   }
 
-  /** 额外底盘费 EXTRA CHASSIS：来自卡车成本库扩展字段 */
-  private BigDecimal resolveExtraChassis(CostRoad road) {
-    if (road.getExtraFields() != null) {
-      Object extra = road.getExtraFields().get(ROAD_EXTRA_CHASSIS_KEY);
+  /** 额外底盘费 EXTRA CHASSIS：来自报价库行扩展字段 */
+  private BigDecimal resolveExtraChassis(RoadCostResponse row) {
+    if (row.extraFields() != null) {
+      Object extra = row.extraFields().get(ROAD_EXTRA_CHASSIS_KEY);
       BigDecimal parsed = toBigDecimal(extra);
       if (parsed != null) {
         return parsed;
       }
     }
-    return road.getChassis();
+    return row.chassis();
   }
 
-  /**
-   * 熏蒸报价：报价日期落在 FM-OUTDOOR 有效期内优先取 outdoor，否则取 FM-INDOOR；
-   * 有效期字段支持 YYYY-MM-DD 或历史区间（取结束日）。
-   */
-  private FumigationRates resolveFumigationRates(CostFumigation fum, LocalDate quoteDate) {
-    LocalDate outdoorEnd = parseValidityEnd(fum.getOutdoorValidity());
-    LocalDate indoorEnd = parseValidityEnd(fum.getIndoorValidity());
+  /** 熏蒸报价：按报价日期在 FM-OUTDOOR / FM-INDOOR 间择价（报价库已含规则）。 */
+  private FumigationRates resolveFumigationRates(
+      FumigationCostResponse row, LocalDate quoteDate) {
+    LocalDate outdoorEnd = parseValidityEnd(row.outdoorValidity());
+    LocalDate indoorEnd = parseValidityEnd(row.indoorValidity());
     boolean outdoorValid = outdoorEnd == null || !quoteDate.isAfter(outdoorEnd);
     boolean indoorValid = indoorEnd == null || !quoteDate.isAfter(indoorEnd);
 
     if (outdoorValid) {
-      return new FumigationRates(fum.getOutdoorNonOak(), fum.getOutdoorOak());
+      return new FumigationRates(row.outdoorNonOak(), row.outdoorOak());
     }
     if (indoorValid) {
-      return new FumigationRates(fum.getIndoorNonOak(), fum.getIndoorOak());
+      return new FumigationRates(row.indoorNonOak(), row.indoorOak());
     }
-    return new FumigationRates(fum.getOutdoorNonOak(), fum.getOutdoorOak());
+    return new FumigationRates(row.outdoorNonOak(), row.outdoorOak());
   }
 
   private LocalDate parseValidityEnd(String raw) {

@@ -6,6 +6,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +35,11 @@ public class QuoteOrder {
 
   @Column(name = "quote_no", nullable = false, unique = true, length = 32)
   private String quoteNo;
+
+  /** 服务类型多选：SEA / FUMIGATION / TRUCK / INSURANCE / TRADE / OTHER */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "service_types", nullable = false)
+  private List<String> serviceTypes = new ArrayList<>();
 
   @Column(name = "customer_id")
   private Long customerId;
@@ -107,6 +115,10 @@ public class QuoteOrder {
   @Column(name = "fumigation_point", length = 64)
   private String fumigationPoint;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "oak_type", length = 16)
+  private QuoteOakType oakType;
+
   @Column(name = "doc_usd", length = 64)
   private String docUsd;
 
@@ -170,11 +182,60 @@ public class QuoteOrder {
   @Column(name = "approved_by")
   private Long approvedBy;
 
+  @Column(name = "approved_by_name", length = 64)
+  private String approvedByName;
+
+  @Column(name = "approved_at")
+  private LocalDateTime approvedAt;
+
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt = LocalDateTime.now();
 
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt = LocalDateTime.now();
+
+  @Column(name = "cost_risk_active", nullable = false)
+  private Boolean costRiskActive = false;
+
+  @Column(name = "cost_risk_reason", length = 512)
+  private String costRiskReason;
+
+  @Column(name = "cost_risk_at")
+  private LocalDateTime costRiskAt;
+
+  @Column(name = "cost_risk_dismissed_at")
+  private LocalDateTime costRiskDismissedAt;
+
+  @Column(name = "cost_risk_dismissed_by")
+  private Long costRiskDismissedBy;
+
+  /** 变更来源报价单 */
+  @Column(name = "parent_quote_id")
+  private Long parentQuoteId;
+
+  /** 版本族根单（原版） */
+  @Column(name = "root_quote_id")
+  private Long rootQuoteId;
+
+  /** 修订号：0=原版 */
+  @Column(name = "revision_no", nullable = false)
+  private Integer revisionNo = 0;
+
+  /** 发起变更原因 */
+  @Column(name = "change_reason", length = 512)
+  private String changeReason;
+
+  /** 是否当前对外生效版本 */
+  @Column(name = "current_version", nullable = false)
+  private Boolean currentVersion = true;
+
+  /** 被哪张变更单替代 */
+  @Column(name = "superseded_by_quote_id")
+  private Long supersededByQuoteId;
+
+  /** 软删时间：有审批记录的草稿删除后仍保留审批与打印快照 */
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
 
   @OneToMany(mappedBy = "quoteOrder", cascade = CascadeType.ALL, orphanRemoval = true)
   @OrderBy("sort ASC, id ASC")

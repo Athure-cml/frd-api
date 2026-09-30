@@ -51,4 +51,7 @@ public interface CostSeaRepository extends JpaRepository<CostSea, Long> {
       Pageable pageable);
 
   long countByIdIn(Collection<Long> ids);
+
+  @Query("SELECT s.id FROM CostSea s")
+  List<Long> findAllIds();
 }

@@ -2,9 +2,12 @@ package com.furuiduo.quote.quote.service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,7 @@ import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
 import com.furuiduo.quote.quote.support.QuoteCostMatchKeys;
 import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
 import com.furuiduo.quote.quote.support.QuoteCostSnapshotMapper;
+import com.furuiduo.quote.quote.support.QuoteLibraryRowSupport;
 
 @Service
 public class QuoteCostMatchService {
@@ -38,16 +42,22 @@ public class QuoteCostMatchService {
   private final CostSeaRepository costSeaRepository;
   private final CostFumigationRepository costFumigationRepository;
   private final QuoteCostSnapshotRepository quoteCostSnapshotRepository;
+  private final QuoteLibraryMatchService quoteLibraryMatchService;
+  private final QuoteLibraryUsageService quoteLibraryUsageService;
 
   public QuoteCostMatchService(
       CostRoadRepository costRoadRepository,
       CostSeaRepository costSeaRepository,
       CostFumigationRepository costFumigationRepository,
-      QuoteCostSnapshotRepository quoteCostSnapshotRepository) {
+      QuoteCostSnapshotRepository quoteCostSnapshotRepository,
+      QuoteLibraryMatchService quoteLibraryMatchService,
+      QuoteLibraryUsageService quoteLibraryUsageService) {
     this.costRoadRepository = costRoadRepository;
     this.costSeaRepository = costSeaRepository;
     this.costFumigationRepository = costFumigationRepository;
     this.quoteCostSnapshotRepository = quoteCostSnapshotRepository;
+    this.quoteLibraryMatchService = quoteLibraryMatchService;
+    this.quoteLibraryUsageService = quoteLibraryUsageService;
   }
 
   public QuoteMatchCostsResponse match(QuoteMatchCostsRequest request) {
@@ -72,8 +82,9 @@ public class QuoteCostMatchService {
               "",
               "",
               SearchText.orEmpty(roadSupplier(request)));
-      QuoteCostMatchSupport.firstActiveRoad(roads)
-          .ifPresent(road -> matches.add(QuoteCostSnapshotMapper.fromRoad(road, keys)));
+      QuoteCostMatchSupport.firstActiveRoad(quoteLibraryMatchService.filterRoadInLibrary(roads))
+          .flatMap(road -> quoteLibraryMatchService.matchRoad(road, keys))
+          .ifPresent(matches::add);
     }
 
     List<CostSea> seas =
@@ -81,14 +92,18 @@ public class QuoteCostMatchService {
             SearchText.orEmpty(QuoteCostMatchKeys.seaPor(request)),
             SearchText.orEmpty(request.pod()),
             SearchText.orEmpty(seaSsl(request)));
-    QuoteCostMatchSupport.firstActiveSeaByPol(seas, QuoteCostMatchKeys.seaPol(request))
-        .ifPresent(sea -> matches.add(QuoteCostSnapshotMapper.fromSea(sea, keys)));
+    QuoteCostMatchSupport.firstActiveSeaByPol(
+            quoteLibraryMatchService.filterSeaInLibrary(seas), QuoteCostMatchKeys.seaPol(request))
+        .flatMap(sea -> quoteLibraryMatchService.matchSea(sea, keys))
+        .ifPresent(matches::add);
 
     List<CostFumigation> fums =
         costFumigationRepository.matchByStation(
             SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
-    QuoteCostMatchSupport.firstActiveFumigation(fums)
-        .ifPresent(fum -> matches.add(QuoteCostSnapshotMapper.fromFumigation(fum, keys)));
+    QuoteCostMatchSupport.firstActiveFumigation(
+            quoteLibraryMatchService.filterFumigationInLibrary(fums))
+        .flatMap(fum -> quoteLibraryMatchService.matchFumigation(fum, keys))
+        .ifPresent(matches::add);
 
     if (matches.isEmpty()) {
       return new QuoteMatchCostsResponse(false, emptySuggested(), List.of());
@@ -113,8 +128,9 @@ public class QuoteCostMatchService {
                     "",
                     "",
                     SearchText.orEmpty(roadSupplier(request)));
-            yield QuoteCostMatchSupport.firstActiveRoad(roads)
-                .map(road -> QuoteCostSnapshotMapper.fromRoad(road, keys))
+            yield QuoteCostMatchSupport.firstActiveRoad(
+                    quoteLibraryMatchService.filterRoadInLibrary(roads))
+                .flatMap(road -> quoteLibraryMatchService.matchRoad(road, keys))
                 .orElse(null);
           }
           case SEA -> {
@@ -124,16 +140,18 @@ public class QuoteCostMatchService {
                     SearchText.orEmpty(request.pod()),
                     SearchText.orEmpty(seaSsl(request)));
             yield QuoteCostMatchSupport.firstActiveSeaByPol(
-                    seas, QuoteCostMatchKeys.seaPol(request))
-                .map(sea -> QuoteCostSnapshotMapper.fromSea(sea, keys))
+                    quoteLibraryMatchService.filterSeaInLibrary(seas),
+                    QuoteCostMatchKeys.seaPol(request))
+                .flatMap(sea -> quoteLibraryMatchService.matchSea(sea, keys))
                 .orElse(null);
           }
           case FUMIGATION -> {
             List<CostFumigation> fums =
                 costFumigationRepository.matchByStation(
                     SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
-            yield QuoteCostMatchSupport.firstActiveFumigation(fums)
-                .map(fum -> QuoteCostSnapshotMapper.fromFumigation(fum, keys))
+            yield QuoteCostMatchSupport.firstActiveFumigation(
+                    quoteLibraryMatchService.filterFumigationInLibrary(fums))
+                .flatMap(fum -> quoteLibraryMatchService.matchFumigation(fum, keys))
                 .orElse(null);
           }
         };
@@ -147,10 +165,13 @@ public class QuoteCostMatchService {
   @Transactional
   public void replaceSnapshots(QuoteOrder order, List<QuoteCostMatchItemDto> matches) {
     if (matches == null || matches.isEmpty()) {
+      quoteCostSnapshotRepository.deleteByQuoteOrderId(order.getId());
+      quoteLibraryUsageService.releaseByQuoteId(order.getId());
       return;
     }
     quoteCostSnapshotRepository.deleteByQuoteOrderId(order.getId());
     persistSnapshots(order, matches);
+    quoteLibraryUsageService.replaceUsage(order, matches);
   }
 
   public void persistSnapshots(QuoteOrder order, List<QuoteCostMatchItemDto> matches) {
@@ -167,12 +188,90 @@ public class QuoteCostMatchService {
   }
 
   public List<QuoteCostMatchItemDto> listSnapshots(Long quoteId, String costType) {
-    var list =
-        costType == null || costType.isBlank()
-            ? quoteCostSnapshotRepository.findByQuoteOrderIdOrderByCreatedAtDesc(quoteId)
-            : quoteCostSnapshotRepository.findByQuoteOrderIdAndCostTypeOrderByCreatedAtDesc(
-                quoteId, QuoteCostType.valueOf(costType));
-    return list.stream().map(this::toDto).toList();
+    return listSnapshotEntities(quoteId, costType).stream().map(this::toDto).toList();
+  }
+
+  public List<QuoteCostSnapshot> listSnapshotEntities(Long quoteId, String costType) {
+    if (costType == null || costType.isBlank()) {
+      return quoteCostSnapshotRepository.findByQuoteOrderIdOrderByCreatedAtDesc(quoteId);
+    }
+    return quoteCostSnapshotRepository.findByQuoteOrderIdAndCostTypeOrderByCreatedAtDesc(
+        quoteId, QuoteCostType.valueOf(costType));
+  }
+
+  /** 报价库列表：按报价单 ID 批量取各类型最新一条成本快照实体。 */
+  @Transactional(readOnly = true)
+  public Map<Long, QuoteCostSnapshot> firstSnapshotEntitiesByQuoteIds(
+      Collection<Long> quoteIds, QuoteCostType costType) {
+    if (quoteIds == null || quoteIds.isEmpty()) {
+      return Map.of();
+    }
+    var snapshots =
+        quoteCostSnapshotRepository.findByQuoteOrderIdInAndCostTypeOrderByCreatedAtDesc(
+            quoteIds, costType);
+    Map<Long, QuoteCostSnapshot> result = new HashMap<>();
+    for (QuoteCostSnapshot snapshot : snapshots) {
+      Long quoteId = snapshot.getQuoteOrder().getId();
+      result.putIfAbsent(quoteId, snapshot);
+    }
+    return result;
+  }
+
+  /** 报价库行：从成本库同步最新数据，并写入报价规则处理后的费用。 */
+  @Transactional(readOnly = true)
+  public Map<Long, Map<String, Object>> buildLibraryRows(
+      List<QuoteOrder> orders, QuoteCostType costType) {
+    if (orders == null || orders.isEmpty()) {
+      return Map.of();
+    }
+    List<Long> quoteIds = orders.stream().map(QuoteOrder::getId).toList();
+    Map<Long, QuoteCostSnapshot> snapshots =
+        firstSnapshotEntitiesByQuoteIds(quoteIds, costType);
+    if (snapshots.isEmpty()) {
+      return Map.of();
+    }
+
+    Set<Long> refIds =
+        snapshots.values().stream().map(QuoteCostSnapshot::getCostRefId).collect(Collectors.toSet());
+
+    Map<Long, CostRoad> roads = Map.of();
+    Map<Long, CostSea> seas = Map.of();
+    Map<Long, CostFumigation> fumigations = Map.of();
+    switch (costType) {
+      case ROAD ->
+          roads =
+              costRoadRepository.findAllById(refIds).stream()
+                  .collect(Collectors.toMap(CostRoad::getId, Function.identity()));
+      case SEA ->
+          seas =
+              costSeaRepository.findAllById(refIds).stream()
+                  .collect(Collectors.toMap(CostSea::getId, Function.identity()));
+      case FUMIGATION ->
+          fumigations =
+              costFumigationRepository.findAllById(refIds).stream()
+                  .collect(Collectors.toMap(CostFumigation::getId, Function.identity()));
+    }
+
+    Map<Long, Map<String, Object>> result = new HashMap<>();
+    for (QuoteOrder order : orders) {
+      QuoteCostSnapshot snapshot = snapshots.get(order.getId());
+      if (snapshot == null) {
+        continue;
+      }
+      Long refId = snapshot.getCostRefId();
+      Map<String, Object> row =
+          QuoteLibraryRowSupport.build(
+              order,
+              snapshot,
+              costType,
+              roads.get(refId),
+              seas.get(refId),
+              fumigations.get(refId));
+      if (row != null && !row.isEmpty()) {
+        result.put(order.getId(), row);
+      }
+    }
+    return result;
   }
 
   public List<QuoteCostMatchItemDto> listSnapshotsByRefId(
@@ -185,7 +284,7 @@ public class QuoteCostMatchService {
         .collect(Collectors.toList());
   }
 
-  private QuoteCostMatchItemDto toDto(QuoteCostSnapshot snapshot) {
+  public QuoteCostMatchItemDto toDto(QuoteCostSnapshot snapshot) {
     return new QuoteCostMatchItemDto(
         snapshot.getCostType().name(),
         snapshot.getCostRefId(),

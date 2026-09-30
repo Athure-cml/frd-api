@@ -59,4 +59,7 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       Pageable pageable);
 
   long countByIdIn(Collection<Long> ids);
+
+  @Query("SELECT r.id FROM CostRoad r")
+  List<Long> findAllIds();
 }

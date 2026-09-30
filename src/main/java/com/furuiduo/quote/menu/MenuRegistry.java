@@ -17,10 +17,11 @@ public final class MenuRegistry {
         costLibrary(),
         customer(),
         masterData(),
+        approval(),
         system());
   }
 
-  /** 一级：工作台（仅工作台页；报价分析已迁至报价管理） */
+  /** 一级：工作台 */
   private static MenuRouteDto workspace() {
     return MenuRouteDto.of("Dashboard", "/dashboard")
         .redirect("/workspace")
@@ -45,13 +46,10 @@ public final class MenuRegistry {
         .meta("order", 2)
         .meta("title", "page.quote.title")
         .requireAnyPermission(
-            PermissionCodes.QUOTE_VIEW, PermissionCodes.DASHBOARD_VIEW)
-        .child(
-            MenuRouteDto.of("Analytics", "/analytics")
-                .component("/dashboard/analytics/index")
-                .meta("icon", "lucide:area-chart")
-                .meta("title", "page.dashboard.analytics")
-                .requirePermission(PermissionCodes.DASHBOARD_VIEW))
+            PermissionCodes.QUOTE_VIEW,
+            PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
+            PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
+            PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW)
         .child(
             MenuRouteDto.of("QuoteList", "/quotes/list")
                 .component("/quote/list/index")
@@ -63,19 +61,19 @@ public final class MenuRegistry {
                 .component("/quote/library/road/index")
                 .meta("icon", "lucide:truck")
                 .meta("title", "page.quote.library.road")
-                .requirePermission(PermissionCodes.QUOTE_VIEW))
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW))
         .child(
             MenuRouteDto.of("QuoteLibrarySea", "/quotes/library/sea")
                 .component("/quote/library/sea/index")
                 .meta("icon", "lucide:ship")
                 .meta("title", "page.quote.library.sea")
-                .requirePermission(PermissionCodes.QUOTE_VIEW))
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_SEA_VIEW))
         .child(
             MenuRouteDto.of("QuoteLibraryFumigation", "/quotes/library/fumigation")
                 .component("/quote/library/fumigation/index")
                 .meta("icon", "lucide:flame")
                 .meta("title", "page.quote.library.fumigation")
-                .requirePermission(PermissionCodes.QUOTE_VIEW));
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW));
   }
 
   private static MenuRouteDto costLibrary() {
@@ -251,11 +249,34 @@ public final class MenuRegistry {
                 .requirePermission(PermissionCodes.MD_QUOTE_RULE_VIEW));
   }
 
+  /** 一级：审批管理（位于主数据之后） */
+  private static MenuRouteDto approval() {
+    return MenuRouteDto.of("Approval", "/approval")
+        .redirect("/approval/list")
+        .meta("icon", "lucide:clipboard-check")
+        .meta("order", 7)
+        .meta("title", "page.approval.title")
+        .requireAnyPermission(
+            PermissionCodes.QUOTE_APPROVE, PermissionCodes.APPROVAL_CONFIG_VIEW)
+        .child(
+            MenuRouteDto.of("ApprovalList", "/approval/list")
+                .component("/approval/list/index")
+                .meta("icon", "lucide:list")
+                .meta("title", "page.approval.list")
+                .requirePermission(PermissionCodes.QUOTE_APPROVE))
+        .child(
+            MenuRouteDto.of("ApprovalConfig", "/approval/config")
+                .component("/approval/config/index")
+                .meta("icon", "lucide:settings-2")
+                .meta("title", "page.approval.config")
+                .requirePermission(PermissionCodes.APPROVAL_CONFIG_VIEW));
+  }
+
   private static MenuRouteDto system() {
     return MenuRouteDto.of("System", "/system")
         .redirect("/system/dept")
         .meta("icon", "lucide:settings")
-        .meta("order", 7)
+        .meta("order", 8)
         .meta("title", "page.system.title")
         .requireRole("super_admin", "admin")
         .child(

@@ -41,6 +41,10 @@ public class SysAnnouncement {
   @Enumerated(EnumType.STRING)
   private AnnouncementStatus status = AnnouncementStatus.PUBLISHED;
 
+  @Column(name = "display_type", nullable = false, length = 16)
+  @Enumerated(EnumType.STRING)
+  private AnnouncementDisplayType displayType = AnnouncementDisplayType.MODAL;
+
   @Column(name = "valid_days")
   private Integer validDays;
 

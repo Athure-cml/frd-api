@@ -1,0 +1,1 @@
+ALTER TABLE quote_order ADD COLUMN IF NOT EXISTS service_type VARCHAR(16);

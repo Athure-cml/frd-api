@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import com.furuiduo.quote.sys.dto.DepartmentResponse;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysUserRepository;
+import com.furuiduo.quote.sys.support.HomePathSupport;
 import com.furuiduo.quote.user.PasswordSecurityInfo;
 import com.furuiduo.quote.user.UserInfoResponse;
 
@@ -48,7 +49,7 @@ public class UserAccountService {
         DepartmentResponse.from(user.getDepartment()),
         permissionService.getEffectiveDataScope(user).name(),
         "",
-        user.getHomePath(),
+        HomePathSupport.resolve(user.getHomePath()),
         PasswordSecurityInfo.from(user),
         token);
   }

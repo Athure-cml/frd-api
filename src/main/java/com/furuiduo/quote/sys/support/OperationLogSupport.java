@@ -14,12 +14,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.sys.entity.OperationAction;
+import com.furuiduo.quote.sys.entity.SysOperationLog;
 
 @Component
 public class OperationLogSupport {
 
   private static final Pattern SENSITIVE_KEY =
       Pattern.compile("password|passwd|secret|token", Pattern.CASE_INSENSITIVE);
+  private static final Pattern QUOTE_NO =
+      Pattern.compile("QT-[A-Z0-9-]+", Pattern.CASE_INSENSITIVE);
   private static final int MAX_BODY_LENGTH = 4000;
   private static final int MAX_SUMMARY_LENGTH = 256;
 
@@ -167,6 +170,12 @@ public class OperationLogSupport {
     if ("quote".equals(module) && path.contains("/follow-ups")) {
       return buildQuoteFollowUpSummary(action, bodyNode);
     }
+    if ("quote".equals(module)) {
+      String workflow = quoteWorkflowSummary(path, bodyNode, resultNode, resourceId, null);
+      if (workflow != null) {
+        return truncate(workflow, MAX_SUMMARY_LENGTH);
+      }
+    }
     if (path.endsWith("/batch-delete") && module.startsWith("cost:")) {
       return "批量删除" + moduleLabel(module);
     }
@@ -247,6 +256,126 @@ public class OperationLogSupport {
         return text;
       }
       return text.substring(0, MAX_BODY_LENGTH) + "…";
+    }
+  }
+
+  public String displayQuoteSummary(SysOperationLog log) {
+    if (log == null) {
+      return null;
+    }
+    if (!"quote".equals(log.getModule())) {
+      return log.getSummary();
+    }
+    JsonNode bodyNode = parseJson(log.getRequestBody());
+    String rewritten =
+        quoteWorkflowSummary(
+            normalizePath(log.getRequestUri()),
+            bodyNode,
+            null,
+            log.getResourceId(),
+            extractQuoteNo(log.getSummary()));
+    return rewritten != null ? rewritten : log.getSummary();
+  }
+
+  private String quoteWorkflowSummary(
+      String path,
+      JsonNode bodyNode,
+      JsonNode resultNode,
+      String resourceId,
+      String fallbackQuoteNo) {
+    String label = quoteWorkflowLabel(path);
+    if (label == null) {
+      return null;
+    }
+    String quoteNo =
+        firstNonBlank(
+            text(resultNode, "quoteNo"), text(bodyNode, "quoteNo"), fallbackQuoteNo);
+    StringBuilder summary = new StringBuilder(label);
+    if (quoteNo != null) {
+      summary.append(' ').append(quoteNo);
+    } else {
+      appendResourceId(summary, resourceId);
+    }
+    String comment = text(bodyNode, "comment");
+    if (comment != null
+        && (label.contains("驳回") || label.contains("撤回") || label.contains("同意"))) {
+      summary.append('：').append(truncate(comment, 80));
+    }
+    String changeReason = text(bodyNode, "changeReason");
+    if (changeReason != null && label.contains("变更")) {
+      summary.append('，').append("原因：").append(truncate(changeReason, 80));
+    }
+    return summary.toString();
+  }
+
+  private String quoteWorkflowLabel(String path) {
+    if (path == null || path.isBlank()) {
+      return null;
+    }
+    if (path.contains("/follow-ups")) {
+      return null;
+    }
+    if (path.endsWith("/submit")) {
+      return "提交审批";
+    }
+    if (path.endsWith("/send") || path.endsWith("/follow")) {
+      return "同意审批";
+    }
+    if (path.endsWith("/reject-approval")) {
+      return "驳回审批";
+    }
+    if (path.endsWith("/cancel-approval")) {
+      return "撤回审批";
+    }
+    if (path.endsWith("/won")) {
+      return "确认成交";
+    }
+    if (path.endsWith("/void")) {
+      return "作废报价单";
+    }
+    if (path.endsWith("/copy")) {
+      return "复制报价单";
+    }
+    if (path.endsWith("/revise")) {
+      return "发起变更";
+    }
+    if (path.endsWith("/reject")) {
+      return "拒绝报价";
+    }
+    if (path.endsWith("/dismiss-cost-risk")) {
+      return "关闭成本风险警示";
+    }
+    if (path.endsWith("/generate-sheet")) {
+      return "生成报价单";
+    }
+    if (path.endsWith("/match-costs")) {
+      return "匹配成本";
+    }
+    if (path.endsWith("/apply-cost-import")) {
+      return "引入成本";
+    }
+    if (path.endsWith("/export")) {
+      return "导出报价单";
+    }
+    return null;
+  }
+
+  private String extractQuoteNo(String summary) {
+    if (summary == null || summary.isBlank()) {
+      return null;
+    }
+    var matcher = QUOTE_NO.matcher(summary);
+    return matcher.find() ? matcher.group() : null;
+  }
+
+  private JsonNode parseJson(String json) {
+    if (json == null || json.isBlank()) {
+      return null;
+    }
+    try {
+      return objectMapper.readTree(json);
+    } catch (JsonProcessingException ex) {
+      return null;
     }
   }
 

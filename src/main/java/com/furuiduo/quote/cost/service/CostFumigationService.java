@@ -1,6 +1,7 @@
 package com.furuiduo.quote.cost.service;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.dto.FumigationCostResponse;
@@ -34,6 +36,7 @@ import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
+import com.furuiduo.quote.cost.support.CostBatchPreviewSupport;
 import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
@@ -43,6 +46,7 @@ import com.furuiduo.quote.cost.support.CostHighlightListFilter;
 import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
+import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
 
 @Service
 public class CostFumigationService {
@@ -64,16 +68,19 @@ public class CostFumigationService {
   private final CostGridTemplateService templateService;
   private final CostMasterRefValidator masterRefValidator;
   private final CostDeptHighlightService highlightService;
+  private final QuoteLibraryEntryService quoteLibraryEntryService;
 
   public CostFumigationService(
       CostFumigationRepository repository,
       CostGridTemplateService templateService,
       CostMasterRefValidator masterRefValidator,
-      CostDeptHighlightService highlightService) {
+      CostDeptHighlightService highlightService,
+      QuoteLibraryEntryService quoteLibraryEntryService) {
     this.repository = repository;
     this.templateService = templateService;
     this.masterRefValidator = masterRefValidator;
     this.highlightService = highlightService;
+    this.quoteLibraryEntryService = quoteLibraryEntryService;
   }
 
   /** 熏蒸成本库 STATION 去重列表，供报价单熏蒸点下拉使用。 */
@@ -93,7 +100,7 @@ public class CostFumigationService {
       String sortOrder,
       Set<Long> restrictToIds) {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
-      return new PageResult<>(List.of(), 0);
+      return finalizeFumigationPage(new PageResult<>(List.of(), 0));
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
@@ -113,9 +120,10 @@ public class CostFumigationService {
       boolean restrict = restrictToIds != null;
       List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
       Page<CostFumigation> result = repository.search(r, st, restrict, idParams, pageable);
-      return new PageResult<>(
-          result.getContent().stream().map(FumigationCostResponse::from).toList(),
-          result.getTotalElements());
+      return finalizeFumigationPage(
+          new PageResult<>(
+              result.getContent().stream().map(FumigationCostResponse::from).toList(),
+              result.getTotalElements()));
     }
 
     List<CostFumigation> filtered =
@@ -124,7 +132,7 @@ public class CostFumigationService {
                 region, station, outdoorValidity, indoorValidity, status, sort),
             restrictToIds,
             CostFumigation::getId);
-    return paginate(filtered, safePage, safePageSize);
+    return finalizeFumigationPage(paginate(filtered, safePage, safePageSize));
   }
 
   /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
@@ -241,12 +249,15 @@ public class CostFumigationService {
 
   @Transactional
   public FumigationCostResponse update(Long id, FumigationCostSaveRequest request) {
+    quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.fumigation, id);
     validateSave(request);
     CostFumigation entity = requireEntity(id);
     applySave(entity, request);
     validateMasterRefs(entity);
     entity.touch();
-    return FumigationCostResponse.from(repository.save(entity));
+    FumigationCostResponse saved = FumigationCostResponse.from(repository.save(entity));
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.fumigation, id);
+    return saved;
   }
 
   @Transactional
@@ -254,6 +265,7 @@ public class CostFumigationService {
     if (!repository.existsById(id)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.fumigation, id);
     repository.deleteById(id);
   }
 
@@ -265,32 +277,84 @@ public class CostFumigationService {
     if (ids.isEmpty()) {
       return;
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.fumigation, ids);
     repository.deleteAllById(ids);
   }
 
   @Transactional
-  public int batchUpdate(CostBatchUpdateRequest request) {
+  public CostBatchUpdateResult<FumigationCostResponse> batchUpdate(
+      CostBatchUpdateRequest request) {
     List<Long> ids =
         resolveFumigationBatchIds(
             request.ids(), request.searchCriteria(), request.excludeIds());
     if (ids.isEmpty()) {
-      return 0;
+      return new CostBatchUpdateResult<>(0, List.of(), 0);
+    }
+    boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    if (!previewOnly) {
+      quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.fumigation, ids);
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
+    int total = ids.size();
+    int previewLimit =
+        CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
+    List<FumigationCostResponse> items = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
+      if (previewOnly && items.size() >= previewLimit) {
+        break;
+      }
       CostFumigation entity = requireEntity(id);
-      if (fields.containsKey("address")) {
-        entity.setAddress(asString(fields.get("address")));
+      if (previewOnly) {
+        CostFumigation preview = copyOf(entity);
+        applyFumigationBatchUpdateFields(preview, fields);
+        items.add(FumigationCostResponse.from(preview));
+      } else {
+        applyFumigationBatchUpdateFields(entity, fields);
+        entity.touch();
+        repository.save(entity);
+        updated++;
       }
-      if (fields.containsKey("remark")) {
-        entity.setRemark(asString(fields.get("remark")));
-      }
-      entity.touch();
-      repository.save(entity);
-      updated++;
     }
-    return updated;
+    if (previewOnly) {
+      return new CostBatchUpdateResult<>(total, items, total);
+    }
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.fumigation, ids);
+    return new CostBatchUpdateResult<>(updated, List.of(), total);
+  }
+
+  private void applyFumigationBatchUpdateFields(
+      CostFumigation entity, Map<String, Object> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return;
+    }
+    if (fields.containsKey("address")) {
+      entity.setAddress(asString(fields.get("address")));
+    }
+    if (fields.containsKey("remark")) {
+      entity.setRemark(asString(fields.get("remark")));
+    }
+  }
+
+  private CostFumigation copyOf(CostFumigation source) {
+    CostFumigation target = new CostFumigation();
+    target.setId(source.getId());
+    target.setRegion(source.getRegion());
+    target.setStation(source.getStation());
+    target.setOutdoorNonOak(source.getOutdoorNonOak());
+    target.setOutdoorOak(source.getOutdoorOak());
+    target.setOutdoorValidity(source.getOutdoorValidity());
+    target.setIndoorNonOak(source.getIndoorNonOak());
+    target.setIndoorOak(source.getIndoorOak());
+    target.setIndoorValidity(source.getIndoorValidity());
+    target.setAddress(source.getAddress());
+    target.setRemark(source.getRemark());
+    target.setStatus(source.getStatus());
+    target.setUpdatedAt(source.getUpdatedAt());
+    if (source.getExtraFields() != null) {
+      target.setExtraFields(new HashMap<>(source.getExtraFields()));
+    }
+    return target;
   }
 
   @Transactional
@@ -377,6 +441,11 @@ public class CostFumigationService {
       CostFumigation item, String outdoorSearch, String indoorSearch) {
     return CostDateSearchFilter.matchesValidTo(item.getOutdoorValidity(), outdoorSearch)
         && CostDateSearchFilter.matchesValidTo(item.getIndoorValidity(), indoorSearch);
+  }
+
+  private PageResult<FumigationCostResponse> finalizeFumigationPage(
+      PageResult<FumigationCostResponse> page) {
+    return quoteLibraryEntryService.enrichFumigationPage(page);
   }
 
   private PageResult<FumigationCostResponse> paginate(

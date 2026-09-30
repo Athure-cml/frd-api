@@ -31,6 +31,7 @@ import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
@@ -91,14 +92,16 @@ public class CostSeaController {
       @RequestParam(required = false) String remark,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
     Set<Long> restrictIds =
-        highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly);
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.sea, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         highlightService.enrichSeaPage(
             user,
@@ -138,14 +141,16 @@ public class CostSeaController {
       @RequestParam(required = false) String remark,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
     Set<Long> restrictIds =
-        highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly);
+        highlightQuerySupport.resolveRestrictIds(
+            CostHighlightMode.sea, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         costSeaService.listIds(
             por,
@@ -218,11 +223,11 @@ public class CostSeaController {
   }
 
   @PatchMapping("/batch")
-  public ApiResponse<Map<String, Integer>> batchUpdate(
+  public ApiResponse<CostBatchUpdateResult<FreightCostResponse>> batchUpdate(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody CostBatchUpdateRequest request) {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(Map.of("updated", costSeaService.batchUpdate(request)));
+    return ApiResponse.ok(costSeaService.batchUpdate(request));
   }
 
   @PostMapping("/batch-copy")

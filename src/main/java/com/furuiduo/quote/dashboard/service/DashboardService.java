@@ -10,9 +10,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.furuiduo.quote.approval.service.ApprovalConfigService;
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
@@ -26,13 +29,19 @@ import com.furuiduo.quote.dashboard.dto.WorkspacePipelineDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceResponse;
 import com.furuiduo.quote.dashboard.dto.WorkspaceRouteDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceTodoDto;
+import com.furuiduo.quote.dashboard.entity.SysUserNotificationState;
 import com.furuiduo.quote.dashboard.repository.DashboardQueryRepository;
+import com.furuiduo.quote.dashboard.repository.SysUserNotificationStateRepository;
 import com.furuiduo.quote.dashboard.support.DashboardScopeParams;
+import com.furuiduo.quote.quote.entity.QuoteApprovalLog;
 import com.furuiduo.quote.quote.entity.QuoteCostSnapshot;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
+import com.furuiduo.quote.quote.repository.QuoteApprovalLogRepository;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
+import com.furuiduo.quote.quote.support.QuoteApprovalSupport;
+import com.furuiduo.quote.quote.support.QuoteCostRiskSupport;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
@@ -49,6 +58,9 @@ public class DashboardService {
   private final CostSeaRepository costSeaRepository;
   private final CostFumigationRepository costFumigationRepository;
   private final PermissionService permissionService;
+  private final ApprovalConfigService approvalConfigService;
+  private final QuoteApprovalLogRepository quoteApprovalLogRepository;
+  private final SysUserNotificationStateRepository notificationStateRepository;
 
   public DashboardService(
       DashboardQueryRepository dashboardQueryRepository,
@@ -56,13 +68,19 @@ public class DashboardService {
       CostRoadRepository costRoadRepository,
       CostSeaRepository costSeaRepository,
       CostFumigationRepository costFumigationRepository,
-      PermissionService permissionService) {
+      PermissionService permissionService,
+      ApprovalConfigService approvalConfigService,
+      QuoteApprovalLogRepository quoteApprovalLogRepository,
+      SysUserNotificationStateRepository notificationStateRepository) {
     this.dashboardQueryRepository = dashboardQueryRepository;
     this.quoteCostSnapshotRepository = quoteCostSnapshotRepository;
     this.costRoadRepository = costRoadRepository;
     this.costSeaRepository = costSeaRepository;
     this.costFumigationRepository = costFumigationRepository;
     this.permissionService = permissionService;
+    this.approvalConfigService = approvalConfigService;
+    this.quoteApprovalLogRepository = quoteApprovalLogRepository;
+    this.notificationStateRepository = notificationStateRepository;
   }
 
   public WorkspaceResponse getWorkspace(SysUser user) {
@@ -74,23 +92,114 @@ public class DashboardService {
     LocalDateTime yesterdayStart = today.minusDays(1).atStartOfDay();
 
     List<WorkspaceMetricDto> metrics = buildMetrics(scope, monthStart, tomorrow, todayStart, yesterdayStart, today);
-    List<WorkspaceTodoDto> todos = buildTodos(scope);
+    List<WorkspaceTodoDto> todos = buildTodos(scope, user, 6);
     List<WorkspacePipelineDto> pipeline = buildPipeline(scope);
-    List<WorkspaceNoticeDto> notices = buildNotices(scope, today);
+    List<WorkspaceNoticeDto> notices = buildNotices(user, today);
+    Map<String, SysUserNotificationState> stateById =
+        loadNotificationStates(user.getId(), notices);
+    notices =
+        notices.stream()
+            .filter(
+                notice -> {
+                  SysUserNotificationState state = stateById.get(notice.id());
+                  return state == null || !Boolean.TRUE.equals(state.getDismissed());
+                })
+            .toList();
     List<WorkspaceRouteDto> topRoutes = buildTopRoutes(scope);
 
     return new WorkspaceResponse(metrics, todos, pipeline, notices, topRoutes);
   }
 
   public List<NotificationItemDto> getNotifications(SysUser user) {
-    DashboardScopeParams scope = DashboardScopeParams.from(user, permissionService);
     LocalDate today = LocalDate.now();
-    List<WorkspaceNoticeDto> notices = buildNotices(scope, today);
+    List<WorkspaceNoticeDto> notices = buildNotices(user, today);
+    Map<String, SysUserNotificationState> stateById = loadNotificationStates(user.getId(), notices);
     List<NotificationItemDto> items = new ArrayList<>();
     for (WorkspaceNoticeDto notice : notices) {
-      items.add(toNotificationItem(notice));
+      SysUserNotificationState state = stateById.get(notice.id());
+      if (state != null && Boolean.TRUE.equals(state.getDismissed())) {
+        continue;
+      }
+      boolean isRead = state != null && Boolean.TRUE.equals(state.getIsRead());
+      items.add(toNotificationItem(notice, isRead));
     }
     return items;
+  }
+
+  @Transactional
+  public void markNotificationRead(SysUser user, String noticeId) {
+    if (noticeId == null || noticeId.isBlank()) {
+      return;
+    }
+    SysUserNotificationState state = requireOrCreateState(user.getId(), noticeId.trim());
+    state.setIsRead(true);
+    state.setUpdatedAt(LocalDateTime.now());
+    notificationStateRepository.save(state);
+  }
+
+  @Transactional
+  public void markAllNotificationsRead(SysUser user) {
+    List<WorkspaceNoticeDto> notices = buildNotices(user, LocalDate.now());
+    for (WorkspaceNoticeDto notice : notices) {
+      SysUserNotificationState state = requireOrCreateState(user.getId(), notice.id());
+      if (Boolean.TRUE.equals(state.getDismissed())) {
+        continue;
+      }
+      state.setIsRead(true);
+      state.setUpdatedAt(LocalDateTime.now());
+      notificationStateRepository.save(state);
+    }
+  }
+
+  @Transactional
+  public void dismissNotification(SysUser user, String noticeId) {
+    if (noticeId == null || noticeId.isBlank()) {
+      return;
+    }
+    SysUserNotificationState state = requireOrCreateState(user.getId(), noticeId.trim());
+    state.setIsRead(true);
+    state.setDismissed(true);
+    state.setUpdatedAt(LocalDateTime.now());
+    notificationStateRepository.save(state);
+  }
+
+  @Transactional
+  public void dismissAllNotifications(SysUser user) {
+    List<WorkspaceNoticeDto> notices = buildNotices(user, LocalDate.now());
+    for (WorkspaceNoticeDto notice : notices) {
+      SysUserNotificationState state = requireOrCreateState(user.getId(), notice.id());
+      state.setIsRead(true);
+      state.setDismissed(true);
+      state.setUpdatedAt(LocalDateTime.now());
+      notificationStateRepository.save(state);
+    }
+  }
+
+  private Map<String, SysUserNotificationState> loadNotificationStates(
+      Long userId, List<WorkspaceNoticeDto> notices) {
+    if (notices.isEmpty()) {
+      return Map.of();
+    }
+    List<String> ids = notices.stream().map(WorkspaceNoticeDto::id).toList();
+    return notificationStateRepository.findByUserIdAndNoticeIdIn(userId, ids).stream()
+        .collect(
+            Collectors.toMap(
+                SysUserNotificationState::getNoticeId, item -> item, (left, right) -> left));
+  }
+
+  private SysUserNotificationState requireOrCreateState(Long userId, String noticeId) {
+    return notificationStateRepository
+        .findByUserIdAndNoticeId(userId, noticeId)
+        .orElseGet(
+            () -> {
+              SysUserNotificationState created = new SysUserNotificationState();
+              created.setUserId(userId);
+              created.setNoticeId(noticeId);
+              created.setIsRead(false);
+              created.setDismissed(false);
+              created.setUpdatedAt(LocalDateTime.now());
+              return created;
+            });
   }
 
   private List<WorkspaceMetricDto> buildMetrics(
@@ -157,10 +266,65 @@ public class DashboardService {
         new WorkspaceMetricDto("expiringSoon", expiringSoon, expiringTrend));
   }
 
-  private List<WorkspaceTodoDto> buildTodos(DashboardScopeParams scope) {
-    return dashboardQueryRepository.findRecentActionable(scope, 6).stream()
-        .map(this::toTodo)
+  public List<WorkspaceTodoDto> listTodos(SysUser user) {
+    DashboardScopeParams scope = DashboardScopeParams.from(user, permissionService);
+    return buildTodos(scope, user, 50);
+  }
+
+  private List<WorkspaceTodoDto> buildTodos(
+      DashboardScopeParams scope, SysUser user, int limit) {
+    int capped = Math.max(1, Math.min(limit, 100));
+    DashboardScopeParams mine = DashboardScopeParams.self(user);
+    List<WorkspaceTodoDto> todos = new ArrayList<>();
+    for (QuoteOrder order : dashboardQueryRepository.findCostRiskQuotes(mine, capped)) {
+      todos.add(toCostRiskTodo(order));
+    }
+    int remaining = Math.max(0, capped - todos.size());
+    if (remaining > 0) {
+      int candidateLimit = Math.min(200, Math.max(20, capped * 4));
+      List<QuoteOrder> candidates =
+          dashboardQueryRepository.findRecentActionable(scope, candidateLimit);
+      Map<Long, List<QuoteApprovalLog>> logsById = loadApprovalLogs(candidates);
+      List<QuoteApprovalSupport.FlowNode> flow = quoteFlowNodes();
+      candidates.stream()
+          .filter(order -> includeTodo(order, user, logsById, flow))
+          .limit(remaining)
+          .map(this::toTodo)
+          .forEach(todos::add);
+    }
+    return todos;
+  }
+
+  private boolean includeTodo(
+      QuoteOrder order,
+      SysUser user,
+      Map<Long, List<QuoteApprovalLog>> logsById,
+      List<QuoteApprovalSupport.FlowNode> flow) {
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status == QuoteStatus.PENDING_APPROVAL) {
+      List<QuoteApprovalLog> logs = logsById.getOrDefault(order.getId(), List.of());
+      return QuoteApprovalSupport.isCurrentApprover(user.getId(), logs, flow);
+    }
+    return user.getId() != null && user.getId().equals(order.getCreatedBy());
+  }
+
+  private List<QuoteApprovalSupport.FlowNode> quoteFlowNodes() {
+    return approvalConfigService.findQuoteFlowSteps().stream()
+        .map(
+            step ->
+                new QuoteApprovalSupport.FlowNode(step.approverId(), step.approverName()))
         .toList();
+  }
+
+  private Map<Long, List<QuoteApprovalLog>> loadApprovalLogs(List<QuoteOrder> orders) {
+    List<Long> ids = orders.stream().map(QuoteOrder::getId).toList();
+    if (ids.isEmpty()) {
+      return Map.of();
+    }
+    return quoteApprovalLogRepository
+        .findByQuoteOrderIdInOrderByCreatedAtAscIdAsc(ids)
+        .stream()
+        .collect(Collectors.groupingBy(QuoteApprovalLog::getQuoteOrderId));
   }
 
   private List<WorkspacePipelineDto> buildPipeline(DashboardScopeParams scope) {
@@ -180,10 +344,11 @@ public class DashboardService {
         .toList();
   }
 
-  private List<WorkspaceNoticeDto> buildNotices(DashboardScopeParams scope, LocalDate today) {
+  private List<WorkspaceNoticeDto> buildNotices(SysUser user, LocalDate today) {
+    DashboardScopeParams mine = DashboardScopeParams.self(user);
     List<WorkspaceNoticeDto> notices = new ArrayList<>();
     LocalDate deadline = today.plusDays(EXPIRING_DAYS);
-    long expiringCount = dashboardQueryRepository.countExpiringSoon(scope, today, deadline);
+    long expiringCount = dashboardQueryRepository.countExpiringSoon(mine, today, deadline);
     if (expiringCount > 0) {
       Map<String, Object> payload = new HashMap<>();
       payload.put("count", expiringCount);
@@ -196,38 +361,21 @@ public class DashboardService {
               payload));
     }
 
-    Map<Long, StaleQuoteNotice> staleByQuote = new LinkedHashMap<>();
-    for (QuoteOrder order : dashboardQueryRepository.findDraftsWithSnapshots(scope, 30)) {
-      List<QuoteCostSnapshot> snapshots =
-          quoteCostSnapshotRepository.findByQuoteOrderIdOrderByCreatedAtDesc(order.getId());
-      for (QuoteCostSnapshot snapshot : snapshots) {
-        if (isSnapshotStale(snapshot)) {
-          staleByQuote.putIfAbsent(
-              order.getId(),
-              new StaleQuoteNotice(
-                  order.getId(),
-                  order.getQuoteNo(),
-                  order.getRouteSummary(),
-                  snapshot.getCostType().name()));
-          break;
-        }
-      }
-      if (staleByQuote.size() >= 5) {
-        break;
-      }
-    }
-
-    for (StaleQuoteNotice stale : staleByQuote.values()) {
+    for (QuoteOrder order : dashboardQueryRepository.findCostRiskQuotes(mine, 5)) {
       Map<String, Object> payload = new HashMap<>();
-      payload.put("quoteId", stale.quoteId());
-      payload.put("quoteNo", stale.quoteNo());
-      payload.put("routeSummary", stale.routeSummary());
-      payload.put("costType", stale.costType());
+      payload.put("quoteId", order.getId());
+      payload.put("quoteNo", order.getQuoteNo());
+      payload.put("routeSummary", order.getRouteSummary());
+      payload.put("reason", order.getCostRiskReason());
+      payload.put("costRiskModes", QuoteCostRiskSupport.parseModes(order.getCostRiskReason()));
       notices.add(
           new WorkspaceNoticeDto(
-              "cost-stale-" + stale.quoteId(),
-              "COST_UPDATED",
-              QuoteDateTimes.format(LocalDateTime.now()),
+              "cost-risk-" + order.getId(),
+              "COST_RISK",
+              QuoteDateTimes.format(
+                  order.getCostRiskAt() != null
+                      ? order.getCostRiskAt()
+                      : LocalDateTime.now()),
               payload));
     }
 
@@ -304,6 +452,17 @@ public class DashboardService {
     };
   }
 
+  private WorkspaceTodoDto toCostRiskTodo(QuoteOrder order) {
+    return new WorkspaceTodoDto(
+        order.getId(),
+        order.getQuoteNo(),
+        order.getCustomerName(),
+        "reviewCostRisk",
+        "urgent",
+        formatTimeLabel(order.getCostRiskAt() != null ? order.getCostRiskAt() : order.getUpdatedAt()),
+        false);
+  }
+
   private WorkspaceTodoDto toTodo(QuoteOrder order) {
     QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
     String todoType =
@@ -366,12 +525,13 @@ public class DashboardService {
     return QuoteDateTimes.format(value);
   }
 
-  private NotificationItemDto toNotificationItem(WorkspaceNoticeDto notice) {
+  private NotificationItemDto toNotificationItem(WorkspaceNoticeDto notice, boolean isRead) {
     String link = null;
     Map<String, Object> payload = notice.payload() == null ? Map.of() : notice.payload();
     if ("QUOTE_EXPIRING".equals(notice.type())) {
       link = "/quotes/list";
-    } else if ("COST_UPDATED".equals(notice.type()) && payload.get("quoteId") != null) {
+    } else if (("COST_UPDATED".equals(notice.type()) || "COST_RISK".equals(notice.type()))
+        && payload.get("quoteId") != null) {
       link = "/quotes/" + payload.get("quoteId") + "/edit";
     }
     return new NotificationItemDto(
@@ -380,7 +540,7 @@ public class DashboardService {
         null,
         null,
         notice.time(),
-        false,
+        isRead,
         link,
         payload);
   }

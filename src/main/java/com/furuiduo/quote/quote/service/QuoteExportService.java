@@ -17,6 +17,7 @@ import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
+import com.furuiduo.quote.quote.support.QuoteServiceTypesSupport;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 
@@ -25,6 +26,7 @@ public class QuoteExportService {
 
   private static final String[] HEADERS = {
     "QUOTE NO",
+    "服务类型",
     "CLINET",
     "PICK UP ADDRESS",
     "POR/POL",
@@ -43,6 +45,7 @@ public class QuoteExportService {
     "CARGO AGENT FEE",
     "REMARK",
     "QUOTE DATA",
+    "VALID UNTIL",
     "状态"
   };
 
@@ -126,6 +129,8 @@ public class QuoteExportService {
         QuoteSheetFieldsDto sheetFields = QuoteSheetFieldsDto.from(order);
         int col = 0;
         row.createCell(col++).setCellValue(nullToEmpty(order.getQuoteNo()));
+        row.createCell(col++)
+            .setCellValue(QuoteServiceTypesSupport.joinNames(order.getServiceTypes()));
         row.createCell(col++).setCellValue(nullToEmpty(order.getCustomerName()));
         row.createCell(col++).setCellValue(nullToEmpty(sheetFields.pickUpAddress()));
         row.createCell(col++).setCellValue(nullToEmpty(sheetFields.porPol()));
@@ -148,6 +153,9 @@ public class QuoteExportService {
                 order.getCreatedAt() != null
                     ? QuoteDateTimes.format(order.getCreatedAt()).substring(0, 10)
                     : "");
+        row.createCell(col++)
+            .setCellValue(
+                order.getValidUntil() != null ? order.getValidUntil().toString() : "");
         row.createCell(col++)
             .setCellValue(
                 order.getStatus() == null

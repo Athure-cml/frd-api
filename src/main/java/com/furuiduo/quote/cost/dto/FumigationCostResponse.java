@@ -26,7 +26,9 @@ public record FumigationCostResponse(
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "扩展字段") Map<String, Object> extraFields,
     @Schema(description = "更新时间") String updatedAt,
-    @Schema(description = "部门常用标记") CostHighlightView highlight) {
+    @Schema(description = "部门常用标记") CostHighlightView highlight,
+    @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
+    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked) {
 
   public static FumigationCostResponse from(CostFumigation entity) {
     return from(entity, null);
@@ -51,7 +53,9 @@ public record FumigationCostResponse(
         status,
         entity.getExtraFields(),
         QuoteDateTimes.format(entity.getUpdatedAt()),
-        highlight);
+        highlight,
+        false,
+        false);
   }
 
   public FumigationCostResponse withHighlight(CostHighlightView highlight) {
@@ -70,6 +74,50 @@ public record FumigationCostResponse(
         status,
         extraFields,
         updatedAt,
-        highlight);
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public FumigationCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
+    return new FumigationCostResponse(
+        id,
+        region,
+        station,
+        outdoorNonOak,
+        outdoorOak,
+        outdoorValidity,
+        indoorNonOak,
+        indoorOak,
+        indoorValidity,
+        address,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public FumigationCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
+    return new FumigationCostResponse(
+        id,
+        region,
+        station,
+        outdoorNonOak,
+        outdoorOak,
+        outdoorValidity,
+        indoorNonOak,
+        indoorOak,
+        indoorValidity,
+        address,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
   }
 }

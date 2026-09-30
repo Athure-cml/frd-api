@@ -111,7 +111,7 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("state", titledRequired("STATE"));
     fieldOverrides.put("por", titledRequired("POR"));
     fieldOverrides.put("station", titled("STATION"));
-    fieldOverrides.put("supplier", titledRequired("SUPPLIER"));
+    fieldOverrides.put("supplier", titledRequired("卡车供应商"));
     fieldOverrides.put("baseFreight", titled("BASE"));
     fieldOverrides.put("fsc", titled("FSC"));
     fieldOverrides.put("chassis", titled("CHASSIS"));

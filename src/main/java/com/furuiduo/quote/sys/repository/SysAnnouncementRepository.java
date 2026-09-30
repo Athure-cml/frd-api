@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.furuiduo.quote.sys.entity.AnnouncementDisplayType;
 import com.furuiduo.quote.sys.entity.AnnouncementStatus;
 import com.furuiduo.quote.sys.entity.SysAnnouncement;
 
@@ -18,6 +19,7 @@ public interface SysAnnouncementRepository extends JpaRepository<SysAnnouncement
       SELECT a FROM SysAnnouncement a
       LEFT JOIN FETCH a.createdBy
       WHERE a.status IN :activeStatuses
+        AND a.displayType IN :modalDisplayTypes
         AND a.publishedAt IS NOT NULL
         AND a.publishedAt <= :now
         AND (a.expiresAt IS NULL OR a.expiresAt > :now)
@@ -30,7 +32,23 @@ public interface SysAnnouncementRepository extends JpaRepository<SysAnnouncement
   List<SysAnnouncement> findPendingForUser(
       @Param("userId") Long userId,
       @Param("now") LocalDateTime now,
-      @Param("activeStatuses") List<AnnouncementStatus> activeStatuses);
+      @Param("activeStatuses") List<AnnouncementStatus> activeStatuses,
+      @Param("modalDisplayTypes") List<AnnouncementDisplayType> modalDisplayTypes);
+
+  @Query(
+      """
+      SELECT a FROM SysAnnouncement a
+      WHERE a.status IN :activeStatuses
+        AND a.displayType IN :tickerDisplayTypes
+        AND a.publishedAt IS NOT NULL
+        AND a.publishedAt <= :now
+        AND (a.expiresAt IS NULL OR a.expiresAt > :now)
+      ORDER BY a.publishedAt ASC, a.id ASC
+      """)
+  List<SysAnnouncement> findActiveTicker(
+      @Param("now") LocalDateTime now,
+      @Param("activeStatuses") List<AnnouncementStatus> activeStatuses,
+      @Param("tickerDisplayTypes") List<AnnouncementDisplayType> tickerDisplayTypes);
 
   @Query(
       """

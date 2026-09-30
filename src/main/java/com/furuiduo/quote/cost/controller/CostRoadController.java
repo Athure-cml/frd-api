@@ -33,6 +33,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyResult;
@@ -95,12 +96,13 @@ public class CostRoadController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     Set<Long> restrictIds =
         highlightQuerySupport.resolveRestrictIds(
-            CostHighlightMode.road, user, highlightOnly);
+            CostHighlightMode.road, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         highlightService.enrichRoadPage(
             user,
@@ -140,12 +142,13 @@ public class CostRoadController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     Set<Long> restrictIds =
         highlightQuerySupport.resolveRestrictIds(
-            CostHighlightMode.road, user, highlightOnly);
+            CostHighlightMode.road, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         costRoadService.listIds(
             zipCode,
@@ -239,12 +242,11 @@ public class CostRoadController {
       summary = "批量更新卡车成本",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PatchMapping("/batch")
-  public ApiResponse<Map<String, Integer>> batchUpdate(
-      @RequestHeader(value = "Authorization", required = false) String authorization,
-      @RequestBody CostBatchUpdateRequest request) {
+  public ApiResponse<CostBatchUpdateResult<RoadCostResponse>> batchUpdate(
+          @RequestHeader(value = "Authorization", required = false) String authorization,
+          @RequestBody CostBatchUpdateRequest request) {
     requireEdit(authService.requireUser(authorization));
-    int updated = costRoadService.batchUpdate(request);
-    return ApiResponse.ok(Map.of("updated", updated));
+    return ApiResponse.ok(costRoadService.batchUpdate(request));
   }
 
   @Operation(

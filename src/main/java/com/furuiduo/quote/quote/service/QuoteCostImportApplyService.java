@@ -21,6 +21,7 @@ import com.furuiduo.quote.quote.dto.QuoteApplyCostImportResponse;
 import com.furuiduo.quote.quote.dto.QuoteSheetFieldsDto;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 import com.furuiduo.quote.quote.support.QuoteCostMatchSupport;
+import com.furuiduo.quote.quote.support.QuoteRoadAllInSupport;
 import com.furuiduo.quote.quoterule.QuoteRuleContext;
 import com.furuiduo.quote.quoterule.service.QuoteRuleEngine;
 
@@ -43,11 +44,15 @@ public class QuoteCostImportApplyService {
 
   private final MdGlobalPortRepository globalPortRepository;
   private final QuoteRuleEngine quoteRuleEngine;
+  private final QuoteLibraryMatchService quoteLibraryMatchService;
 
   public QuoteCostImportApplyService(
-      MdGlobalPortRepository globalPortRepository, QuoteRuleEngine quoteRuleEngine) {
+      MdGlobalPortRepository globalPortRepository,
+      QuoteRuleEngine quoteRuleEngine,
+      QuoteLibraryMatchService quoteLibraryMatchService) {
     this.globalPortRepository = globalPortRepository;
     this.quoteRuleEngine = quoteRuleEngine;
+    this.quoteLibraryMatchService = quoteLibraryMatchService;
   }
 
   public QuoteApplyCostImportResponse apply(QuoteApplyCostImportRequest request) {
@@ -78,36 +83,158 @@ public class QuoteCostImportApplyService {
             ? LocalDate.parse(request.quoteDate().trim())
             : LocalDate.now();
 
+    if (request.costRefId() != null) {
+      QuoteSheetFieldsDto fields =
+          quoteLibraryMatchService.buildImportFields(
+              type, request.costRefId(), ruleContext, quoteDate, fumigationEnabled, request.oakType());
+      return new QuoteApplyCostImportResponse(fields);
+    }
+    if (isQuoteLibrarySnapshot(request.snapshot())) {
+      QuoteSheetFieldsDto fields =
+          switch (type) {
+            case ROAD -> applyRoadFromLibrary(request.snapshot(), fumigationEnabled, request.oakType());
+            case SEA -> applySeaFromLibrary(request.snapshot());
+            case FUMIGATION -> applyFumigationFromLibrary(request.snapshot(), quoteDate);
+          };
+      return new QuoteApplyCostImportResponse(fields);
+    }
     QuoteSheetFieldsDto fields =
         switch (type) {
-          case ROAD -> applyRoad(request.snapshot(), ruleContext, fumigationEnabled);
+          case ROAD -> applyRoad(request.snapshot(), ruleContext, fumigationEnabled, request.oakType());
           case SEA -> applySea(request.snapshot(), ruleContext);
           case FUMIGATION -> applyFumigation(request.snapshot(), ruleContext, quoteDate);
         };
     return new QuoteApplyCostImportResponse(fields);
   }
 
-  private QuoteSheetFieldsDto applyRoad(
-      Map<String, Object> snap, QuoteRuleContext ctx, boolean fumigationEnabled) {
-    BigDecimal truckingFee = null;
+  private boolean isQuoteLibrarySnapshot(Map<String, Object> snapshot) {
+    Object flag = snapshot.get("fromQuoteLibrary");
+    return Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
+  }
+
+  private QuoteSheetFieldsDto applyRoadFromLibrary(
+      Map<String, Object> snap, boolean fumigationEnabled, String oakType) {
+    BigDecimal truckingFee =
+        QuoteRoadAllInSupport.pick(
+            toBigDecimal(snap.get("allInNoFm")),
+            toBigDecimal(snap.get("allInFmOneWay")),
+            toBigDecimal(snap.get("allInFmRound")),
+            fumigationEnabled,
+            oakType);
     BigDecimal truckingNonOakUsd = null;
     BigDecimal truckingOakUsd = null;
+    return new QuoteSheetFieldsDto(
+        text(snap.get("zipCode")),
+        text(snap.get("city")),
+        text(snap.get("state")),
+        text(snap.get("logYardNameAddress")),
+        text(snap.get("por")),
+        text(snap.get("pol")),
+        null,
+        null,
+        null,
+        truckingFee,
+        toBigDecimal(snap.get("nsLift")),
+        resolveExtraChassis(snap),
+        toBigDecimal(snap.get("waitingFee")),
+        toBigDecimal(snap.get("redelivery")),
+        QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(snap),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        truckingNonOakUsd,
+        truckingOakUsd,
+        null,
+        null);
+  }
 
-    if (fumigationEnabled) {
-      BigDecimal fmNonOakBase = toBigDecimal(snap.get("allInFmOneWay"));
-      BigDecimal fmOakBase = toBigDecimal(snap.get("allInFmRound"));
-      if (fmNonOakBase != null) {
-        truckingNonOakUsd = quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", fmNonOakBase, ctx);
-      }
-      if (fmOakBase != null) {
-        truckingOakUsd = quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", fmOakBase, ctx);
-      }
-    } else {
-      BigDecimal noFmBase = toBigDecimal(snap.get("allInNoFm"));
-      if (noFmBase != null) {
-        truckingFee = quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", noFmBase, ctx);
-      }
+  private QuoteSheetFieldsDto applySeaFromLibrary(Map<String, Object> snap) {
+    BigDecimal allIn = toBigDecimal(snap.get("allIn"));
+    if (allIn == null) {
+      allIn = toBigDecimal(snap.get("freight"));
     }
+    String oceanFreight = allIn != null ? allIn.toPlainString() : null;
+    return new QuoteSheetFieldsDto(
+        null,
+        null,
+        null,
+        null,
+        text(snap.get("por")),
+        text(snap.get("pol")),
+        text(snap.get("pod")),
+        oceanFreight,
+        text(snap.get("ssl")),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private QuoteSheetFieldsDto applyFumigationFromLibrary(
+      Map<String, Object> snap, LocalDate quoteDate) {
+    FumigationRates rates = resolveFumigationRatesFromSnapshot(snap, quoteDate);
+    return new QuoteSheetFieldsDto(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        rates.nonOak(),
+        rates.oak(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private QuoteSheetFieldsDto applyRoad(
+      Map<String, Object> snap, QuoteRuleContext ctx, boolean fumigationEnabled, String oakType) {
+    BigDecimal base =
+        QuoteRoadAllInSupport.pick(
+            toBigDecimal(snap.get("allInNoFm")),
+            toBigDecimal(snap.get("allInFmOneWay")),
+            toBigDecimal(snap.get("allInFmRound")),
+            fumigationEnabled,
+            oakType);
+    BigDecimal truckingFee =
+        base == null ? null : quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", base, ctx);
+    BigDecimal truckingNonOakUsd = null;
+    BigDecimal truckingOakUsd = null;
 
     return new QuoteSheetFieldsDto(
         text(snap.get("zipCode")),

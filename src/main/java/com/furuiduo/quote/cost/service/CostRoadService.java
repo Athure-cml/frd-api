@@ -29,6 +29,7 @@ import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.CostRoadBatchCopyResult;
@@ -40,6 +41,7 @@ import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
+import com.furuiduo.quote.cost.support.CostBatchPreviewSupport;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
 import com.furuiduo.quote.cost.support.CostExcelSupport;
@@ -53,6 +55,7 @@ import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.cost.support.RoadAllInFormulaEvaluator;
 import com.furuiduo.quote.masterdata.dto.DestZipResolveItemResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
+import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
 import com.furuiduo.quote.supplier.repository.SupplierRepository;
 
 @Service
@@ -101,6 +104,7 @@ public class CostRoadService {
   private final DestAddressService destAddressService;
   private final CostMasterRefValidator masterRefValidator;
   private final CostDeptHighlightService highlightService;
+  private final QuoteLibraryEntryService quoteLibraryEntryService;
 
   public CostRoadService(
       CostRoadRepository repository,
@@ -108,13 +112,15 @@ public class CostRoadService {
       SupplierRepository supplierRepository,
       DestAddressService destAddressService,
       CostMasterRefValidator masterRefValidator,
-      CostDeptHighlightService highlightService) {
+      CostDeptHighlightService highlightService,
+      QuoteLibraryEntryService quoteLibraryEntryService) {
     this.repository = repository;
     this.templateService = templateService;
     this.supplierRepository = supplierRepository;
     this.destAddressService = destAddressService;
     this.masterRefValidator = masterRefValidator;
     this.highlightService = highlightService;
+    this.quoteLibraryEntryService = quoteLibraryEntryService;
   }
 
   public PageResult<RoadCostResponse> list(
@@ -134,7 +140,7 @@ public class CostRoadService {
       String sortOrder,
       Set<Long> restrictToIds) {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
-      return new PageResult<>(List.of(), 0);
+      return finalizeRoadPage(new PageResult<>(List.of(), 0));
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
@@ -170,9 +176,10 @@ public class CostRoadService {
               restrict,
               idParams,
               pageable);
-      return new PageResult<>(
-          result.getContent().stream().map(RoadCostResponse::from).toList(),
-          result.getTotalElements());
+      return finalizeRoadPage(
+          new PageResult<>(
+              result.getContent().stream().map(RoadCostResponse::from).toList(),
+              result.getTotalElements()));
     }
 
     List<CostRoad> filtered =
@@ -191,7 +198,7 @@ public class CostRoadService {
                 sort),
             restrictToIds,
             CostRoad::getId);
-    return paginate(filtered, safePage, safePageSize);
+    return finalizeRoadPage(paginate(filtered, safePage, safePageSize));
   }
 
   /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
@@ -420,6 +427,7 @@ public class CostRoadService {
             CostStatus.active, source.getExtraFields(), previousValidText));
     source.touch();
     repository.save(source);
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, sourceId);
     copyHighlightsIfRequested(sourceId, created.id());
     return created;
   }
@@ -487,13 +495,16 @@ public class CostRoadService {
 
   @Transactional
   public RoadCostResponse update(Long id, RoadCostSaveRequest request) {
+    quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.road, id);
     CostRoad entity = requireEntity(id);
     applySave(entity, request);
     fillMissingAllInFromFormulas(entity);
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
-    return RoadCostResponse.from(repository.save(entity));
+    RoadCostResponse saved = RoadCostResponse.from(repository.save(entity));
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, id);
+    return saved;
   }
 
   @Transactional
@@ -501,6 +512,7 @@ public class CostRoadService {
     if (!repository.existsById(id)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.road, id);
     repository.deleteById(id);
   }
 
@@ -512,30 +524,55 @@ public class CostRoadService {
     if (ids.isEmpty()) {
       return;
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.road, ids);
     repository.deleteAllById(ids);
   }
 
   @Transactional
-  public int batchUpdate(CostBatchUpdateRequest request) {
+  public CostBatchUpdateResult<RoadCostResponse> batchUpdate(CostBatchUpdateRequest request) {
     List<Long> ids =
         resolveRoadBatchIds(
             request.ids(), request.searchCriteria(), request.excludeIds());
     if (ids.isEmpty()) {
-      return 0;
+      return new CostBatchUpdateResult<>(0, List.of(), 0);
+    }
+    boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    if (!previewOnly) {
+      quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.road, ids);
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
+    int total = ids.size();
+    int previewLimit =
+        CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
+    List<RoadCostResponse> items = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
-      CostRoad entity = requireEntity(id);
-      applyRoadFieldOverrides(entity, fields, false);
-      if (fields.containsKey("supplier")) {
-        validateMasterRefs(entity);
+      if (previewOnly && items.size() >= previewLimit) {
+        break;
       }
-      entity.touch();
-      repository.save(entity);
-      updated++;
+      CostRoad entity = requireEntity(id);
+      if (previewOnly) {
+        CostRoad preview = copyOf(entity);
+        applyRoadFieldOverrides(preview, fields, false);
+        if (fields.containsKey("supplier")) {
+          validateMasterRefs(preview);
+        }
+        items.add(RoadCostResponse.from(preview));
+      } else {
+        applyRoadFieldOverrides(entity, fields, false);
+        if (fields.containsKey("supplier")) {
+          validateMasterRefs(entity);
+        }
+        entity.touch();
+        repository.save(entity);
+        updated++;
+      }
     }
-    return updated;
+    if (previewOnly) {
+      return new CostBatchUpdateResult<>(total, items, total);
+    }
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, ids);
+    return new CostBatchUpdateResult<>(updated, List.of(), total);
   }
 
   private void applyRoadFieldOverrides(CostRoad entity, Map<String, Object> fields) {
@@ -862,6 +899,10 @@ public class CostRoadService {
 
     var layout = templateService.resolveExportLayout("road", templateId);
     return CostDataExcelExporter.exportRoad(items, layout);
+  }
+
+  private PageResult<RoadCostResponse> finalizeRoadPage(PageResult<RoadCostResponse> page) {
+    return quoteLibraryEntryService.enrichRoadPage(page);
   }
 
   private PageResult<RoadCostResponse> paginate(List<CostRoad> filtered, int page, int pageSize) {

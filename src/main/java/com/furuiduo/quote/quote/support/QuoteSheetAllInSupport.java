@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Locale;
 
+import com.furuiduo.quote.quote.entity.QuoteOakType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 
 /** 报价单业务表 ALL IN：汇总 sheet 上可解析的美元费用项。 */
@@ -19,10 +20,15 @@ public final class QuoteSheetAllInSupport {
     total = add(total, parseUsdAmount(order.getOfUsd()));
 
     if (isFumigationEnabled(order)) {
-      total = add(total, order.getTruckingNonOakUsd());
-      total = add(total, order.getTruckingOakUsd());
-      total = add(total, order.getFmNonOak());
-      total = add(total, order.getFmOak());
+      total = add(total, defaultTruckingFee(order));
+      if (order.getOakType() == QuoteOakType.OAK) {
+        total = add(total, order.getFmOak());
+      } else if (order.getOakType() == QuoteOakType.NON_OAK) {
+        total = add(total, order.getFmNonOak());
+      } else {
+        total = add(total, order.getFmNonOak());
+        total = add(total, order.getFmOak());
+      }
     } else {
       total = add(total, defaultTruckingFee(order));
     }
@@ -61,7 +67,7 @@ public final class QuoteSheetAllInSupport {
   }
 
   /** 解析 US$ / 千分位；含 CIF 公式占位则跳过。 */
-  static BigDecimal parseUsdAmount(String raw) {
+  public static BigDecimal parseUsdAmount(String raw) {
     if (raw == null || raw.isBlank()) {
       return null;
     }

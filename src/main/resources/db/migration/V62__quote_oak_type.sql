@@ -1,0 +1,1 @@
+ALTER TABLE quote_order ADD COLUMN IF NOT EXISTS oak_type VARCHAR(16);

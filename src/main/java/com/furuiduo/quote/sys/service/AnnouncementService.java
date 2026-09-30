@@ -15,6 +15,8 @@ import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.dto.AnnouncementResponse;
 import com.furuiduo.quote.sys.dto.AnnouncementSaveAction;
 import com.furuiduo.quote.sys.dto.AnnouncementSaveRequest;
+import com.furuiduo.quote.sys.dto.AnnouncementTickerResponse;
+import com.furuiduo.quote.sys.entity.AnnouncementDisplayType;
 import com.furuiduo.quote.sys.entity.AnnouncementStatus;
 import com.furuiduo.quote.sys.entity.SysAnnouncement;
 import com.furuiduo.quote.sys.entity.SysAnnouncementRead;
@@ -29,6 +31,12 @@ public class AnnouncementService {
 
   private static final List<AnnouncementStatus> PENDING_STATUSES =
       List.of(AnnouncementStatus.PUBLISHED, AnnouncementStatus.SCHEDULED);
+
+  private static final List<AnnouncementDisplayType> MODAL_DISPLAY_TYPES =
+      List.of(AnnouncementDisplayType.MODAL, AnnouncementDisplayType.BOTH);
+
+  private static final List<AnnouncementDisplayType> TICKER_DISPLAY_TYPES =
+      List.of(AnnouncementDisplayType.TICKER, AnnouncementDisplayType.BOTH);
 
   private final SysAnnouncementRepository announcementRepository;
   private final SysAnnouncementReadRepository readRepository;
@@ -50,8 +58,21 @@ public class AnnouncementService {
   public List<AnnouncementResponse> listPending(SysUser user) {
     promoteDueScheduled();
     LocalDateTime now = LocalDateTime.now();
-    return announcementRepository.findPendingForUser(user.getId(), now, PENDING_STATUSES).stream()
+    return announcementRepository
+        .findPendingForUser(user.getId(), now, PENDING_STATUSES, MODAL_DISPLAY_TYPES)
+        .stream()
         .map(item -> toResponse(item, now, false))
+        .toList();
+  }
+
+  @Transactional
+  public List<AnnouncementTickerResponse> listTicker(SysUser user) {
+    promoteDueScheduled();
+    LocalDateTime now = LocalDateTime.now();
+    return announcementRepository
+        .findActiveTicker(now, PENDING_STATUSES, TICKER_DISPLAY_TYPES)
+        .stream()
+        .map(this::toTickerResponse)
         .toList();
   }
 
@@ -109,6 +130,7 @@ public class AnnouncementService {
     copy.setTitle(buildCopyTitle(source.getTitle()));
     copy.setContent(source.getContent());
     copy.setValidDays(source.getValidDays());
+    copy.setDisplayType(source.getDisplayType());
     copy.setStatus(AnnouncementStatus.DRAFT);
     copy.setEnabled(true);
     copy.setPublishedAt(null);
@@ -166,20 +188,50 @@ public class AnnouncementService {
   }
 
   private void applyContent(SysAnnouncement announcement, AnnouncementSaveRequest request) {
-    announcement.setTitle(request.title().trim());
-    announcement.setContent(
-        request.content() == null ? "" : request.content().trim());
+    AnnouncementDisplayType displayType =
+        request.displayType() == null
+            ? AnnouncementDisplayType.MODAL
+            : request.displayType();
+    String title = request.title() == null ? "" : request.title().trim();
+    String content = request.content() == null ? "" : request.content().trim();
+    if (displayType.showsModal()) {
+      announcement.setTitle(title);
+    } else {
+      announcement.setTitle(
+          StringUtils.hasText(title) ? title : deriveTitleFromContent(content));
+    }
+    announcement.setContent(content);
+    announcement.setDisplayType(displayType);
     applyValidDays(announcement, request.validDays());
   }
 
   private void validateSaveRequest(AnnouncementSaveRequest request) {
-    if (!StringUtils.hasText(request.title())) {
+    AnnouncementDisplayType displayType =
+        request.displayType() == null ? AnnouncementDisplayType.MODAL : request.displayType();
+    if (displayType.showsModal() && !StringUtils.hasText(request.title())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
     }
-    if (request.saveAction() != AnnouncementSaveAction.DRAFT
-        && !StringUtils.hasText(request.content())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "正文不能为空");
+    if (request.saveAction() == AnnouncementSaveAction.DRAFT) {
+      return;
     }
+    String plainContent = stripHtmlText(request.content());
+    if (displayType.showsModal() && !StringUtils.hasText(plainContent)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "弹窗公告正文不能为空");
+    }
+    if (displayType.showsTicker() && !StringUtils.hasText(plainContent)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "滚动条公告正文不能为空");
+    }
+  }
+
+  private String deriveTitleFromContent(String content) {
+    String text = stripHtmlText(content);
+    if (!StringUtils.hasText(text)) {
+      return "滚动公告";
+    }
+    if (text.length() <= 128) {
+      return text;
+    }
+    return text.substring(0, 125) + "…";
   }
 
   private void applySaveAction(SysAnnouncement announcement, AnnouncementSaveRequest request) {
@@ -355,6 +407,7 @@ public class AnnouncementService {
         announcement.getId(),
         announcement.getTitle(),
         announcement.getContent(),
+        announcement.getDisplayType().name(),
         resolveDisplayStatus(announcement, now),
         announcement.getPublishedAt() != null ? announcement.getPublishedAt().toString() : null,
         announcement.getExpiresAt() != null ? announcement.getExpiresAt().toString() : null,
@@ -384,5 +437,32 @@ public class AnnouncementService {
       return "SCHEDULED";
     }
     return "PUBLISHED";
+  }
+
+  private AnnouncementTickerResponse toTickerResponse(SysAnnouncement announcement) {
+    return new AnnouncementTickerResponse(
+        announcement.getId(),
+        resolveTickerText(announcement),
+        announcement.getTitle() == null ? "" : announcement.getTitle().trim(),
+        announcement.getContent() == null ? "" : announcement.getContent().trim());
+  }
+
+  private String resolveTickerText(SysAnnouncement announcement) {
+    String content = stripHtmlText(announcement.getContent());
+    if (StringUtils.hasText(content)) {
+      return content;
+    }
+    return announcement.getTitle() == null ? "" : announcement.getTitle().trim();
+  }
+
+  private String stripHtmlText(String value) {
+    if (!StringUtils.hasText(value)) {
+      return "";
+    }
+    return value
+        .replaceAll("<[^>]+>", " ")
+        .replace("&nbsp;", " ")
+        .replaceAll("\\s+", " ")
+        .trim();
   }
 }

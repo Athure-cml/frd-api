@@ -27,6 +27,10 @@ public record OperationLogResponse(
     @Schema(description = "时间") String createdAt) {
 
   public static OperationLogResponse from(SysOperationLog log) {
+    return from(log, log.getSummary());
+  }
+
+  public static OperationLogResponse from(SysOperationLog log, String summary) {
     return new OperationLogResponse(
         log.getId(),
         log.getUserId(),
@@ -36,13 +40,13 @@ public record OperationLogResponse(
         log.getAction(),
         log.getResourceType(),
         log.getResourceId(),
-        log.getSummary(),
+        summary,
         log.getRequestMethod(),
         log.getRequestUri(),
         log.getRequestBody(),
         log.getIpAddress(),
         log.getSuccess(),
         log.getErrorMessage(),
-        QuoteDateTimes.format(log.getCreatedAt()));
+        QuoteDateTimes.formatSeconds(log.getCreatedAt()));
   }
 }

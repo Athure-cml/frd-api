@@ -203,6 +203,30 @@ public class DashboardQueryRepository {
   }
 
   @SuppressWarnings("unchecked")
+  public List<QuoteOrder> findCostRiskQuotes(DashboardScopeParams scope, int limit) {
+    String jpql =
+        """
+        SELECT q FROM QuoteOrder q
+        WHERE q.costRiskActive = TRUE
+        AND (
+          :scopeAll = TRUE OR
+          (:scopeDept = TRUE AND q.deptId = :deptId) OR
+          (:scopeSelf = TRUE AND q.createdBy = :userId)
+        )
+        ORDER BY q.costRiskAt DESC, q.updatedAt DESC
+        """;
+    return entityManager
+        .createQuery(jpql, QuoteOrder.class)
+        .setParameter("scopeAll", scope.scopeAll())
+        .setParameter("scopeDept", scope.scopeDept())
+        .setParameter("scopeSelf", scope.scopeSelf())
+        .setParameter("deptId", scope.deptId())
+        .setParameter("userId", scope.userId())
+        .setMaxResults(limit)
+        .getResultList();
+  }
+
+  @SuppressWarnings("unchecked")
   public List<QuoteOrder> findDraftsWithSnapshots(DashboardScopeParams scope, int limit) {
     String jpql =
         """

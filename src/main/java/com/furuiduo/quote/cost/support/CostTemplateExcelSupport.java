@@ -27,7 +27,7 @@ public final class CostTemplateExcelSupport {
           Map.entry("por", "POR"),
           Map.entry("station", "STATION"),
           Map.entry("pol", "POL"),
-          Map.entry("supplier", "SUPPLIER"),
+          Map.entry("supplier", "卡车供应商"),
           Map.entry("baseFreight", "BASE"),
           Map.entry("fsc", "FSC"),
           Map.entry("chassis", "CHASSIS"),

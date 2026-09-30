@@ -19,6 +19,7 @@ import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysDepartmentRepository;
 import com.furuiduo.quote.sys.repository.SysRoleRepository;
 import com.furuiduo.quote.sys.repository.SysUserRepository;
+import com.furuiduo.quote.sys.support.HomePathSupport;
 import com.furuiduo.quote.user.PasswordStrengthEvaluator;
 
 @Service
@@ -66,10 +67,7 @@ public class SysUserCommandService {
     user.setDepartment(requireDepartment(request.deptId()));
     user.setStatus(request.status());
     user.setAvatar(request.avatar());
-    user.setHomePath(
-        request.homePath() == null || request.homePath().isBlank()
-            ? "/workspace"
-            : request.homePath());
+    user.setHomePath(HomePathSupport.resolve(request.homePath()));
     user.setRoles(resolveRoles(request.roleCodes()));
     user = userRepository.save(user);
     return getById(user.getId());
@@ -101,7 +99,7 @@ public class SysUserCommandService {
       user.setAvatar(request.avatar());
     }
     if (request.homePath() != null && !request.homePath().isBlank()) {
-      user.setHomePath(request.homePath());
+      user.setHomePath(HomePathSupport.resolve(request.homePath()));
     }
     user.setRoles(newRoles);
     if (request.password() != null && !request.password().isBlank()) {

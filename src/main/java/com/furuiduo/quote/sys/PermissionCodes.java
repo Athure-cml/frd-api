@@ -50,8 +50,20 @@ public final class PermissionCodes {
   public static final String QUOTE_EDIT = "quote:edit";
   public static final String QUOTE_SUBMIT = "quote:submit";
   public static final String QUOTE_APPROVE = "quote:approve";
+  public static final String APPROVAL_CONFIG_VIEW = "approval:config:view";
+  public static final String APPROVAL_CONFIG_MANAGE = "approval:config:manage";
   public static final String QUOTE_EXPORT = "quote:export";
   public static final String QUOTE_DELETE = "quote:delete";
+
+  public static final String QUOTE_LIBRARY_ROAD_VIEW = "quote:library:road:view";
+  public static final String QUOTE_LIBRARY_ROAD_EDIT = "quote:library:road:edit";
+  public static final String QUOTE_LIBRARY_ROAD_DELETE = "quote:library:road:delete";
+  public static final String QUOTE_LIBRARY_SEA_VIEW = "quote:library:sea:view";
+  public static final String QUOTE_LIBRARY_SEA_EDIT = "quote:library:sea:edit";
+  public static final String QUOTE_LIBRARY_SEA_DELETE = "quote:library:sea:delete";
+  public static final String QUOTE_LIBRARY_FUMIGATION_VIEW = "quote:library:fumigation:view";
+  public static final String QUOTE_LIBRARY_FUMIGATION_EDIT = "quote:library:fumigation:edit";
+  public static final String QUOTE_LIBRARY_FUMIGATION_DELETE = "quote:library:fumigation:delete";
 
   public static final String CUSTOMER_VIEW = "customer:view";
   public static final String CUSTOMER_CREATE = "customer:create";
@@ -143,8 +155,19 @@ public final class PermissionCodes {
       QUOTE_EDIT,
       QUOTE_SUBMIT,
       QUOTE_APPROVE,
+      APPROVAL_CONFIG_VIEW,
+      APPROVAL_CONFIG_MANAGE,
       QUOTE_EXPORT,
       QUOTE_DELETE,
+      QUOTE_LIBRARY_ROAD_VIEW,
+      QUOTE_LIBRARY_ROAD_EDIT,
+      QUOTE_LIBRARY_ROAD_DELETE,
+      QUOTE_LIBRARY_SEA_VIEW,
+      QUOTE_LIBRARY_SEA_EDIT,
+      QUOTE_LIBRARY_SEA_DELETE,
+      QUOTE_LIBRARY_FUMIGATION_VIEW,
+      QUOTE_LIBRARY_FUMIGATION_EDIT,
+      QUOTE_LIBRARY_FUMIGATION_DELETE,
       CUSTOMER_VIEW,
       CUSTOMER_CREATE,
       CUSTOMER_EDIT,

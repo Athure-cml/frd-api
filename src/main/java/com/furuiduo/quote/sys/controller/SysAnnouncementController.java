@@ -20,6 +20,7 @@ import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.sys.dto.AnnouncementResponse;
 import com.furuiduo.quote.sys.dto.AnnouncementSaveRequest;
+import com.furuiduo.quote.sys.dto.AnnouncementTickerResponse;
 import com.furuiduo.quote.sys.service.AnnouncementService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +50,16 @@ public class SysAnnouncementController {
       @RequestHeader(value = "Authorization", required = false) String authorization) {
     return ApiResponse.ok(
         announcementService.listPending(authService.requireUser(authorization)));
+  }
+
+  @Operation(
+      summary = "活动滚动条公告",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/ticker")
+  public ApiResponse<List<AnnouncementTickerResponse>> ticker(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    return ApiResponse.ok(
+        announcementService.listTicker(authService.requireUser(authorization)));
   }
 
   @Operation(

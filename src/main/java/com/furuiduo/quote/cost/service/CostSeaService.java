@@ -28,6 +28,7 @@ import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.common.SearchText;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyRequest;
 import com.furuiduo.quote.cost.dto.CostSeaBatchCopyResult;
@@ -39,6 +40,7 @@ import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
 import com.furuiduo.quote.cost.support.CostBatchCriteriaMaps;
+import com.furuiduo.quote.cost.support.CostBatchPreviewSupport;
 import com.furuiduo.quote.cost.support.CostBatchIdResolver;
 import com.furuiduo.quote.cost.support.CostDataExcelExporter;
 import com.furuiduo.quote.cost.support.CostDateSearchFilter;
@@ -49,6 +51,7 @@ import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.cost.support.SeaAllInCalculator;
+import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
 
 @Service
 public class CostSeaService {
@@ -87,16 +90,19 @@ public class CostSeaService {
   private final CostGridTemplateService templateService;
   private final CostMasterRefValidator masterRefValidator;
   private final CostDeptHighlightService highlightService;
+  private final QuoteLibraryEntryService quoteLibraryEntryService;
 
   public CostSeaService(
       CostSeaRepository repository,
       CostGridTemplateService templateService,
       CostMasterRefValidator masterRefValidator,
-      CostDeptHighlightService highlightService) {
+      CostDeptHighlightService highlightService,
+      QuoteLibraryEntryService quoteLibraryEntryService) {
     this.repository = repository;
     this.templateService = templateService;
     this.masterRefValidator = masterRefValidator;
     this.highlightService = highlightService;
+    this.quoteLibraryEntryService = quoteLibraryEntryService;
   }
 
   public PageResult<FreightCostResponse> list(
@@ -116,7 +122,7 @@ public class CostSeaService {
       String sortOrder,
       Set<Long> restrictToIds) {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
-      return new PageResult<>(List.of(), 0);
+      return finalizeSeaPage(new PageResult<>(List.of(), 0));
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
@@ -142,9 +148,10 @@ public class CostSeaService {
       List<Long> idParams = restrict ? List.copyOf(restrictToIds) : List.of(-1L);
       Page<CostSea> result =
           repository.search(p, pl, pd, s, ct, a, rm, restrict, idParams, pageable);
-      return new PageResult<>(
-          result.getContent().stream().map(FreightCostResponse::fromSea).toList(),
-          result.getTotalElements());
+      return finalizeSeaPage(
+          new PageResult<>(
+              result.getContent().stream().map(FreightCostResponse::fromSea).toList(),
+              result.getTotalElements()));
     }
 
     List<CostSea> filtered =
@@ -163,7 +170,7 @@ public class CostSeaService {
                 sort),
             restrictToIds,
             CostSea::getId);
-    return paginate(filtered, safePage, safePageSize);
+    return finalizeSeaPage(paginate(filtered, safePage, safePageSize));
   }
 
   /** 按与 list 相同的筛选条件返回全部匹配记录 ID（跨页全选）。 */
@@ -315,12 +322,15 @@ public class CostSeaService {
 
   @Transactional
   public FreightCostResponse update(Long id, FreightCostSaveRequest request) {
+    quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.sea, id);
     CostSea entity = requireEntity(id);
     applySave(entity, request);
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
-    return FreightCostResponse.fromSea(repository.save(entity));
+    FreightCostResponse saved = FreightCostResponse.fromSea(repository.save(entity));
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, id);
+    return saved;
   }
 
   /**
@@ -386,6 +396,7 @@ public class CostSeaService {
         CostValidityStatus.resolve(CostStatus.active, source.getFreightValidDate()));
     source.touch();
     repository.save(source);
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, sourceId);
     copyHighlightsIfRequested(sourceId, created.id());
     return created;
   }
@@ -448,6 +459,7 @@ public class CostSeaService {
     if (!repository.existsById(id)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.sea, id);
     repository.deleteById(id);
   }
 
@@ -459,6 +471,7 @@ public class CostSeaService {
     if (ids.isEmpty()) {
       return;
     }
+    quoteLibraryEntryService.ensureEditable(CostHighlightMode.sea, ids);
     repository.deleteAllById(ids);
   }
 
@@ -514,83 +527,108 @@ public class CostSeaService {
   }
 
   @Transactional
-  public int batchUpdate(CostBatchUpdateRequest request) {
+  public CostBatchUpdateResult<FreightCostResponse> batchUpdate(CostBatchUpdateRequest request) {
     List<Long> ids =
         resolveSeaBatchIds(
             request.ids(), request.searchCriteria(), request.excludeIds());
     if (ids.isEmpty()) {
-      return 0;
+      return new CostBatchUpdateResult<>(0, List.of(), 0);
+    }
+    boolean previewOnly = Boolean.TRUE.equals(request.previewOnly());
+    if (!previewOnly) {
+      quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.sea, ids);
     }
     Map<String, Object> fields = request.fields() == null ? Map.of() : request.fields();
+    int total = ids.size();
+    int previewLimit =
+        CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
+    List<FreightCostResponse> items = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
+      if (previewOnly && items.size() >= previewLimit) {
+        break;
+      }
       CostSea entity = requireEntity(id);
-
-      if (fields.containsKey("freight")) {
-        entity.setFreight(asDecimal(fields.get("freight")));
+      if (previewOnly) {
+        CostSea preview = copyOf(entity);
+        applySeaBatchUpdateFields(preview, fields);
+        items.add(FreightCostResponse.fromSea(preview));
+      } else {
+        applySeaBatchUpdateFields(entity, fields);
+        entity.touch();
+        repository.save(entity);
+        updated++;
       }
-      if (fields.containsKey("containerType")) {
-        entity.setContainerType(asString(fields.get("containerType")));
-      }
-      if (fields.containsKey("freightValidDate")) {
-        entity.setFreightValidDate(asString(fields.get("freightValidDate")));
-      }
-      if (fields.containsKey("buc")) {
-        entity.setBuc(asDecimal(fields.get("buc")));
-      }
-      if (fields.containsKey("bucValidDate")) {
-        entity.setBucValidDate(asString(fields.get("bucValidDate")));
-      }
-      if (fields.containsKey("others")) {
-        entity.setOthers(asDecimal(fields.get("others")));
-      }
-      if (fields.containsKey("othersValidDate")) {
-        entity.setOthersValidDate(asString(fields.get("othersValidDate")));
-      }
-
-      Map<String, Object> extra =
-          entity.getExtraFields() == null
-              ? new HashMap<>()
-              : new HashMap<>(entity.getExtraFields());
-      boolean extraChanged = false;
-      if (fields.containsKey("freightEffDate")) {
-        extra.put(CF_FREIGHT_EFF, asString(fields.get("freightEffDate")));
-        extraChanged = true;
-      }
-      if (fields.containsKey("bucEffDate")) {
-        extra.put(CF_BUNKER_EFF, asString(fields.get("bucEffDate")));
-        extraChanged = true;
-      }
-      if (fields.containsKey("othersEffDate")) {
-        extra.put(CF_OTHERS_EFF, asString(fields.get("othersEffDate")));
-        extraChanged = true;
-      }
-      if (extraChanged) {
-        entity.setExtraFields(extra);
-      }
-
-      // 兼容旧批量字段
-      if (fields.containsKey("agent")) {
-        entity.setAgent(asString(fields.get("agent")));
-      }
-      if (fields.containsKey("remark")) {
-        entity.setRemark(asString(fields.get("remark")));
-      }
-
-      // ALL IN 始终按公式重算，不接受手工覆盖
-      entity.setAllIn(SeaAllInCalculator.compute(entity));
-      if (fields.containsKey("freightValidDate")) {
-        entity.setStatus(
-            CostValidityStatus.resolve(CostStatus.active, entity.getFreightValidDate()));
-      }
-      if (fields.containsKey("containerType") || fields.containsKey("agent")) {
-        validateMasterRefs(entity);
-      }
-      entity.touch();
-      repository.save(entity);
-      updated++;
     }
-    return updated;
+    if (previewOnly) {
+      return new CostBatchUpdateResult<>(total, items, total);
+    }
+    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, ids);
+    return new CostBatchUpdateResult<>(updated, List.of(), total);
+  }
+
+  private void applySeaBatchUpdateFields(CostSea entity, Map<String, Object> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return;
+    }
+    if (fields.containsKey("freight")) {
+      entity.setFreight(asDecimal(fields.get("freight")));
+    }
+    if (fields.containsKey("containerType")) {
+      entity.setContainerType(asString(fields.get("containerType")));
+    }
+    if (fields.containsKey("freightValidDate")) {
+      entity.setFreightValidDate(asString(fields.get("freightValidDate")));
+    }
+    if (fields.containsKey("buc")) {
+      entity.setBuc(asDecimal(fields.get("buc")));
+    }
+    if (fields.containsKey("bucValidDate")) {
+      entity.setBucValidDate(asString(fields.get("bucValidDate")));
+    }
+    if (fields.containsKey("others")) {
+      entity.setOthers(asDecimal(fields.get("others")));
+    }
+    if (fields.containsKey("othersValidDate")) {
+      entity.setOthersValidDate(asString(fields.get("othersValidDate")));
+    }
+
+    Map<String, Object> extra =
+        entity.getExtraFields() == null
+            ? new HashMap<>()
+            : new HashMap<>(entity.getExtraFields());
+    boolean extraChanged = false;
+    if (fields.containsKey("freightEffDate")) {
+      extra.put(CF_FREIGHT_EFF, asString(fields.get("freightEffDate")));
+      extraChanged = true;
+    }
+    if (fields.containsKey("bucEffDate")) {
+      extra.put(CF_BUNKER_EFF, asString(fields.get("bucEffDate")));
+      extraChanged = true;
+    }
+    if (fields.containsKey("othersEffDate")) {
+      extra.put(CF_OTHERS_EFF, asString(fields.get("othersEffDate")));
+      extraChanged = true;
+    }
+    if (extraChanged) {
+      entity.setExtraFields(extra);
+    }
+
+    if (fields.containsKey("agent")) {
+      entity.setAgent(asString(fields.get("agent")));
+    }
+    if (fields.containsKey("remark")) {
+      entity.setRemark(asString(fields.get("remark")));
+    }
+
+    entity.setAllIn(SeaAllInCalculator.compute(entity));
+    if (fields.containsKey("freightValidDate")) {
+      entity.setStatus(
+          CostValidityStatus.resolve(CostStatus.active, entity.getFreightValidDate()));
+    }
+    if (fields.containsKey("containerType") || fields.containsKey("agent")) {
+      validateMasterRefs(entity);
+    }
   }
 
   @Transactional
@@ -686,6 +724,10 @@ public class CostSeaService {
             item.getExtraFields(), item.getFreightValidDate());
     return CostDateSearchFilter.matchesRange(
         eff, item.getFreightValidDate(), freightEffDate, freightValidDate);
+  }
+
+  private PageResult<FreightCostResponse> finalizeSeaPage(PageResult<FreightCostResponse> page) {
+    return quoteLibraryEntryService.enrichSeaPage(page);
   }
 
   private PageResult<FreightCostResponse> paginate(List<CostSea> filtered, int page, int pageSize) {

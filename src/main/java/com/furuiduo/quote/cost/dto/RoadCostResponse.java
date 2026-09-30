@@ -40,7 +40,9 @@ public record RoadCostResponse(
     @Schema(description = "状态") CostStatus status,
     @Schema(description = "自定义字段值") Map<String, Object> extraFields,
     @Schema(description = "更新时间") String updatedAt,
-    @Schema(description = "部门常用标记") CostHighlightView highlight) {
+    @Schema(description = "部门常用标记") CostHighlightView highlight,
+    @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
+    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -80,7 +82,9 @@ public record RoadCostResponse(
         status,
         entity.getExtraFields(),
         entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER),
-        highlight);
+        highlight,
+        false,
+        false);
   }
 
   public RoadCostResponse withHighlight(CostHighlightView highlight) {
@@ -113,6 +117,78 @@ public record RoadCostResponse(
         status,
         extraFields,
         updatedAt,
-        highlight);
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public RoadCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
+    return new RoadCostResponse(
+        id,
+        zipCode,
+        city,
+        state,
+        por,
+        station,
+        pol,
+        supplier,
+        baseFreight,
+        fsc,
+        chassis,
+        triTandemAxle,
+        split,
+        stopOff,
+        allInNoFm,
+        allInFmOneWay,
+        allInFmRound,
+        waitingFee,
+        redelivery,
+        prepull,
+        nsLift,
+        otherFee,
+        remark,
+        validDate,
+        logYardNameAddress,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
+  }
+
+  public RoadCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
+    return new RoadCostResponse(
+        id,
+        zipCode,
+        city,
+        state,
+        por,
+        station,
+        pol,
+        supplier,
+        baseFreight,
+        fsc,
+        chassis,
+        triTandemAxle,
+        split,
+        stopOff,
+        allInNoFm,
+        allInFmOneWay,
+        allInFmRound,
+        waitingFee,
+        redelivery,
+        prepull,
+        nsLift,
+        otherFee,
+        remark,
+        validDate,
+        logYardNameAddress,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked);
   }
 }

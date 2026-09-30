@@ -264,7 +264,8 @@ public class AiToolExecutor {
       return ToolResult.error(
           "未知页面: "
               + page
-              + "。可用: workspace, analytics, quote_list, quote_create, cost_road, cost_sea,"
+              + "。可用: workspace, quote_list, quote_create, quote_library_road,"
+              + " quote_library_sea, quote_library_fumigation, cost_road, cost_sea,"
               + " cost_fumigation, customer_list, supplier_list");
     }
     if (target.permission() != null) {
@@ -286,12 +287,28 @@ public class AiToolExecutor {
     return switch (page) {
       case "workspace", "dashboard", "工作台" ->
           new PageTarget("workspace", "Workspace", "工作台", PermissionCodes.DASHBOARD_VIEW);
-      case "analytics", "分析", "数据看板" ->
-          new PageTarget("analytics", "Analytics", "分析页", PermissionCodes.DASHBOARD_VIEW);
       case "quote_list", "quotes", "报价列表", "报价单" ->
           new PageTarget("quote_list", "QuoteList", "报价列表", PermissionCodes.QUOTE_VIEW);
       case "quote_create", "new_quote", "新建报价" ->
           new PageTarget("quote_create", "QuoteCreate", "新建报价", PermissionCodes.QUOTE_CREATE);
+      case "quote_library_road", "quote_road_library", "卡车报价库" ->
+          new PageTarget(
+              "quote_library_road",
+              "QuoteLibraryRoad",
+              "卡车报价库",
+              PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW);
+      case "quote_library_sea", "quote_sea_library", "海运报价库" ->
+          new PageTarget(
+              "quote_library_sea",
+              "QuoteLibrarySea",
+              "海运报价库",
+              PermissionCodes.QUOTE_LIBRARY_SEA_VIEW);
+      case "quote_library_fumigation", "quote_fumigation_library", "熏蒸报价库" ->
+          new PageTarget(
+              "quote_library_fumigation",
+              "QuoteLibraryFumigation",
+              "熏蒸报价库",
+              PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW);
       case "cost_road", "road", "卡车成本", "卡车成本库" ->
           new PageTarget("cost_road", "CostLibraryRoad", "卡车成本库", PermissionCodes.COST_ROAD_VIEW);
       case "cost_sea", "sea", "海运成本", "海运成本库" ->

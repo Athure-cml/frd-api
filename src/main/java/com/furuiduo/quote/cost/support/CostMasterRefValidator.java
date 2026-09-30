@@ -322,15 +322,20 @@ public class CostMasterRefValidator {
     return null;
   }
 
-  /** 卡车供应商：按全称/简称识别，并回写全称。 */
+  /** 卡车供应商：必填；按全称/简称识别并回写全称。不存在时提示先去客商管理录入。 */
   public String resolveSupplierTruck(CostRoad entity) {
-    if (entity == null || isBlank(entity.getSupplier())) {
+    if (entity == null) {
       return null;
+    }
+    if (isBlank(entity.getSupplier())) {
+      return "卡车供应商不能为空。若系统中还没有该供应商，请先在客商管理→供应商（卡车）中录入后再导入";
     }
     String raw = entity.getSupplier().trim();
     var found = supplierRepository.findByCategoryAndNameOrShortName("TRUCK", raw);
     if (found.isEmpty()) {
-      return missing("SUPPLIER", raw);
+      return "卡车供应商「"
+          + raw
+          + "」在系统中不存在，请先在客商管理→供应商（卡车）中录入后再导入";
     }
     entity.setSupplier(found.get().getName());
     return null;

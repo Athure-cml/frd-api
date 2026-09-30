@@ -12,6 +12,7 @@ import java.io.IOException;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysUserRepository;
 import com.furuiduo.quote.sys.service.PermissionService;
+import com.furuiduo.quote.sys.support.HomePathSupport;
 
 @Service
 public class UserProfileService {
@@ -102,7 +103,7 @@ public class UserProfileService {
         com.furuiduo.quote.sys.dto.DepartmentResponse.from(user.getDepartment()),
         permissionService.getEffectiveDataScope(user).name(),
         "",
-        user.getHomePath(),
+        HomePathSupport.resolve(user.getHomePath()),
         PasswordSecurityInfo.from(user),
         token);
   }

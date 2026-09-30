@@ -31,6 +31,7 @@ import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.cost.dto.CostBatchDeleteRequest;
 import com.furuiduo.quote.cost.dto.CostBatchUpdateRequest;
+import com.furuiduo.quote.cost.dto.CostBatchUpdateResult;
 import com.furuiduo.quote.cost.dto.CostImportResult;
 import com.furuiduo.quote.cost.dto.FumigationCostResponse;
 import com.furuiduo.quote.cost.dto.FumigationCostSaveRequest;
@@ -81,14 +82,15 @@ public class CostFumigationController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     String regionFilter =
         region != null && !region.isBlank() ? region : port;
     Set<Long> restrictIds =
         highlightQuerySupport.resolveRestrictIds(
-            CostHighlightMode.fumigation, user, highlightOnly);
+            CostHighlightMode.fumigation, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         highlightService.enrichFumigationPage(
             user,
@@ -116,13 +118,14 @@ public class CostFumigationController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
-      @RequestParam(required = false) Boolean highlightOnly) {
+      @RequestParam(required = false) Boolean highlightOnly,
+      @RequestParam(required = false) Boolean inQuoteLibrary) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     String regionFilter = region != null && !region.isBlank() ? region : port;
     Set<Long> restrictIds =
         highlightQuerySupport.resolveRestrictIds(
-            CostHighlightMode.fumigation, user, highlightOnly);
+            CostHighlightMode.fumigation, user, highlightOnly, inQuoteLibrary);
     return ApiResponse.ok(
         costFumigationService.listIds(
             regionFilter,
@@ -179,11 +182,11 @@ public class CostFumigationController {
   }
 
   @PatchMapping("/batch")
-  public ApiResponse<Map<String, Integer>> batchUpdate(
+  public ApiResponse<CostBatchUpdateResult<FumigationCostResponse>> batchUpdate(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody CostBatchUpdateRequest request) {
     requireEdit(authService.requireUser(authorization));
-    return ApiResponse.ok(Map.of("updated", costFumigationService.batchUpdate(request)));
+    return ApiResponse.ok(costFumigationService.batchUpdate(request));
   }
 
   @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

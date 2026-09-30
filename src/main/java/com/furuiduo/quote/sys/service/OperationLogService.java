@@ -18,6 +18,7 @@ import com.furuiduo.quote.sys.entity.OperationAction;
 import com.furuiduo.quote.sys.entity.SysOperationLog;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysOperationLogRepository;
+import com.furuiduo.quote.sys.support.OperationLogSupport;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -25,9 +26,13 @@ import jakarta.persistence.criteria.Predicate;
 public class OperationLogService {
 
   private final SysOperationLogRepository operationLogRepository;
+  private final OperationLogSupport operationLogSupport;
 
-  public OperationLogService(SysOperationLogRepository operationLogRepository) {
+  public OperationLogService(
+      SysOperationLogRepository operationLogRepository,
+      OperationLogSupport operationLogSupport) {
     this.operationLogRepository = operationLogRepository;
+    this.operationLogSupport = operationLogSupport;
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -76,7 +81,7 @@ public class OperationLogService {
 
   public PageResult<OperationLogResponse> listForQuote(Long quoteId, int page, int pageSize) {
     int safePage = Math.max(page, 1);
-    int safeSize = Math.min(Math.max(pageSize, 1), 100);
+    int safeSize = Math.min(Math.max(pageSize, 1), 200);
     PageRequest pageable =
         PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
     String quoteIdText = String.valueOf(quoteId);
@@ -92,7 +97,7 @@ public class OperationLogService {
 
     Page<SysOperationLog> result = operationLogRepository.findAll(spec, pageable);
     List<OperationLogResponse> items =
-        result.getContent().stream().map(OperationLogResponse::from).toList();
+        result.getContent().stream().map(this::toResponse).toList();
     return new PageResult<>(items, result.getTotalElements());
   }
 
@@ -141,7 +146,7 @@ public class OperationLogService {
         };
 
     Page<SysOperationLog> result = operationLogRepository.findAll(spec, pageable);
-    List<OperationLogResponse> items = result.getContent().stream().map(OperationLogResponse::from).toList();
+    List<OperationLogResponse> items = result.getContent().stream().map(this::toResponse).toList();
     return new PageResult<>(items, result.getTotalElements());
   }
 
@@ -152,7 +157,11 @@ public class OperationLogService {
             .orElseThrow(
                 () -> new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.NOT_FOUND, "Operation log not found"));
-    return OperationLogResponse.from(log);
+    return toResponse(log);
+  }
+
+  private OperationLogResponse toResponse(SysOperationLog log) {
+    return OperationLogResponse.from(log, operationLogSupport.displayQuoteSummary(log));
   }
 
   private SysOperationLog baseLog(

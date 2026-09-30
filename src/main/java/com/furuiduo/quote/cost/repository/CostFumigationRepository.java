@@ -47,4 +47,7 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
       Pageable pageable);
 
   long countByIdIn(Collection<Long> ids);
+
+  @Query("SELECT f.id FROM CostFumigation f")
+  List<Long> findAllIds();
 }

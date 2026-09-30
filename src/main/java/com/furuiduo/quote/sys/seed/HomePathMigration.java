@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.sys.repository.SysUserRepository;
+import com.furuiduo.quote.sys.support.HomePathSupport;
 
 /** 将历史默认首页从报价分析迁移到工作台。 */
 @Component
@@ -26,8 +27,9 @@ public class HomePathMigration implements ApplicationRunner {
         .findAll()
         .forEach(
             user -> {
-              if ("/analytics".equals(user.getHomePath())) {
-                user.setHomePath("/workspace");
+              String resolved = HomePathSupport.resolve(user.getHomePath());
+              if (!resolved.equals(user.getHomePath())) {
+                user.setHomePath(resolved);
                 userRepository.save(user);
               }
             });
