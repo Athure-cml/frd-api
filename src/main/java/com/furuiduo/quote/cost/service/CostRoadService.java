@@ -146,10 +146,10 @@ public class CostRoadService {
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
     String z = SearchText.orEmpty(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
+    SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
-    String sup = SearchText.orEmpty(supplier);
     String vd = SearchText.orEmpty(validDate);
     String ed = SearchText.orEmpty(effectiveDate);
     String statusFilter = status;
@@ -171,7 +171,8 @@ public class CostRoadService {
               st,
               p,
               pl,
-              sup,
+              supplierFilter.filterSuppliers(),
+              supplierFilter.suppliers(),
               redelivery,
               restrict,
               idParams,
@@ -221,10 +222,10 @@ public class CostRoadService {
     }
     String z = SearchText.orEmpty(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
+    SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
-    String sup = SearchText.orEmpty(supplier);
     String vd = SearchText.orEmpty(validDate);
     String ed = SearchText.orEmpty(effectiveDate);
     String statusFilter = status;
@@ -245,7 +246,8 @@ public class CostRoadService {
               st,
               p,
               pl,
-              sup,
+              supplierFilter.filterSuppliers(),
+              supplierFilter.suppliers(),
               redelivery,
               restrict,
               idParams,
@@ -289,10 +291,10 @@ public class CostRoadService {
       CostGridSort.Parsed sort) {
     String z = SearchText.orEmpty(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
+    SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
     String st = SearchText.orEmpty(state);
     String p = SearchText.orEmpty(por);
     String pl = SearchText.orEmpty(pol);
-    String sup = SearchText.orEmpty(supplier);
     String ed = SearchText.orEmpty(effectiveDate);
     String vd = SearchText.orEmpty(validDate);
     String statusFilter = status;
@@ -306,7 +308,8 @@ public class CostRoadService {
                 st,
                 p,
                 pl,
-                sup,
+                supplierFilter.filterSuppliers(),
+                supplierFilter.suppliers(),
                 redelivery,
                 false,
                 List.of(-1L),
@@ -332,6 +335,17 @@ public class CostRoadService {
         return new CitySearchParams(false, List.of(""));
       }
       return new CitySearchParams(true, values);
+    }
+  }
+
+  private record SupplierSearchParams(boolean filterSuppliers, List<String> suppliers) {
+    private static SupplierSearchParams from(String supplier) {
+      // 供应商全称常含逗号（如 EVANS DELIVERY COMPANY, INC），须用管道符分隔多选
+      List<String> values = SearchText.parsePipeUpper(supplier);
+      if (values.isEmpty()) {
+        return new SupplierSearchParams(false, List.of(""));
+      }
+      return new SupplierSearchParams(true, values);
     }
   }
 
@@ -869,6 +883,7 @@ public class CostRoadService {
       boolean filterDates = !vd.isEmpty() || !ed.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       CitySearchParams cityFilter = CitySearchParams.from(city);
+      SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
       items =
           repository
               .search(
@@ -878,7 +893,8 @@ public class CostRoadService {
                   SearchText.orEmpty(state),
                   SearchText.orEmpty(por),
                   SearchText.orEmpty(pol),
-                  SearchText.orEmpty(supplier),
+                  supplierFilter.filterSuppliers(),
+                  supplierFilter.suppliers(),
                   redelivery,
                   false,
                   List.of(-1L),

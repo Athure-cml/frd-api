@@ -492,8 +492,8 @@ public class QuoteLibraryService {
 
   private PageResult<RoadCostResponse> applyRoadPage(PageResult<RoadCostResponse> source) {
     List<Long> ids = source.items().stream().map(RoadCostResponse::id).toList();
-    Set<Long> lockedIds =
-        quoteLibraryUsageService.loadLockedIds(CostHighlightMode.road, ids);
+    Map<Long, Long> quoteCounts =
+        quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.road, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.road, ids);
     return new PageResult<>(
@@ -504,7 +504,8 @@ public class QuoteLibraryService {
                   RoadCostResponse merged =
                       quoteLibraryApplyService.applyRoadOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
-                  return merged.withQuoteOrderLocked(lockedIds.contains(row.id()));
+                  long count = quoteCounts.getOrDefault(row.id(), 0L);
+                  return merged.withQuoteUsage(count > 0, count);
                 })
             .toList(),
         source.total());
@@ -512,8 +513,8 @@ public class QuoteLibraryService {
 
   private PageResult<FreightCostResponse> applySeaPage(PageResult<FreightCostResponse> source) {
     List<Long> ids = source.items().stream().map(FreightCostResponse::id).toList();
-    Set<Long> lockedIds =
-        quoteLibraryUsageService.loadLockedIds(CostHighlightMode.sea, ids);
+    Map<Long, Long> quoteCounts =
+        quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.sea, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.sea, ids);
     return new PageResult<>(
@@ -524,7 +525,8 @@ public class QuoteLibraryService {
                   FreightCostResponse merged =
                       quoteLibraryApplyService.applySeaOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
-                  return merged.withQuoteOrderLocked(lockedIds.contains(row.id()));
+                  long count = quoteCounts.getOrDefault(row.id(), 0L);
+                  return merged.withQuoteUsage(count > 0, count);
                 })
             .toList(),
         source.total());
@@ -533,8 +535,8 @@ public class QuoteLibraryService {
   private PageResult<FumigationCostResponse> applyFumigationPage(
       PageResult<FumigationCostResponse> source) {
     List<Long> ids = source.items().stream().map(FumigationCostResponse::id).toList();
-    Set<Long> lockedIds =
-        quoteLibraryUsageService.loadLockedIds(CostHighlightMode.fumigation, ids);
+    Map<Long, Long> quoteCounts =
+        quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.fumigation, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.fumigation, ids);
     return new PageResult<>(
@@ -545,7 +547,8 @@ public class QuoteLibraryService {
                   FumigationCostResponse merged =
                       quoteLibraryApplyService.applyFumigationOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
-                  return merged.withQuoteOrderLocked(lockedIds.contains(row.id()));
+                  long count = quoteCounts.getOrDefault(row.id(), 0L);
+                  return merged.withQuoteUsage(count > 0, count);
                 })
             .toList(),
         source.total());

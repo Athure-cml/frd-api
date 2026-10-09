@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
@@ -26,7 +27,20 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:customerName = '' OR UPPER(q.customerName) LIKE UPPER(CONCAT('%', :customerName, '%')))
       AND (:transportMode IS NULL OR q.transportMode = :transportMode)
       AND (:status IS NULL OR q.status = :status)
-      AND (:zipCode = '' OR UPPER(q.zipCode) LIKE UPPER(CONCAT('%', :zipCode, '%')))
+      AND (
+        :zipCode = '' OR
+        UPPER(COALESCE(q.zipCode, '')) LIKE UPPER(CONCAT('%', :zipCode, '%')) OR
+        EXISTS (
+          SELECT 1 FROM QuoteLibraryUsage u
+          WHERE u.quoteOrder = q
+            AND u.costMode = com.furuiduo.quote.cost.entity.CostHighlightMode.road
+            AND EXISTS (
+              SELECT 1 FROM CostRoad r
+              WHERE r.id = u.costId
+                AND UPPER(TRIM(COALESCE(r.zipCode, ''))) LIKE UPPER(CONCAT('%', :zipCode, '%'))
+            )
+        )
+      )
       AND (:city = '' OR UPPER(q.city) LIKE UPPER(CONCAT('%', :city, '%')))
       AND (:state = '' OR UPPER(TRIM(q.state)) = UPPER(:state))
       AND (:por = '' OR UPPER(TRIM(q.por)) = UPPER(:por))
@@ -85,7 +99,20 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:customerName = '' OR UPPER(q.customerName) LIKE UPPER(CONCAT('%', :customerName, '%')))
       AND (:transportMode IS NULL OR q.transportMode = :transportMode)
       AND (:status IS NULL OR q.status = :status)
-      AND (:zipCode = '' OR UPPER(q.zipCode) LIKE UPPER(CONCAT('%', :zipCode, '%')))
+      AND (
+        :zipCode = '' OR
+        UPPER(COALESCE(q.zipCode, '')) LIKE UPPER(CONCAT('%', :zipCode, '%')) OR
+        EXISTS (
+          SELECT 1 FROM QuoteLibraryUsage u
+          WHERE u.quoteOrder = q
+            AND u.costMode = com.furuiduo.quote.cost.entity.CostHighlightMode.road
+            AND EXISTS (
+              SELECT 1 FROM CostRoad r
+              WHERE r.id = u.costId
+                AND UPPER(TRIM(COALESCE(r.zipCode, ''))) LIKE UPPER(CONCAT('%', :zipCode, '%'))
+            )
+        )
+      )
       AND (:city = '' OR UPPER(q.city) LIKE UPPER(CONCAT('%', :city, '%')))
       AND (:state = '' OR UPPER(TRIM(q.state)) = UPPER(:state))
       AND (:por = '' OR UPPER(TRIM(q.por)) = UPPER(:por))
@@ -104,6 +131,72 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       """)
   Page<QuoteOrder> searchWithCostSnapshot(
       @Param("costType") QuoteCostType costType,
+      @Param("quoteNo") String quoteNo,
+      @Param("customerName") String customerName,
+      @Param("transportMode") QuoteTransportMode transportMode,
+      @Param("status") QuoteStatus status,
+      @Param("zipCode") String zipCode,
+      @Param("city") String city,
+      @Param("state") String state,
+      @Param("por") String por,
+      @Param("pol") String pol,
+      @Param("pod") String pod,
+      @Param("pickUpAddress") String pickUpAddress,
+      @Param("fumigationPoint") String fumigationPoint,
+      @Param("ssl") String ssl,
+      @Param("followUpByName") String followUpByName,
+      @Param("scopeAll") boolean scopeAll,
+      @Param("scopeDept") boolean scopeDept,
+      @Param("scopeSelf") boolean scopeSelf,
+      @Param("deptId") Long deptId,
+      @Param("userId") Long userId,
+      Pageable pageable);
+
+  /** 报价库反查：引用了指定报价库成本行的报价单（quote_library_usage）。 */
+  @Query(
+      """
+      SELECT q FROM QuoteOrder q WHERE
+      EXISTS (
+        SELECT 1 FROM QuoteLibraryUsage u
+        WHERE u.quoteOrder = q AND u.costMode = :costMode AND u.costId = :costId
+      )
+      AND (:quoteNo = '' OR UPPER(q.quoteNo) LIKE UPPER(CONCAT('%', :quoteNo, '%')))
+      AND (:customerName = '' OR UPPER(q.customerName) LIKE UPPER(CONCAT('%', :customerName, '%')))
+      AND (:transportMode IS NULL OR q.transportMode = :transportMode)
+      AND (:status IS NULL OR q.status = :status)
+      AND (
+        :zipCode = '' OR
+        UPPER(COALESCE(q.zipCode, '')) LIKE UPPER(CONCAT('%', :zipCode, '%')) OR
+        EXISTS (
+          SELECT 1 FROM QuoteLibraryUsage u
+          WHERE u.quoteOrder = q
+            AND u.costMode = com.furuiduo.quote.cost.entity.CostHighlightMode.road
+            AND EXISTS (
+              SELECT 1 FROM CostRoad r
+              WHERE r.id = u.costId
+                AND UPPER(TRIM(COALESCE(r.zipCode, ''))) LIKE UPPER(CONCAT('%', :zipCode, '%'))
+            )
+        )
+      )
+      AND (:city = '' OR UPPER(q.city) LIKE UPPER(CONCAT('%', :city, '%')))
+      AND (:state = '' OR UPPER(TRIM(q.state)) = UPPER(:state))
+      AND (:por = '' OR UPPER(TRIM(q.por)) = UPPER(:por))
+      AND (:pol = '' OR UPPER(TRIM(q.pol)) = UPPER(:pol))
+      AND (:pod = '' OR UPPER(TRIM(q.pod)) = UPPER(:pod))
+      AND (:pickUpAddress = '' OR UPPER(q.pickUpAddress) LIKE UPPER(CONCAT('%', :pickUpAddress, '%')))
+      AND (:fumigationPoint = '' OR UPPER(TRIM(q.fumigationPoint)) = UPPER(:fumigationPoint))
+      AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
+      AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
+      AND q.deletedAt IS NULL
+      AND (
+        :scopeAll = TRUE OR
+        (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeSelf = TRUE AND q.createdBy = :userId)
+      )
+      """)
+  Page<QuoteOrder> searchByLibraryUsage(
+      @Param("costMode") CostHighlightMode costMode,
+      @Param("costId") Long costId,
       @Param("quoteNo") String quoteNo,
       @Param("customerName") String customerName,
       @Param("transportMode") QuoteTransportMode transportMode,

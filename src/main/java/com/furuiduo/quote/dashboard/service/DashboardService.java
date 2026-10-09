@@ -26,6 +26,7 @@ import com.furuiduo.quote.dashboard.dto.NotificationItemDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceMetricDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceNoticeDto;
 import com.furuiduo.quote.dashboard.dto.WorkspacePipelineDto;
+import com.furuiduo.quote.dashboard.dto.WorkspaceQuoteStatsDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceResponse;
 import com.furuiduo.quote.dashboard.dto.WorkspaceRouteDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceTodoDto;
@@ -105,9 +106,10 @@ public class DashboardService {
                   return state == null || !Boolean.TRUE.equals(state.getDismissed());
                 })
             .toList();
-    List<WorkspaceRouteDto> topRoutes = buildTopRoutes(scope);
+    List<WorkspaceRouteDto> topRoutes = buildTopRoutes(scope, 4);
+    WorkspaceQuoteStatsDto quoteStats = buildQuoteStats(scope, today);
 
-    return new WorkspaceResponse(metrics, todos, pipeline, notices, topRoutes);
+    return new WorkspaceResponse(metrics, todos, pipeline, notices, topRoutes, quoteStats);
   }
 
   public List<NotificationItemDto> getNotifications(SysUser user) {
@@ -271,6 +273,11 @@ public class DashboardService {
     return buildTodos(scope, user, 50);
   }
 
+  public List<WorkspaceRouteDto> listTopRoutes(SysUser user) {
+    DashboardScopeParams scope = DashboardScopeParams.from(user, permissionService);
+    return buildTopRoutes(scope, 20);
+  }
+
   private List<WorkspaceTodoDto> buildTodos(
       DashboardScopeParams scope, SysUser user, int limit) {
     int capped = Math.max(1, Math.min(limit, 100));
@@ -333,15 +340,61 @@ public class DashboardService {
         .toList();
   }
 
-  private List<WorkspaceRouteDto> buildTopRoutes(DashboardScopeParams scope) {
+  private List<WorkspaceRouteDto> buildTopRoutes(DashboardScopeParams scope, int limit) {
+    int capped = Math.max(1, Math.min(limit, 100));
     LocalDateTime since = LocalDate.now().minusDays(30).atStartOfDay();
-    return dashboardQueryRepository.findTopRoutes(scope, since, 4).stream()
+    return dashboardQueryRepository.findTopRoutes(scope, since, capped).stream()
         .map(
             row ->
                 new WorkspaceRouteDto(
-                    row[0] == null ? "" : row[0].toString(),
+                    row[0] == null ? "" : row[0].toString().trim(),
                     row[1] == null ? 0 : ((Number) row[1]).longValue()))
+        .filter(item -> !item.name().isBlank())
         .toList();
+  }
+
+  private WorkspaceQuoteStatsDto buildQuoteStats(DashboardScopeParams scope, LocalDate today) {
+    LocalDate startMonth = today.minusMonths(11).withDayOfMonth(1);
+    LocalDateTime from = startMonth.atStartOfDay();
+    LocalDateTime to = today.plusMonths(1).withDayOfMonth(1).atStartOfDay();
+    Map<String, Double> quotedByMonth =
+        monthAmountMap(dashboardQueryRepository.sumAmountByCreatedMonth(scope, from, to));
+    Map<String, Double> wonByMonth =
+        monthAmountMap(dashboardQueryRepository.sumWonAmountByUpdatedMonth(scope, from, to));
+    List<String> months = new ArrayList<>();
+    List<Double> quoted = new ArrayList<>();
+    List<Double> won = new ArrayList<>();
+    for (int i = 0; i < 12; i++) {
+      LocalDate month = startMonth.plusMonths(i);
+      String key = String.format("%04d-%02d", month.getYear(), month.getMonthValue());
+      months.add(key);
+      quoted.add(quotedByMonth.getOrDefault(key, 0D));
+      won.add(wonByMonth.getOrDefault(key, 0D));
+    }
+    return new WorkspaceQuoteStatsDto(months, quoted, won);
+  }
+
+  private Map<String, Double> monthAmountMap(List<Object[]> rows) {
+    Map<String, Double> map = new LinkedHashMap<>();
+    for (Object[] row : rows) {
+      if (row == null || row.length < 3 || row[0] == null || row[1] == null) {
+        continue;
+      }
+      int year = ((Number) row[0]).intValue();
+      int month = ((Number) row[1]).intValue();
+      map.put(String.format("%04d-%02d", year, month), toWan(row[2]));
+    }
+    return map;
+  }
+
+  private double toWan(Object raw) {
+    BigDecimal amount = BigDecimal.ZERO;
+    if (raw instanceof BigDecimal decimal) {
+      amount = decimal;
+    } else if (raw instanceof Number number) {
+      amount = BigDecimal.valueOf(number.doubleValue());
+    }
+    return amount.divide(BigDecimal.valueOf(10_000), 2, RoundingMode.HALF_UP).doubleValue();
   }
 
   private List<WorkspaceNoticeDto> buildNotices(SysUser user, LocalDate today) {
@@ -508,8 +561,24 @@ public class DashboardService {
         order.getRouteSummary() != null && !order.getRouteSummary().isBlank()
             ? order.getRouteSummary()
             : order.getQuoteNo();
+    List<String> serviceTypes =
+        order.getServiceTypes() == null ? List.of() : List.copyOf(order.getServiceTypes());
+    BigDecimal amount =
+        order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount();
+    String currency =
+        order.getCurrency() == null || order.getCurrency().isBlank()
+            ? "USD"
+            : order.getCurrency();
     return new WorkspacePipelineDto(
-        order.getId(), order.getQuoteNo(), title, progress, pipelineStatus);
+        order.getId(),
+        order.getQuoteNo(),
+        order.getCustomerName() == null ? "" : order.getCustomerName(),
+        serviceTypes,
+        amount,
+        currency,
+        title,
+        progress,
+        pipelineStatus);
   }
 
   private String formatTimeLabel(LocalDateTime value) {

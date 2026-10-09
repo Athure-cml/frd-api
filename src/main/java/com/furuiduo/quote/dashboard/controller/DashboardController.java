@@ -17,6 +17,7 @@ import com.furuiduo.quote.common.ApiResponse;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.dashboard.dto.NotificationItemDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceResponse;
+import com.furuiduo.quote.dashboard.dto.WorkspaceRouteDto;
 import com.furuiduo.quote.dashboard.dto.WorkspaceTodoDto;
 import com.furuiduo.quote.dashboard.service.DashboardService;
 import com.furuiduo.quote.sys.PermissionCodes;
@@ -65,6 +66,17 @@ public class DashboardController {
     SysUser user = authService.requireUser(authorization);
     requireDashboardView(user);
     return ApiResponse.ok(dashboardService.listTodos(user));
+  }
+
+  @Operation(
+      summary = "热门线路排行",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/top-routes")
+  public ApiResponse<List<WorkspaceRouteDto>> topRoutes(
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
+    SysUser user = authService.requireUser(authorization);
+    requireDashboardView(user);
+    return ApiResponse.ok(dashboardService.listTopRoutes(user));
   }
 
   @Operation(

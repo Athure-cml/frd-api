@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.furuiduo.quote.ai.dto.AiCitedCost;
 import com.furuiduo.quote.ai.dto.AiOpenPage;
 import com.furuiduo.quote.ai.dto.AiProposedCost;
+import com.furuiduo.quote.ai.dto.AiProposedQuote;
 import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.cost.dto.FreightCostResponse;
 import com.furuiduo.quote.cost.dto.FumigationCostResponse;
@@ -20,8 +21,12 @@ import com.furuiduo.quote.cost.dto.RoadCostResponse;
 import com.furuiduo.quote.cost.service.CostFumigationService;
 import com.furuiduo.quote.cost.service.CostRoadService;
 import com.furuiduo.quote.cost.service.CostSeaService;
+import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
+import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
+import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
 import com.furuiduo.quote.quote.service.QuoteQueryService;
+import com.furuiduo.quote.quote.service.QuoteSheetGenerateService;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
@@ -29,28 +34,40 @@ import com.furuiduo.quote.sys.service.PermissionService;
 @Component
 public class AiToolExecutor {
 
+  private static final List<String> ALLOWED_SERVICE_TYPES =
+      List.of("SEA", "FUMIGATION", "TRUCK", "INSURANCE", "TRADE", "OTHER");
+
   public record ToolResult(
       String content,
       List<AiCitedCost> citedCosts,
       List<AiProposedCost> proposedCosts,
+      List<AiProposedQuote> proposedQuotes,
       List<AiOpenPage> openPages) {
     public static ToolResult of(String content, List<AiCitedCost> citedCosts) {
-      return new ToolResult(content, citedCosts, List.of(), List.of());
+      return new ToolResult(content, citedCosts, List.of(), List.of(), List.of());
     }
 
-    public static ToolResult withPages(
-        String content, List<AiOpenPage> openPages) {
-      return new ToolResult(content, List.of(), List.of(), openPages);
+    public static ToolResult withPages(String content, List<AiOpenPage> openPages) {
+      return new ToolResult(content, List.of(), List.of(), List.of(), openPages);
     }
 
     public static ToolResult propose(
         String content, List<AiProposedCost> proposedCosts, List<AiOpenPage> openPages) {
-      return new ToolResult(content, List.of(), proposedCosts, openPages);
+      return new ToolResult(content, List.of(), proposedCosts, List.of(), openPages);
+    }
+
+    public static ToolResult proposeQuote(
+        String content, List<AiProposedQuote> proposedQuotes, List<AiOpenPage> openPages) {
+      return new ToolResult(content, List.of(), List.of(), proposedQuotes, openPages);
     }
 
     public static ToolResult error(String message) {
       return new ToolResult(
-          "{\"error\":\"" + escape(message) + "\"}", List.of(), List.of(), List.of());
+          "{\"error\":\"" + escape(message) + "\"}",
+          List.of(),
+          List.of(),
+          List.of(),
+          List.of());
     }
   }
 
@@ -60,6 +77,7 @@ public class AiToolExecutor {
   private final CostSeaService costSeaService;
   private final CostFumigationService costFumigationService;
   private final QuoteQueryService quoteQueryService;
+  private final QuoteSheetGenerateService quoteSheetGenerateService;
 
   public AiToolExecutor(
       ObjectMapper objectMapper,
@@ -67,13 +85,15 @@ public class AiToolExecutor {
       CostRoadService costRoadService,
       CostSeaService costSeaService,
       CostFumigationService costFumigationService,
-      QuoteQueryService quoteQueryService) {
+      QuoteQueryService quoteQueryService,
+      QuoteSheetGenerateService quoteSheetGenerateService) {
     this.objectMapper = objectMapper;
     this.permissionService = permissionService;
     this.costRoadService = costRoadService;
     this.costSeaService = costSeaService;
     this.costFumigationService = costFumigationService;
     this.quoteQueryService = quoteQueryService;
+    this.quoteSheetGenerateService = quoteSheetGenerateService;
   }
 
   /**
@@ -90,6 +110,7 @@ public class AiToolExecutor {
         case "propose_road_cost" -> proposeRoad(user, args);
         case "propose_sea_cost" -> proposeSea(user, args);
         case "propose_fumigation_cost" -> proposeFumigation(user, args);
+        case "propose_quote_draft" -> proposeQuoteDraft(user, args);
         default -> ToolResult.error("unknown or forbidden tool");
       };
     } catch (org.springframework.web.server.ResponseStatusException ex) {
@@ -499,6 +520,255 @@ public class AiToolExecutor {
         objectMapper.writeValueAsString(result),
         List.of(proposed),
         List.of(new AiOpenPage("cost_fumigation", "CostLibraryFumigation", "熏蒸成本库")));
+  }
+
+  /** 拟新建报价草稿：可匹配报价库成本，不落库；前端打开新建页由用户核对后创建。 */
+  private ToolResult proposeQuoteDraft(SysUser user, JsonNode args) throws Exception {
+    require(user, PermissionCodes.QUOTE_CREATE, "缺少报价创建权限，无法拟新建报价");
+
+    List<String> serviceTypes = readServiceTypes(args);
+    String por = text(args, "por");
+    String pol = text(args, "pol");
+    String pod = text(args, "pod");
+    String zipCode = text(args, "zipCode");
+    String city = text(args, "city");
+    String state = text(args, "state");
+    String pickUpAddress = text(args, "pickUpAddress");
+    String fumigationPoint = text(args, "fumigationPoint");
+    // 与新建页一致：仅当明确给出熏蒸点时才启用熏蒸 / OAK 选择；勿因模型臆造 FUMIGATION/oakType 误开
+    boolean hasFumigationPoint = fumigationPoint != null && !fumigationPoint.isBlank();
+    boolean fumigationEnabled = hasFumigationPoint;
+    String oakType = hasFumigationPoint ? normalizeOakType(text(args, "oakType")) : null;
+    if (!hasFumigationPoint) {
+      serviceTypes.remove("FUMIGATION");
+    }
+    String customerName = text(args, "customerName");
+    Long customerId = longValue(args, "customerId");
+    String currency = text(args, "currency");
+    String remark = text(args, "remark");
+    String ssl = text(args, "ssl");
+    boolean autoMatch =
+        args == null || !args.has("autoMatchCosts") || !args.get("autoMatchCosts").isBoolean()
+            ? true
+            : args.get("autoMatchCosts").asBoolean(true);
+
+    List<String> warnings = new ArrayList<>();
+    if (serviceTypes.isEmpty()) {
+      warnings.add("缺少服务类型 serviceTypes（如 SEA / TRUCK / FUMIGATION）");
+    }
+    requireField(warnings, "por", por, "POR");
+    requireField(warnings, "pod", pod, "POD");
+    if (Boolean.TRUE.equals(bool(args, "fumigationEnabled")) && !hasFumigationPoint) {
+      warnings.add("未提供熏蒸点，已按未熏蒸处理；需要熏蒸时请指定 fumigationPoint");
+    }
+    if (fumigationEnabled && oakType == null) {
+      warnings.add("已选择熏蒸点，请核对 OAK / NON_OAK");
+    }
+    if (customerName != null && customerId == null) {
+      warnings.add("客户未绑定系统 ID，请在新建页手工选择客户");
+    }
+
+    Map<String, Object> sheet = new LinkedHashMap<>();
+    putText(sheet, "por", por);
+    putText(sheet, "pol", pol);
+    putText(sheet, "pod", pod);
+    putText(sheet, "zipCode", zipCode);
+    putText(sheet, "city", city);
+    putText(sheet, "state", state);
+    putText(sheet, "pickUpAddress", pickUpAddress);
+    if (hasFumigationPoint) {
+      putText(sheet, "fumigationPoint", fumigationPoint);
+    }
+    putText(sheet, "ssl", ssl);
+    sheet.put("fumigationEnabled", fumigationEnabled);
+
+    List<QuoteCostMatchItemDto> costMatches = List.of();
+    boolean matched = false;
+    if (autoMatch && por != null && !por.isBlank() && pod != null && !pod.isBlank()) {
+      try {
+        QuoteGenerateSheetResponse generated =
+            quoteSheetGenerateService.generate(
+                new QuoteGenerateSheetRequest(
+                    por,
+                    pol,
+                    pod,
+                    zipCode,
+                    city,
+                    state,
+                    pickUpAddress,
+                    null,
+                    fumigationPoint,
+                    fumigationEnabled,
+                    oakType,
+                    null,
+                    false));
+        if (generated.sheet() != null) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> generatedSheet =
+              objectMapper.convertValue(generated.sheet(), Map.class);
+          if (generatedSheet != null) {
+            sheet.putAll(generatedSheet);
+          }
+        }
+        // 生成结果可能带回空熏蒸字段；未指定熏蒸点时强制关闭，避免前端出现 OAK 选择
+        sheet.put("fumigationEnabled", fumigationEnabled);
+        if (hasFumigationPoint) {
+          sheet.put("fumigationPoint", fumigationPoint);
+        } else {
+          sheet.put("fumigationPoint", null);
+          sheet.put("fmNonOak", 0);
+          sheet.put("fmOak", 0);
+        }
+        costMatches =
+            generated.costMatches() == null ? List.of() : generated.costMatches();
+        if (!fumigationEnabled) {
+          costMatches =
+              costMatches.stream()
+                  .filter(item -> !"FUMIGATION".equalsIgnoreCase(item.costType()))
+                  .toList();
+        }
+        matched = !costMatches.isEmpty();
+        if (!matched) {
+          warnings.add("未匹配到报价库成本，已预填路线，请在新建页手工引入或生成业务表");
+        }
+      } catch (org.springframework.web.server.ResponseStatusException ex) {
+        warnings.add(
+            "自动匹配报价库失败：" + (ex.getReason() == null ? "请手工生成业务表" : ex.getReason()));
+      } catch (Exception ex) {
+        warnings.add(
+            "自动匹配报价库失败：" + (ex.getMessage() == null ? "请手工生成业务表" : ex.getMessage()));
+      }
+    } else if (!autoMatch) {
+      warnings.add("未自动匹配报价库，请在新建页点击生成业务表");
+    }
+
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("serviceTypes", serviceTypes);
+    if (customerId != null) {
+      payload.put("customerId", customerId);
+    }
+    putText(payload, "customerName", customerName);
+    payload.put("currency", currency == null || currency.isBlank() ? "USD" : currency);
+    if (oakType != null) {
+      payload.put("oakType", oakType);
+    }
+    payload.put("fumigationEnabled", fumigationEnabled);
+    putText(payload, "remark", remark);
+    payload.put("sheet", sheet);
+    payload.put("costMatches", costMatches);
+
+    String route =
+        nullToEmpty(por)
+            + (pol == null || pol.isBlank() ? "" : " → " + pol)
+            + " → "
+            + nullToEmpty(pod);
+    String title = "拟新建报价 " + route;
+    String summary =
+        (serviceTypes.isEmpty() ? "未指定服务类型" : String.join("+", serviceTypes))
+            + (customerName == null || customerName.isBlank()
+                ? ""
+                : " · 客户 " + customerName)
+            + (matched ? " · 已匹配报价库" : " · 待核对成本");
+
+    AiProposedQuote proposed =
+        new AiProposedQuote(title, summary, payload, List.copyOf(warnings), matched);
+
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("proposed", true);
+    result.put("persisted", false);
+    result.put("matched", matched);
+    result.put("message", "已整理新建报价草稿；前端将打开新建报价页，由用户核对后点击创建保存");
+    result.put("warnings", warnings);
+    result.put("payload", payload);
+    return ToolResult.proposeQuote(
+        objectMapper.writeValueAsString(result),
+        List.of(proposed),
+        List.of(new AiOpenPage("quote_create", "QuoteCreate", "新建报价")));
+  }
+
+  private List<String> readServiceTypes(JsonNode args) {
+    List<String> types = new ArrayList<>();
+    if (args == null || !args.has("serviceTypes") || args.get("serviceTypes").isNull()) {
+      return types;
+    }
+    JsonNode node = args.get("serviceTypes");
+    if (node.isArray()) {
+      for (JsonNode item : node) {
+        addServiceType(types, item == null ? null : item.asText());
+      }
+    } else if (node.isTextual()) {
+      for (String part : node.asText().split("[,|+/\\s]+")) {
+        addServiceType(types, part);
+      }
+    }
+    return types;
+  }
+
+  private static void addServiceType(List<String> types, String raw) {
+    if (raw == null || raw.isBlank()) {
+      return;
+    }
+    String normalized = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+    if ("FM".equals(normalized) || "FUMIGATE".equals(normalized)) {
+      normalized = "FUMIGATION";
+    }
+    if ("OCEAN".equals(normalized) || "OCEAN_FREIGHT".equals(normalized)) {
+      normalized = "SEA";
+    }
+    if ("ROAD".equals(normalized) || "TRUCKING".equals(normalized)) {
+      normalized = "TRUCK";
+    }
+    if (ALLOWED_SERVICE_TYPES.contains(normalized) && !types.contains(normalized)) {
+      types.add(normalized);
+    }
+  }
+
+  private static String normalizeOakType(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    String v = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+    if ("NONOAK".equals(v) || "NON_OAK".equals(v) || "NO_OAK".equals(v)) {
+      return "NON_OAK";
+    }
+    if ("OAK".equals(v)) {
+      return "OAK";
+    }
+    return null;
+  }
+
+  private static Boolean bool(JsonNode args, String field) {
+    if (args == null || !args.has(field) || args.get(field).isNull()) {
+      return null;
+    }
+    JsonNode node = args.get(field);
+    if (node.isBoolean()) {
+      return node.asBoolean();
+    }
+    String raw = node.asText();
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    return "true".equalsIgnoreCase(raw.trim()) || "1".equals(raw.trim());
+  }
+
+  private static Long longValue(JsonNode args, String field) {
+    if (args == null || !args.has(field) || args.get(field).isNull()) {
+      return null;
+    }
+    JsonNode node = args.get(field);
+    try {
+      if (node.isNumber()) {
+        return node.longValue();
+      }
+      String raw = node.asText();
+      if (raw == null || raw.isBlank()) {
+        return null;
+      }
+      return Long.parseLong(raw.trim());
+    } catch (Exception ex) {
+      return null;
+    }
   }
 
   private void require(SysUser user, String code, String message) {

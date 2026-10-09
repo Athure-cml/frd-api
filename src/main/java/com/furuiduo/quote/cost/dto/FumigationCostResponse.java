@@ -28,7 +28,8 @@ public record FumigationCostResponse(
     @Schema(description = "更新时间") String updatedAt,
     @Schema(description = "部门常用标记") CostHighlightView highlight,
     @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
-    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked) {
+    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked,
+    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount) {
 
   public static FumigationCostResponse from(CostFumigation entity) {
     return from(entity, null);
@@ -55,7 +56,8 @@ public record FumigationCostResponse(
         QuoteDateTimes.format(entity.getUpdatedAt()),
         highlight,
         false,
-        false);
+        false,
+        0L);
   }
 
   public FumigationCostResponse withHighlight(CostHighlightView highlight) {
@@ -76,7 +78,8 @@ public record FumigationCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount);
   }
 
   public FumigationCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
@@ -97,10 +100,15 @@ public record FumigationCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount);
   }
 
   public FumigationCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
+    return withQuoteUsage(quoteOrderLocked, quoteCount);
+  }
+
+  public FumigationCostResponse withQuoteUsage(Boolean quoteOrderLocked, Long quoteCount) {
     return new FumigationCostResponse(
         id,
         region,
@@ -118,6 +126,7 @@ public record FumigationCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount == null ? 0L : quoteCount);
   }
 }

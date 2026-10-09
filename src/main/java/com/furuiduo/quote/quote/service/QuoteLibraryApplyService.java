@@ -69,7 +69,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   public FreightCostResponse applySea(FreightCostResponse row) {
@@ -111,7 +112,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   /** 熏蒸报价库：四列 FM 费用分别套加价规则，不判断有效期。 */
@@ -151,7 +153,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   public FreightCostResponse applySeaOverrides(
@@ -193,7 +196,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   public FumigationCostResponse applyFumigationOverrides(
@@ -218,7 +222,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   public FumigationCostResponse applyFumigation(FumigationCostResponse row) {
@@ -247,7 +252,8 @@ public class QuoteLibraryApplyService {
         row.updatedAt(),
         row.highlight(),
         row.inQuoteLibrary(),
-        row.quoteOrderLocked());
+        row.quoteOrderLocked(),
+        row.quoteCount());
   }
 
   private static BigDecimal pick(

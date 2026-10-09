@@ -24,6 +24,7 @@ import com.furuiduo.quote.ai.dto.AiChatResponse;
 import com.furuiduo.quote.ai.dto.AiCitedCost;
 import com.furuiduo.quote.ai.dto.AiOpenPage;
 import com.furuiduo.quote.ai.dto.AiProposedCost;
+import com.furuiduo.quote.ai.dto.AiProposedQuote;
 import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.SupplierPermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
@@ -73,6 +74,7 @@ public class AiChatService {
     List<String> toolCallNames = new ArrayList<>();
     List<AiCitedCost> citedCosts = new ArrayList<>();
     List<AiProposedCost> proposedCosts = new ArrayList<>();
+    List<AiProposedQuote> proposedQuotes = new ArrayList<>();
     List<AiOpenPage> openPages = new ArrayList<>();
 
     for (int round = 0; round < maxToolRounds; round++) {
@@ -94,7 +96,9 @@ public class AiChatService {
       if (allowedTools.isEmpty() || !toolCalls.isArray() || toolCalls.isEmpty()) {
         String reply = message.path("content").asText("");
         if (reply == null || reply.isBlank()) {
-          if (!proposedCosts.isEmpty()) {
+          if (!proposedQuotes.isEmpty()) {
+            reply = "已整理新建报价草稿，正在打开新建报价页，请核对后点击创建。";
+          } else if (!proposedCosts.isEmpty()) {
             reply = "已整理成本草稿，正在打开录入表单，请核对后保存。";
           } else if (!openPages.isEmpty()) {
             reply = "好的，正在为你打开「" + openPages.get(openPages.size() - 1).title() + "」。";
@@ -107,6 +111,7 @@ public class AiChatService {
             List.copyOf(toolCallNames),
             List.copyOf(citedCosts),
             List.copyOf(proposedCosts),
+            List.copyOf(proposedQuotes),
             List.copyOf(openPages),
             aiClient.model());
       }
@@ -135,6 +140,7 @@ public class AiChatService {
         AiToolExecutor.ToolResult result = toolExecutor.execute(user, name, args);
         citedCosts.addAll(result.citedCosts());
         proposedCosts.addAll(result.proposedCosts());
+        proposedQuotes.addAll(result.proposedQuotes());
         openPages.addAll(result.openPages());
         Map<String, Object> toolMsg = new LinkedHashMap<>();
         toolMsg.put("role", "tool");
@@ -151,7 +157,9 @@ public class AiChatService {
     JsonNode finalResponse = aiClient.chatCompletions(finalBody);
     String reply = finalResponse.path("choices").path(0).path("message").path("content").asText("");
     if (reply == null || reply.isBlank()) {
-      if (!proposedCosts.isEmpty()) {
+      if (!proposedQuotes.isEmpty()) {
+        reply = "已整理新建报价草稿，正在打开新建报价页，请核对后点击创建。";
+      } else if (!proposedCosts.isEmpty()) {
         reply = "已整理成本草稿，正在打开录入表单，请核对后保存。";
       } else if (!openPages.isEmpty()) {
         reply = "好的，正在为你打开「" + openPages.get(openPages.size() - 1).title() + "」。";
@@ -164,6 +172,7 @@ public class AiChatService {
         List.copyOf(toolCallNames),
         List.copyOf(citedCosts),
         List.copyOf(proposedCosts),
+        List.copyOf(proposedQuotes),
         List.copyOf(openPages),
         aiClient.model());
   }
@@ -277,6 +286,71 @@ public class AiChatService {
                   Map.of("quoteId", Map.of("type", "integer")),
                   "required",
                   List.of("quoteId"))));
+    }
+    if (permissionService.hasPermission(user, PermissionCodes.QUOTE_CREATE)) {
+      tools.add(
+          tool(
+              "propose_quote_draft",
+              "根据用户描述整理一份新建报价草稿（不会写入数据库）。可按 POR/POL/POD 等自动匹配报价库成本并预填业务表；"
+                  + "前端会打开新建报价页，由用户核对后点击创建保存。用户说「帮我建/拟/创建报价、按路线起草稿」且提供了服务类型与路线时必须调用本工具，"
+                  + "不要只用 open_page 打开空白新建页。"
+                  + "除非用户明确提到熏蒸点/熏蒸站，否则不要传 fumigationPoint、fumigationEnabled、oakType，也不要把 FUMIGATION 放进 serviceTypes。",
+              Map.of(
+                  "type",
+                  "object",
+                  "properties",
+                  Map.ofEntries(
+                      Map.entry(
+                          "serviceTypes",
+                          Map.of(
+                              "type",
+                              "array",
+                              "items",
+                              Map.of("type", "string"),
+                              "description",
+                              "服务类型：SEA / FUMIGATION / TRUCK / INSURANCE / TRADE / OTHER；未提熏蒸时不要含 FUMIGATION")),
+                      Map.entry("customerName", Map.of("type", "string")),
+                      Map.entry("customerId", Map.of("type", "integer")),
+                      Map.entry("por", Map.of("type", "string", "description", "接货地，必填")),
+                      Map.entry("pol", Map.of("type", "string", "description", "装货港，可选")),
+                      Map.entry("pod", Map.of("type", "string", "description", "目的港，必填")),
+                      Map.entry("zipCode", Map.of("type", "string")),
+                      Map.entry("city", Map.of("type", "string")),
+                      Map.entry("state", Map.of("type", "string")),
+                      Map.entry("pickUpAddress", Map.of("type", "string")),
+                      Map.entry(
+                          "fumigationEnabled",
+                          Map.of(
+                              "type",
+                              "boolean",
+                              "description",
+                              "仅当用户明确要熏蒸且给出熏蒸点时为 true")),
+                      Map.entry(
+                          "fumigationPoint",
+                          Map.of(
+                              "type",
+                              "string",
+                              "description",
+                              "熏蒸站/点；用户未提及时不要传")),
+                      Map.entry(
+                          "oakType",
+                          Map.of(
+                              "type",
+                              "string",
+                              "description",
+                              "仅有熏蒸点时传 OAK 或 NON_OAK；无熏蒸点不要传")),
+                      Map.entry("currency", Map.of("type", "string")),
+                      Map.entry("remark", Map.of("type", "string")),
+                      Map.entry("ssl", Map.of("type", "string", "description", "船公司，可选")),
+                      Map.entry(
+                          "autoMatchCosts",
+                          Map.of(
+                              "type",
+                              "boolean",
+                              "description",
+                              "是否自动匹配报价库并生成业务表字段，默认 true"))),
+                  "required",
+                  List.of("serviceTypes", "por", "pod"))));
     }
     if (permissionService.hasPermission(user, PermissionCodes.COST_ROAD_EDIT)) {
       tools.add(

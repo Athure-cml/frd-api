@@ -10,4 +10,5 @@ public record WorkspaceResponse(
     @Schema(description = "待办任务") List<WorkspaceTodoDto> todos,
     @Schema(description = "报价进度") List<WorkspacePipelineDto> pipeline,
     @Schema(description = "系统通知") List<WorkspaceNoticeDto> notices,
-    @Schema(description = "热门线路 TOP") List<WorkspaceRouteDto> topRoutes) {}
+    @Schema(description = "热门线路 TOP") List<WorkspaceRouteDto> topRoutes,
+    @Schema(description = "报价统计") WorkspaceQuoteStatsDto quoteStats) {}

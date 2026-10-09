@@ -131,7 +131,8 @@ public class QuoteController {
       @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName,
-      @RequestParam(required = false) String libraryMode) {
+      @RequestParam(required = false) String libraryMode,
+      @RequestParam(required = false) Long libraryCostId) {
     SysUser user = authService.requireUser(authorization);
     requireView(user);
     return ApiResponse.ok(
@@ -153,7 +154,8 @@ public class QuoteController {
             fumigationPoint,
             ssl,
             followUpByName,
-            libraryMode));
+            libraryMode,
+            libraryCostId));
   }
 
   @Operation(

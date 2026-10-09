@@ -258,16 +258,26 @@ public class DashboardQueryRepository {
   public List<Object[]> findTopRoutes(DashboardScopeParams scope, LocalDateTime since, int limit) {
     String sql =
         """
-        SELECT q.route_summary, COUNT(*)
+        SELECT CONCAT_WS(
+                 ' → ',
+                 NULLIF(TRIM(q.por), ''),
+                 NULLIF(TRIM(q.pol), ''),
+                 NULLIF(TRIM(q.pod), '')
+               ) AS route_name,
+               COUNT(*) AS cnt
         FROM quote_order q
-        WHERE q.route_summary IS NOT NULL
-          AND TRIM(q.route_summary) <> ''
+        WHERE q.deleted_at IS NULL
           AND q.created_at >= :since
+          AND (
+            NULLIF(TRIM(q.por), '') IS NOT NULL
+            OR NULLIF(TRIM(q.pol), '') IS NOT NULL
+            OR NULLIF(TRIM(q.pod), '') IS NOT NULL
+          )
         """
             + SCOPE_FILTER
             + """
-        GROUP BY q.route_summary
-        ORDER BY COUNT(*) DESC
+        GROUP BY 1
+        ORDER BY cnt DESC
         """;
     List<Object[]> rows =
         entityManager
@@ -280,7 +290,71 @@ public class DashboardQueryRepository {
             .setParameter("userId", scope.userId())
             .setMaxResults(limit)
             .getResultList();
-    return rows.stream().map(this::toObjectArray).toList();
+    return rows.stream()
+        .map(this::toObjectArray)
+        .filter(row -> row.length > 0 && row[0] != null && !row[0].toString().isBlank())
+        .toList();
+  }
+
+  @SuppressWarnings("unchecked")
+  public List<Object[]> sumAmountByCreatedMonth(
+      DashboardScopeParams scope, LocalDateTime from, LocalDateTime to) {
+    String sql =
+        """
+        SELECT EXTRACT(YEAR FROM q.created_at), EXTRACT(MONTH FROM q.created_at),
+               COALESCE(SUM(q.total_amount), 0)
+        FROM quote_order q
+        WHERE q.deleted_at IS NULL
+          AND q.created_at >= :from AND q.created_at < :to
+        """
+            + SCOPE_FILTER
+            + """
+        GROUP BY EXTRACT(YEAR FROM q.created_at), EXTRACT(MONTH FROM q.created_at)
+        """;
+    return entityManager
+        .createNativeQuery(sql)
+        .setParameter("from", from)
+        .setParameter("to", to)
+        .setParameter("scopeAll", scope.scopeAll())
+        .setParameter("scopeDept", scope.scopeDept())
+        .setParameter("scopeSelf", scope.scopeSelf())
+        .setParameter("deptId", scope.deptId())
+        .setParameter("userId", scope.userId())
+        .getResultList()
+        .stream()
+        .map(this::toObjectArray)
+        .toList();
+  }
+
+  @SuppressWarnings("unchecked")
+  public List<Object[]> sumWonAmountByUpdatedMonth(
+      DashboardScopeParams scope, LocalDateTime from, LocalDateTime to) {
+    String sql =
+        """
+        SELECT EXTRACT(YEAR FROM q.updated_at), EXTRACT(MONTH FROM q.updated_at),
+               COALESCE(SUM(q.total_amount), 0)
+        FROM quote_order q
+        WHERE q.deleted_at IS NULL
+          AND q.status = 'WON'
+          AND q.updated_at >= :from AND q.updated_at < :to
+        """
+            + SCOPE_FILTER
+            + """
+        GROUP BY EXTRACT(YEAR FROM q.updated_at), EXTRACT(MONTH FROM q.updated_at)
+        """;
+    return entityManager
+        .createNativeQuery(sql)
+        .setParameter("from", from)
+        .setParameter("to", to)
+        .setParameter("scopeAll", scope.scopeAll())
+        .setParameter("scopeDept", scope.scopeDept())
+        .setParameter("scopeSelf", scope.scopeSelf())
+        .setParameter("deptId", scope.deptId())
+        .setParameter("userId", scope.userId())
+        .getResultList()
+        .stream()
+        .map(this::toObjectArray)
+        .toList();
   }
 
   private Object[] toObjectArray(Object row) {

@@ -38,7 +38,8 @@ public record FreightCostResponse(
     @Schema(description = "更新时间") String updatedAt,
     @Schema(description = "部门常用标记") CostHighlightView highlight,
     @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
-    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked) {
+    @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked,
+    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -76,7 +77,8 @@ public record FreightCostResponse(
         entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().format(FORMATTER),
         highlight,
         false,
-        false);
+        false,
+        0L);
   }
 
   public FreightCostResponse withHighlight(CostHighlightView highlight) {
@@ -107,7 +109,8 @@ public record FreightCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount);
   }
 
   public FreightCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
@@ -138,10 +141,15 @@ public record FreightCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount);
   }
 
   public FreightCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
+    return withQuoteUsage(quoteOrderLocked, quoteCount);
+  }
+
+  public FreightCostResponse withQuoteUsage(Boolean quoteOrderLocked, Long quoteCount) {
     return new FreightCostResponse(
         id,
         por,
@@ -169,7 +177,8 @@ public record FreightCostResponse(
         updatedAt,
         highlight,
         inQuoteLibrary,
-        quoteOrderLocked);
+        quoteOrderLocked,
+        quoteCount == null ? 0L : quoteCount);
   }
 
   private static Map<String, Object> migrateSeaExtraFields(Map<String, Object> extraFields) {

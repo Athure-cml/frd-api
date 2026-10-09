@@ -25,4 +25,15 @@ public interface QuoteLibraryUsageRepository extends JpaRepository<QuoteLibraryU
 
   List<QuoteLibraryUsage> findByCostModeAndCostIdIn(
       CostHighlightMode costMode, Collection<Long> costIds);
+
+  long countByCostModeAndCostId(CostHighlightMode costMode, Long costId);
+
+  @Query(
+      """
+      SELECT u.costId, COUNT(u.id) FROM QuoteLibraryUsage u
+      WHERE u.costMode = :costMode AND u.costId IN :costIds
+      GROUP BY u.costId
+      """)
+  List<Object[]> countGroupedByCostId(
+      @Param("costMode") CostHighlightMode costMode, @Param("costIds") Collection<Long> costIds);
 }

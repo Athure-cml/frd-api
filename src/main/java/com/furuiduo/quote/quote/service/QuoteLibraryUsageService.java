@@ -50,6 +50,21 @@ public class QuoteLibraryUsageService {
     return locked;
   }
 
+  /** 各成本 ID 被报价单引用次数（与 quoteOrderLocked 同源：quote_library_usage）。 */
+  public Map<Long, Long> loadQuoteCounts(CostHighlightMode mode, Collection<Long> costIds) {
+    Map<Long, Long> counts = new HashMap<>();
+    if (costIds == null || costIds.isEmpty()) {
+      return counts;
+    }
+    for (Object[] row : usageRepository.countGroupedByCostId(mode, costIds)) {
+      if (row == null || row.length < 2 || row[0] == null || row[1] == null) {
+        continue;
+      }
+      counts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+    }
+    return counts;
+  }
+
   public void ensureEditable(CostHighlightMode mode, Long costId) {
     if (isLocked(mode, costId)) {
       throw new ResponseStatusException(

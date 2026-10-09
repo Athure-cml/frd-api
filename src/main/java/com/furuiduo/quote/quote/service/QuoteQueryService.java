@@ -24,6 +24,7 @@ import com.furuiduo.quote.quote.support.QuoteCostRiskSupport;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
 import com.furuiduo.quote.quote.entity.QuoteTransportMode;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
+import com.furuiduo.quote.quote.support.QuoteLibraryModeSupport;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
 import com.furuiduo.quote.sys.entity.DataScope;
 import com.furuiduo.quote.sys.entity.SysUser;
@@ -80,7 +81,8 @@ public class QuoteQueryService {
       String fumigationPoint,
       String ssl,
       String followUpByName,
-      String libraryMode) {
+      String libraryMode,
+      Long libraryCostId) {
     quoteOrderRepository.voidQuotesPastValidUntil();
     DataScope scope = permissionService.getEffectiveDataScope(user);
     Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
@@ -92,52 +94,97 @@ public class QuoteQueryService {
             Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
 
     QuoteCostType libraryCostType = parseLibraryMode(libraryMode);
+    if (libraryCostId != null && libraryCostId > 0 && libraryCostType == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "反查报价单需同时指定 libraryMode");
+    }
+
+    boolean scopeAll = scope == DataScope.ALL;
+    boolean scopeDept = scope == DataScope.DEPT;
+    boolean scopeSelf = scope == DataScope.SELF;
+    String qNo = SearchText.orEmpty(quoteNo);
+    String qCustomer = SearchText.orEmpty(customerName);
+    QuoteTransportMode qTransport = parseTransportMode(transportMode);
+    QuoteStatus qStatus = parseStatus(status);
+    String qZip = SearchText.orEmpty(zipCode);
+    String qCity = SearchText.orEmpty(city);
+    String qState = SearchText.orEmpty(state);
+    String qPor = SearchText.orEmpty(por);
+    String qPol = SearchText.orEmpty(pol);
+    String qPod = SearchText.orEmpty(pod);
+    String qPickUp = SearchText.orEmpty(pickUpAddress);
+    String qFumigation = SearchText.orEmpty(fumigationPoint);
+    String qSsl = SearchText.orEmpty(ssl);
+    String qFollow = SearchText.orEmpty(followUpByName);
 
     var result =
-        libraryCostType == null
-            ? quoteOrderRepository.search(
-                SearchText.orEmpty(quoteNo),
-                SearchText.orEmpty(customerName),
-                parseTransportMode(transportMode),
-                parseStatus(status),
-                SearchText.orEmpty(zipCode),
-                SearchText.orEmpty(city),
-                SearchText.orEmpty(state),
-                SearchText.orEmpty(por),
-                SearchText.orEmpty(pol),
-                SearchText.orEmpty(pod),
-                SearchText.orEmpty(pickUpAddress),
-                SearchText.orEmpty(fumigationPoint),
-                SearchText.orEmpty(ssl),
-                SearchText.orEmpty(followUpByName),
-                scope == DataScope.ALL,
-                scope == DataScope.DEPT,
-                scope == DataScope.SELF,
+        libraryCostId != null && libraryCostId > 0 && libraryCostType != null
+            ? quoteOrderRepository.searchByLibraryUsage(
+                QuoteLibraryModeSupport.toMode(libraryCostType),
+                libraryCostId,
+                qNo,
+                qCustomer,
+                qTransport,
+                qStatus,
+                qZip,
+                qCity,
+                qState,
+                qPor,
+                qPol,
+                qPod,
+                qPickUp,
+                qFumigation,
+                qSsl,
+                qFollow,
+                scopeAll,
+                scopeDept,
+                scopeSelf,
                 deptId,
                 user.getId(),
                 pageable)
-            : quoteOrderRepository.searchWithCostSnapshot(
-                libraryCostType,
-                SearchText.orEmpty(quoteNo),
-                SearchText.orEmpty(customerName),
-                parseTransportMode(transportMode),
-                parseStatus(status),
-                SearchText.orEmpty(zipCode),
-                SearchText.orEmpty(city),
-                SearchText.orEmpty(state),
-                SearchText.orEmpty(por),
-                SearchText.orEmpty(pol),
-                SearchText.orEmpty(pod),
-                SearchText.orEmpty(pickUpAddress),
-                SearchText.orEmpty(fumigationPoint),
-                SearchText.orEmpty(ssl),
-                SearchText.orEmpty(followUpByName),
-                scope == DataScope.ALL,
-                scope == DataScope.DEPT,
-                scope == DataScope.SELF,
-                deptId,
-                user.getId(),
-                pageable);
+            : libraryCostType == null
+                ? quoteOrderRepository.search(
+                    qNo,
+                    qCustomer,
+                    qTransport,
+                    qStatus,
+                    qZip,
+                    qCity,
+                    qState,
+                    qPor,
+                    qPol,
+                    qPod,
+                    qPickUp,
+                    qFumigation,
+                    qSsl,
+                    qFollow,
+                    scopeAll,
+                    scopeDept,
+                    scopeSelf,
+                    deptId,
+                    user.getId(),
+                    pageable)
+                : quoteOrderRepository.searchWithCostSnapshot(
+                    libraryCostType,
+                    qNo,
+                    qCustomer,
+                    qTransport,
+                    qStatus,
+                    qZip,
+                    qCity,
+                    qState,
+                    qPor,
+                    qPol,
+                    qPod,
+                    qPickUp,
+                    qFumigation,
+                    qSsl,
+                    qFollow,
+                    scopeAll,
+                    scopeDept,
+                    scopeSelf,
+                    deptId,
+                    user.getId(),
+                    pageable);
 
     Map<Long, Map<String, Object>> libraryRows =
         libraryCostType == null

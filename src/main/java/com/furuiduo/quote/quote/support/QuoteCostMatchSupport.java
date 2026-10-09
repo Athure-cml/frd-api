@@ -88,18 +88,16 @@ public final class QuoteCostMatchSupport {
         && !state.isBlank();
   }
 
-  /** 卡车 REMARK：优先 extraFields.cf_road_remark，否则 fallback remark 列。 */
+  /** 卡车 REMARK：仅取业务表头 REMARK（extraFields.cf_road_remark），不回退操作备注。 */
   public static String resolveRoadRemark(CostRoad road) {
-    if (road.getExtraFields() != null) {
-      Object custom = road.getExtraFields().get("cf_road_remark");
-      if (custom != null && !String.valueOf(custom).isBlank()) {
-        return String.valueOf(custom).trim();
-      }
-    }
-    if (road.getRemark() == null || road.getRemark().isBlank()) {
+    if (road == null || road.getExtraFields() == null) {
       return null;
     }
-    return road.getRemark().trim();
+    Object custom = road.getExtraFields().get("cf_road_remark");
+    if (custom != null && !String.valueOf(custom).isBlank()) {
+      return String.valueOf(custom).trim();
+    }
+    return null;
   }
 
   public static String resolveRoadRemarkFromSnapshot(java.util.Map<String, Object> snap) {
@@ -114,10 +112,6 @@ public final class QuoteCostMatchSupport {
       }
     }
     Object remark = snap.get("cf_road_remark");
-    if (remark != null && !String.valueOf(remark).isBlank()) {
-      return String.valueOf(remark).trim();
-    }
-    remark = snap.get("remark");
     if (remark != null && !String.valueOf(remark).isBlank()) {
       return String.valueOf(remark).trim();
     }

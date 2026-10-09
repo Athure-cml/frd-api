@@ -41,7 +41,7 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       AND (:state = '' OR LOWER(COALESCE(r.state, '')) LIKE LOWER(CONCAT('%', :state, '%')))
       AND (:por = '' OR LOWER(COALESCE(r.por, '')) LIKE LOWER(CONCAT('%', :por, '%')))
       AND (:pol = '' OR LOWER(COALESCE(r.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
-      AND (:supplier = '' OR LOWER(COALESCE(r.supplier, '')) LIKE LOWER(CONCAT('%', :supplier, '%')))
+      AND (:filterSuppliers = false OR UPPER(TRIM(r.supplier)) IN :suppliers)
       AND (:redelivery IS NULL OR r.redelivery = :redelivery)
       AND (:restrictIds = false OR r.id IN :ids)
       """)
@@ -52,7 +52,8 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
       @Param("state") String state,
       @Param("por") String por,
       @Param("pol") String pol,
-      @Param("supplier") String supplier,
+      @Param("filterSuppliers") boolean filterSuppliers,
+      @Param("suppliers") List<String> suppliers,
       @Param("redelivery") BigDecimal redelivery,
       @Param("restrictIds") boolean restrictIds,
       @Param("ids") List<Long> ids,
