@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.furuiduo.quote.cost.entity.CostStatus;
+import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.masterdata.entity.MdGlobalPort;
 import com.furuiduo.quote.masterdata.repository.MdGlobalPortRepository;
 import com.furuiduo.quote.quote.dto.QuoteApplyCostImportRequest;
@@ -90,6 +92,7 @@ public class QuoteCostImportApplyService {
       return new QuoteApplyCostImportResponse(fields);
     }
     if (isQuoteLibrarySnapshot(request.snapshot())) {
+      rejectExpiredSnapshot(type, request.snapshot());
       QuoteSheetFieldsDto fields =
           switch (type) {
             case ROAD -> applyRoadFromLibrary(request.snapshot(), fumigationEnabled, request.oakType());
@@ -110,6 +113,45 @@ public class QuoteCostImportApplyService {
   private boolean isQuoteLibrarySnapshot(Map<String, Object> snapshot) {
     Object flag = snapshot.get("fromQuoteLibrary");
     return Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
+  }
+
+  private void rejectExpiredSnapshot(QuoteCostType type, Map<String, Object> snapshot) {
+    CostStatus stored = parseSnapshotStatus(snapshot.get("status"));
+    CostStatus resolved =
+        switch (type) {
+          case ROAD ->
+              CostValidityStatus.resolveRoad(
+                  stored, asExtraMap(snapshot.get("extraFields")), text(snapshot.get("validDate")));
+          case SEA ->
+              CostValidityStatus.resolve(stored, text(snapshot.get("freightValidDate")));
+          case FUMIGATION ->
+              CostValidityStatus.resolve(
+                  stored,
+                  text(snapshot.get("outdoorValidity")),
+                  text(snapshot.get("indoorValidity")));
+        };
+    if (resolved == CostStatus.expired) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "已过期的报价库数据不可引入报价单");
+    }
+  }
+
+  private CostStatus parseSnapshotStatus(Object raw) {
+    if (raw == null) {
+      return CostStatus.active;
+    }
+    try {
+      return CostStatus.valueOf(String.valueOf(raw).trim().toLowerCase(Locale.ROOT));
+    } catch (IllegalArgumentException ex) {
+      return CostStatus.active;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> asExtraMap(Object raw) {
+    if (raw instanceof Map<?, ?> map) {
+      return (Map<String, Object>) map;
+    }
+    return Map.of();
   }
 
   private QuoteSheetFieldsDto applyRoadFromLibrary(

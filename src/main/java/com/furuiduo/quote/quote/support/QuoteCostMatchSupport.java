@@ -1,5 +1,7 @@
 package com.furuiduo.quote.quote.support;
 
+import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,7 +21,7 @@ public final class QuoteCostMatchSupport {
   }
 
   public static Optional<CostSea> firstActiveSea(List<CostSea> items) {
-    return items.stream().filter(QuoteCostMatchSupport::isImportable).findFirst();
+    return lowestAllInSea(items.stream().filter(QuoteCostMatchSupport::isImportable).toList());
   }
 
   public static Optional<CostFumigation> firstActiveFumigation(List<CostFumigation> items) {
@@ -56,7 +58,13 @@ public final class QuoteCostMatchSupport {
     return status == CostStatus.active || status == CostStatus.pending;
   }
 
-  /** 海运 POL 支持单值或 / 拼接多港。 */
+  /**
+   * 海运 POL 匹配：
+   * <ul>
+   *   <li>报价单未填 POL：不限制 POL，可仅按 POR+POD 匹配
+   *   <li>已填 POL：成本库 POL 支持单值或 / 拼接多港
+   * </ul>
+   */
   public static boolean polMatches(String recordPol, String searchPol) {
     if (searchPol == null || searchPol.isBlank()) {
       return true;
@@ -73,11 +81,30 @@ public final class QuoteCostMatchSupport {
     return recordPol.trim().equalsIgnoreCase(needle);
   }
 
+  /**
+   * 在 POR/POD 已筛结果上按 POL 过滤，并取 ALL IN 最低的可引入海运成本。
+   * 未填 POL 时等同仅按 POR+POD 匹配后取最低价。
+   */
   public static Optional<CostSea> firstActiveSeaByPol(List<CostSea> items, String pol) {
+    List<CostSea> candidates =
+        items.stream()
+            .filter(item -> polMatches(item.getPol(), pol))
+            .filter(QuoteCostMatchSupport::isImportable)
+            .toList();
+    return lowestAllInSea(candidates);
+  }
+
+  /** ALL IN 为空视为最大，避免抢占有价记录；同价时保持原列表顺序中的第一条。 */
+  private static Optional<CostSea> lowestAllInSea(List<CostSea> items) {
     return items.stream()
-        .filter(item -> polMatches(item.getPol(), pol))
-        .filter(QuoteCostMatchSupport::isImportable)
-        .findFirst();
+        .min(
+            Comparator.comparing(
+                QuoteCostMatchSupport::seaAllInOrMax, Comparator.naturalOrder()));
+  }
+
+  private static BigDecimal seaAllInOrMax(CostSea sea) {
+    BigDecimal allIn = sea.getAllIn();
+    return allIn != null ? allIn : BigDecimal.valueOf(Long.MAX_VALUE);
   }
 
   /** 卡车成本匹配要求 city、state 均已填写。 */
@@ -86,6 +113,11 @@ public final class QuoteCostMatchSupport {
         && !city.isBlank()
         && state != null
         && !state.isBlank();
+  }
+
+  /** 熏蒸成本匹配要求已填写熏蒸点（对应成本库 STATION）。 */
+  public static boolean hasFumigationStationKey(String fumigationPoint) {
+    return fumigationPoint != null && !fumigationPoint.isBlank();
   }
 
   /** 卡车 REMARK：仅取业务表头 REMARK（extraFields.cf_road_remark），不回退操作备注。 */

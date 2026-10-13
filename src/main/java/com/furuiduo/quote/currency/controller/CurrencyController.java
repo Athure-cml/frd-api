@@ -124,10 +124,13 @@ public class CurrencyController {
     return ApiResponse.ok(null);
   }
 
+  /** 币种列表/详情：主数据查看，或报价相关权限（报价单币种下拉）。写操作仍仅币种管理权限。 */
   private void requireView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.CURRENCY_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    if (permissionService.hasPermission(user, PermissionCodes.CURRENCY_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
     }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少币种选项读取权限");
   }
 
   private void requireManage(SysUser user) {

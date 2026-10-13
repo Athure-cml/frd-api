@@ -50,10 +50,12 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:fumigationPoint = '' OR UPPER(TRIM(q.fumigationPoint)) = UPPER(:fumigationPoint))
       AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
       AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
+      AND (:createdBy IS NULL OR q.createdBy = :createdBy)
       AND q.deletedAt IS NULL
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeAssigned = TRUE AND q.createdBy IN :assignedUserIds) OR
         (:scopeSelf = TRUE AND q.createdBy = :userId)
       )
       """)
@@ -72,11 +74,14 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       @Param("fumigationPoint") String fumigationPoint,
       @Param("ssl") String ssl,
       @Param("followUpByName") String followUpByName,
+      @Param("createdBy") Long createdBy,
       @Param("scopeAll") boolean scopeAll,
       @Param("scopeDept") boolean scopeDept,
+      @Param("scopeAssigned") boolean scopeAssigned,
       @Param("scopeSelf") boolean scopeSelf,
       @Param("deptId") Long deptId,
       @Param("userId") Long userId,
+      @Param("assignedUserIds") java.util.Collection<Long> assignedUserIds,
       Pageable pageable);
 
   @Query(
@@ -122,10 +127,12 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:fumigationPoint = '' OR UPPER(TRIM(q.fumigationPoint)) = UPPER(:fumigationPoint))
       AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
       AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
+      AND (:createdBy IS NULL OR q.createdBy = :createdBy)
       AND q.deletedAt IS NULL
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeAssigned = TRUE AND q.createdBy IN :assignedUserIds) OR
         (:scopeSelf = TRUE AND q.createdBy = :userId)
       )
       """)
@@ -145,11 +152,14 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       @Param("fumigationPoint") String fumigationPoint,
       @Param("ssl") String ssl,
       @Param("followUpByName") String followUpByName,
+      @Param("createdBy") Long createdBy,
       @Param("scopeAll") boolean scopeAll,
       @Param("scopeDept") boolean scopeDept,
+      @Param("scopeAssigned") boolean scopeAssigned,
       @Param("scopeSelf") boolean scopeSelf,
       @Param("deptId") Long deptId,
       @Param("userId") Long userId,
+      @Param("assignedUserIds") java.util.Collection<Long> assignedUserIds,
       Pageable pageable);
 
   /** 报价库反查：引用了指定报价库成本行的报价单（quote_library_usage）。 */
@@ -187,10 +197,12 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (:fumigationPoint = '' OR UPPER(TRIM(q.fumigationPoint)) = UPPER(:fumigationPoint))
       AND (:ssl = '' OR UPPER(TRIM(q.ssl)) LIKE UPPER(CONCAT('%', :ssl, '%')))
       AND (:followUpByName = '' OR UPPER(q.followUpByName) LIKE UPPER(CONCAT('%', :followUpByName, '%')))
+      AND (:createdBy IS NULL OR q.createdBy = :createdBy)
       AND q.deletedAt IS NULL
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeAssigned = TRUE AND q.createdBy IN :assignedUserIds) OR
         (:scopeSelf = TRUE AND q.createdBy = :userId)
       )
       """)
@@ -211,11 +223,14 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       @Param("fumigationPoint") String fumigationPoint,
       @Param("ssl") String ssl,
       @Param("followUpByName") String followUpByName,
+      @Param("createdBy") Long createdBy,
       @Param("scopeAll") boolean scopeAll,
       @Param("scopeDept") boolean scopeDept,
+      @Param("scopeAssigned") boolean scopeAssigned,
       @Param("scopeSelf") boolean scopeSelf,
       @Param("deptId") Long deptId,
       @Param("userId") Long userId,
+      @Param("assignedUserIds") java.util.Collection<Long> assignedUserIds,
       Pageable pageable);
 
   @Query(
@@ -267,6 +282,7 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeAssigned = TRUE AND q.createdBy IN :assignedUserIds) OR
         (:scopeSelf = TRUE AND q.createdBy = :userId)
       )
       """)
@@ -275,9 +291,11 @@ public interface QuoteOrderRepository extends JpaRepository<QuoteOrder, Long> {
       @Param("statusFilter") String statusFilter,
       @Param("scopeAll") boolean scopeAll,
       @Param("scopeDept") boolean scopeDept,
+      @Param("scopeAssigned") boolean scopeAssigned,
       @Param("scopeSelf") boolean scopeSelf,
       @Param("deptId") Long deptId,
       @Param("userId") Long userId,
+      @Param("assignedUserIds") java.util.Collection<Long> assignedUserIds,
       Pageable pageable);
 
   boolean existsByRootQuoteIdAndRevisionNoGreaterThanAndStatusIn(

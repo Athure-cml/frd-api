@@ -26,10 +26,10 @@ import com.furuiduo.quote.quote.entity.QuoteTransportMode;
 import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteLibraryModeSupport;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
-import com.furuiduo.quote.sys.entity.DataScope;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.OperationLogService;
 import com.furuiduo.quote.sys.service.PermissionService;
+import com.furuiduo.quote.sys.support.DataScopeFilter;
 
 @Service
 public class QuoteQueryService {
@@ -81,11 +81,11 @@ public class QuoteQueryService {
       String fumigationPoint,
       String ssl,
       String followUpByName,
+      Long createdBy,
       String libraryMode,
       Long libraryCostId) {
     quoteOrderRepository.voidQuotesPastValidUntil();
-    DataScope scope = permissionService.getEffectiveDataScope(user);
-    Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+    DataScopeFilter scope = DataScopeFilter.from(user, permissionService);
 
     var pageable =
         PageRequest.of(
@@ -98,9 +98,6 @@ public class QuoteQueryService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "反查报价单需同时指定 libraryMode");
     }
 
-    boolean scopeAll = scope == DataScope.ALL;
-    boolean scopeDept = scope == DataScope.DEPT;
-    boolean scopeSelf = scope == DataScope.SELF;
     String qNo = SearchText.orEmpty(quoteNo);
     String qCustomer = SearchText.orEmpty(customerName);
     QuoteTransportMode qTransport = parseTransportMode(transportMode);
@@ -135,11 +132,14 @@ public class QuoteQueryService {
                 qFumigation,
                 qSsl,
                 qFollow,
-                scopeAll,
-                scopeDept,
-                scopeSelf,
-                deptId,
-                user.getId(),
+                createdBy,
+                scope.scopeAll(),
+                scope.scopeDept(),
+                scope.scopeAssigned(),
+                scope.scopeSelf(),
+                scope.deptId(),
+                scope.userId(),
+                scope.assignedUserIds(),
                 pageable)
             : libraryCostType == null
                 ? quoteOrderRepository.search(
@@ -157,11 +157,14 @@ public class QuoteQueryService {
                     qFumigation,
                     qSsl,
                     qFollow,
-                    scopeAll,
-                    scopeDept,
-                    scopeSelf,
-                    deptId,
-                    user.getId(),
+                    createdBy,
+                    scope.scopeAll(),
+                    scope.scopeDept(),
+                    scope.scopeAssigned(),
+                    scope.scopeSelf(),
+                    scope.deptId(),
+                    scope.userId(),
+                    scope.assignedUserIds(),
                     pageable)
                 : quoteOrderRepository.searchWithCostSnapshot(
                     libraryCostType,
@@ -179,11 +182,14 @@ public class QuoteQueryService {
                     qFumigation,
                     qSsl,
                     qFollow,
-                    scopeAll,
-                    scopeDept,
-                    scopeSelf,
-                    deptId,
-                    user.getId(),
+                    createdBy,
+                    scope.scopeAll(),
+                    scope.scopeDept(),
+                    scope.scopeAssigned(),
+                    scope.scopeSelf(),
+                    scope.deptId(),
+                    scope.userId(),
+                    scope.assignedUserIds(),
                     pageable);
 
     Map<Long, Map<String, Object>> libraryRows =
@@ -219,9 +225,9 @@ public class QuoteQueryService {
       String pickUpAddress,
       String fumigationPoint,
       String ssl,
-      String followUpByName) {
-    DataScope scope = permissionService.getEffectiveDataScope(user);
-    Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+      String followUpByName,
+      Long createdBy) {
+    DataScopeFilter scope = DataScopeFilter.from(user, permissionService);
     var pageable =
         Pageable.unpaged(
             Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
@@ -241,11 +247,14 @@ public class QuoteQueryService {
             SearchText.orEmpty(fumigationPoint),
             SearchText.orEmpty(ssl),
             SearchText.orEmpty(followUpByName),
-            scope == DataScope.ALL,
-            scope == DataScope.DEPT,
-            scope == DataScope.SELF,
-            deptId,
-            user.getId(),
+            createdBy,
+            scope.scopeAll(),
+            scope.scopeDept(),
+            scope.scopeAssigned(),
+            scope.scopeSelf(),
+            scope.deptId(),
+            scope.userId(),
+            scope.assignedUserIds(),
             pageable)
         .getContent();
   }

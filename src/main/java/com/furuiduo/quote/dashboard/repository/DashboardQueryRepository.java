@@ -13,6 +13,8 @@ import com.furuiduo.quote.quote.entity.QuoteStatus;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import jakarta.persistence.TypedQuery;
 
 @Repository
 public class DashboardQueryRepository {
@@ -22,7 +24,18 @@ public class DashboardQueryRepository {
       AND (
         :scopeAll = TRUE OR
         (:scopeDept = TRUE AND q.dept_id = :deptId) OR
+        (:scopeAssigned = TRUE AND q.created_by IN (:assignedUserIds)) OR
         (:scopeSelf = TRUE AND q.created_by = :userId)
+      )
+      """;
+
+  private static final String JPQL_SCOPE_FILTER =
+      """
+      AND (
+        :scopeAll = TRUE OR
+        (:scopeDept = TRUE AND q.deptId = :deptId) OR
+        (:scopeAssigned = TRUE AND q.createdBy IN :assignedUserIds) OR
+        (:scopeSelf = TRUE AND q.createdBy = :userId)
       )
       """;
 
@@ -48,15 +61,9 @@ public class DashboardQueryRepository {
         """
             + SCOPE_FILTER;
     Object raw =
-        entityManager
-            .createNativeQuery(sql)
+        bindScope(entityManager.createNativeQuery(sql), scope)
             .setParameter("from", from)
             .setParameter("to", to)
-            .setParameter("scopeAll", scope.scopeAll())
-            .setParameter("scopeDept", scope.scopeDept())
-            .setParameter("scopeSelf", scope.scopeSelf())
-            .setParameter("deptId", scope.deptId())
-            .setParameter("userId", scope.userId())
             .getSingleResult();
     if (raw instanceof BigDecimal decimal) {
       return decimal;
@@ -79,14 +86,8 @@ public class DashboardQueryRepository {
             + SCOPE_FILTER;
     Number value =
         (Number)
-            entityManager
-                .createNativeQuery(sql)
+            bindScope(entityManager.createNativeQuery(sql), scope)
                 .setParameter("statuses", statuses)
-                .setParameter("scopeAll", scope.scopeAll())
-                .setParameter("scopeDept", scope.scopeDept())
-                .setParameter("scopeSelf", scope.scopeSelf())
-                .setParameter("deptId", scope.deptId())
-                .setParameter("userId", scope.userId())
                 .getSingleResult();
     return value.longValue();
   }
@@ -105,16 +106,10 @@ public class DashboardQueryRepository {
             + SCOPE_FILTER;
     Number value =
         (Number)
-            entityManager
-                .createNativeQuery(sql)
+            bindScope(entityManager.createNativeQuery(sql), scope)
                 .setParameter("statuses", statuses)
                 .setParameter("from", from)
                 .setParameter("to", to)
-                .setParameter("scopeAll", scope.scopeAll())
-                .setParameter("scopeDept", scope.scopeDept())
-                .setParameter("scopeSelf", scope.scopeSelf())
-                .setParameter("deptId", scope.deptId())
-                .setParameter("userId", scope.userId())
                 .getSingleResult();
     return value.longValue();
   }
@@ -131,15 +126,9 @@ public class DashboardQueryRepository {
             + SCOPE_FILTER;
     Number value =
         (Number)
-            entityManager
-                .createNativeQuery(sql)
+            bindScope(entityManager.createNativeQuery(sql), scope)
                 .setParameter("today", today)
                 .setParameter("deadline", deadline)
-                .setParameter("scopeAll", scope.scopeAll())
-                .setParameter("scopeDept", scope.scopeDept())
-                .setParameter("scopeSelf", scope.scopeSelf())
-                .setParameter("deptId", scope.deptId())
-                .setParameter("userId", scope.userId())
                 .getSingleResult();
     return value.longValue();
   }
@@ -168,21 +157,17 @@ public class DashboardQueryRepository {
     return scalarLong(sql, scope, from, to);
   }
 
-  @SuppressWarnings("unchecked")
   public List<QuoteOrder> findRecentActionable(DashboardScopeParams scope, int limit) {
     String jpql =
         """
         SELECT q FROM QuoteOrder q
         WHERE q.status IN :statuses
-        AND (
-          :scopeAll = TRUE OR
-          (:scopeDept = TRUE AND q.deptId = :deptId) OR
-          (:scopeSelf = TRUE AND q.createdBy = :userId)
-        )
+        """
+            + JPQL_SCOPE_FILTER
+            + """
         ORDER BY q.updatedAt DESC
         """;
-    return entityManager
-        .createQuery(jpql, QuoteOrder.class)
+    return bindScope(entityManager.createQuery(jpql, QuoteOrder.class), scope)
         .setParameter(
             "statuses",
             List.of(
@@ -193,40 +178,25 @@ public class DashboardQueryRepository {
                 QuoteStatus.PENDING,
                 QuoteStatus.FOLLOWING,
                 QuoteStatus.EFFECTIVE))
-        .setParameter("scopeAll", scope.scopeAll())
-        .setParameter("scopeDept", scope.scopeDept())
-        .setParameter("scopeSelf", scope.scopeSelf())
-        .setParameter("deptId", scope.deptId())
-        .setParameter("userId", scope.userId())
         .setMaxResults(limit)
         .getResultList();
   }
 
-  @SuppressWarnings("unchecked")
   public List<QuoteOrder> findCostRiskQuotes(DashboardScopeParams scope, int limit) {
     String jpql =
         """
         SELECT q FROM QuoteOrder q
         WHERE q.costRiskActive = TRUE
-        AND (
-          :scopeAll = TRUE OR
-          (:scopeDept = TRUE AND q.deptId = :deptId) OR
-          (:scopeSelf = TRUE AND q.createdBy = :userId)
-        )
+        """
+            + JPQL_SCOPE_FILTER
+            + """
         ORDER BY q.costRiskAt DESC, q.updatedAt DESC
         """;
-    return entityManager
-        .createQuery(jpql, QuoteOrder.class)
-        .setParameter("scopeAll", scope.scopeAll())
-        .setParameter("scopeDept", scope.scopeDept())
-        .setParameter("scopeSelf", scope.scopeSelf())
-        .setParameter("deptId", scope.deptId())
-        .setParameter("userId", scope.userId())
+    return bindScope(entityManager.createQuery(jpql, QuoteOrder.class), scope)
         .setMaxResults(limit)
         .getResultList();
   }
 
-  @SuppressWarnings("unchecked")
   public List<QuoteOrder> findDraftsWithSnapshots(DashboardScopeParams scope, int limit) {
     String jpql =
         """
@@ -235,21 +205,13 @@ public class DashboardQueryRepository {
         AND EXISTS (
           SELECT 1 FROM QuoteCostSnapshot cs WHERE cs.quoteOrder.id = q.id
         )
-        AND (
-          :scopeAll = TRUE OR
-          (:scopeDept = TRUE AND q.deptId = :deptId) OR
-          (:scopeSelf = TRUE AND q.createdBy = :userId)
-        )
+        """
+            + JPQL_SCOPE_FILTER
+            + """
         ORDER BY q.updatedAt DESC
         """;
-    return entityManager
-        .createQuery(jpql, QuoteOrder.class)
+    return bindScope(entityManager.createQuery(jpql, QuoteOrder.class), scope)
         .setParameter("draft", QuoteStatus.DRAFT)
-        .setParameter("scopeAll", scope.scopeAll())
-        .setParameter("scopeDept", scope.scopeDept())
-        .setParameter("scopeSelf", scope.scopeSelf())
-        .setParameter("deptId", scope.deptId())
-        .setParameter("userId", scope.userId())
         .setMaxResults(limit)
         .getResultList();
   }
@@ -280,14 +242,8 @@ public class DashboardQueryRepository {
         ORDER BY cnt DESC
         """;
     List<Object[]> rows =
-        entityManager
-            .createNativeQuery(sql)
+        bindScope(entityManager.createNativeQuery(sql), scope)
             .setParameter("since", since)
-            .setParameter("scopeAll", scope.scopeAll())
-            .setParameter("scopeDept", scope.scopeDept())
-            .setParameter("scopeSelf", scope.scopeSelf())
-            .setParameter("deptId", scope.deptId())
-            .setParameter("userId", scope.userId())
             .setMaxResults(limit)
             .getResultList();
     return rows.stream()
@@ -311,15 +267,9 @@ public class DashboardQueryRepository {
             + """
         GROUP BY EXTRACT(YEAR FROM q.created_at), EXTRACT(MONTH FROM q.created_at)
         """;
-    return entityManager
-        .createNativeQuery(sql)
+    return bindScope(entityManager.createNativeQuery(sql), scope)
         .setParameter("from", from)
         .setParameter("to", to)
-        .setParameter("scopeAll", scope.scopeAll())
-        .setParameter("scopeDept", scope.scopeDept())
-        .setParameter("scopeSelf", scope.scopeSelf())
-        .setParameter("deptId", scope.deptId())
-        .setParameter("userId", scope.userId())
         .getResultList()
         .stream()
         .map(this::toObjectArray)
@@ -342,15 +292,9 @@ public class DashboardQueryRepository {
             + """
         GROUP BY EXTRACT(YEAR FROM q.updated_at), EXTRACT(MONTH FROM q.updated_at)
         """;
-    return entityManager
-        .createNativeQuery(sql)
+    return bindScope(entityManager.createNativeQuery(sql), scope)
         .setParameter("from", from)
         .setParameter("to", to)
-        .setParameter("scopeAll", scope.scopeAll())
-        .setParameter("scopeDept", scope.scopeDept())
-        .setParameter("scopeSelf", scope.scopeSelf())
-        .setParameter("deptId", scope.deptId())
-        .setParameter("userId", scope.userId())
         .getResultList()
         .stream()
         .map(this::toObjectArray)
@@ -368,16 +312,27 @@ public class DashboardQueryRepository {
       String sql, DashboardScopeParams scope, LocalDateTime from, LocalDateTime to) {
     Number value =
         (Number)
-            entityManager
-                .createNativeQuery(sql)
+            bindScope(entityManager.createNativeQuery(sql), scope)
                 .setParameter("from", from)
                 .setParameter("to", to)
-                .setParameter("scopeAll", scope.scopeAll())
-                .setParameter("scopeDept", scope.scopeDept())
-                .setParameter("scopeSelf", scope.scopeSelf())
-                .setParameter("deptId", scope.deptId())
-                .setParameter("userId", scope.userId())
                 .getSingleResult();
     return value.longValue();
+  }
+
+  private Query bindScope(Query query, DashboardScopeParams scope) {
+    query.setParameter("scopeAll", scope.scopeAll());
+    query.setParameter("scopeDept", scope.scopeDept());
+    query.setParameter("scopeAssigned", scope.scopeAssigned());
+    query.setParameter("scopeSelf", scope.scopeSelf());
+    query.setParameter("deptId", scope.deptId());
+    query.setParameter("userId", scope.userId());
+    query.setParameter("assignedUserIds", scope.assignedUserIds());
+    return query;
+  }
+
+  private TypedQuery<QuoteOrder> bindScope(
+      TypedQuery<QuoteOrder> query, DashboardScopeParams scope) {
+    bindScope((Query) query, scope);
+    return query;
   }
 }

@@ -11,10 +11,10 @@ import com.furuiduo.quote.sys.entity.SysUser;
 
 public interface SysUserRepository extends JpaRepository<SysUser, Long> {
 
-  @EntityGraph(attributePaths = {"department", "roles", "roles.permissions"})
+  @EntityGraph(attributePaths = {"department", "roles", "roles.permissions", "roles.dataUsers"})
   Optional<SysUser> findWithDetailsByUsername(String username);
 
-  @EntityGraph(attributePaths = {"department", "roles", "roles.permissions"})
+  @EntityGraph(attributePaths = {"department", "roles", "roles.permissions", "roles.dataUsers"})
   Optional<SysUser> findWithDetailsById(Long id);
 
   @EntityGraph(attributePaths = {"department", "roles"})

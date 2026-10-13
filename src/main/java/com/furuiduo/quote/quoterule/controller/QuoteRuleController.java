@@ -125,10 +125,10 @@ public class QuoteRuleController {
 
   private void requireView(SysUser user) {
     if (permissionService.hasPermission(user, PermissionCodes.MD_QUOTE_RULE_VIEW)
-        || permissionService.hasPermission(user, PermissionCodes.QUOTE_VIEW)) {
+        || permissionService.canUseQuoteLookups(user)) {
       return;
     }
-    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价规则读取权限");
   }
 
   private void requireManage(SysUser user) {

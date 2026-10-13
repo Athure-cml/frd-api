@@ -50,4 +50,12 @@ public class SysRole {
       joinColumns = @JoinColumn(name = "role_id"),
       inverseJoinColumns = @JoinColumn(name = "permission_id"))
   private Set<SysPermission> permissions = new HashSet<>();
+
+  /** 数据权限为 ASSIGNED 时：可见这些用户创建的业务数据（另始终包含登录人本人） */
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "sys_role_data_user",
+      joinColumns = @JoinColumn(name = "role_id"),
+      inverseJoinColumns = @JoinColumn(name = "user_id"))
+  private Set<SysUser> dataUsers = new HashSet<>();
 }

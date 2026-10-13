@@ -223,6 +223,9 @@ public class QuoteCommandService {
         trimToNull(request.fumigationPoint()) != null
             || Boolean.TRUE.equals(request.fumigationEnabled());
     if (fumigation) {
+      if (trimToNull(request.fumigationPoint()) == null) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择熏蒸点");
+      }
       if (request.oakType() == null || request.oakType().isBlank()) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 OAK / NON-OAK");
       }

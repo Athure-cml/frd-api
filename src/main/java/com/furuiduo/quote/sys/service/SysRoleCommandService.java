@@ -1,6 +1,7 @@
 package com.furuiduo.quote.sys.service;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -14,6 +15,7 @@ import com.furuiduo.quote.sys.dto.RoleSaveRequest;
 import com.furuiduo.quote.sys.entity.DataScope;
 import com.furuiduo.quote.sys.entity.SysPermission;
 import com.furuiduo.quote.sys.entity.SysRole;
+import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysPermissionRepository;
 import com.furuiduo.quote.sys.repository.SysRoleRepository;
 import com.furuiduo.quote.sys.repository.SysUserRepository;
@@ -90,10 +92,16 @@ public class SysRoleCommandService {
       role.setCode(request.code().trim());
     }
     role.setName(request.name().trim());
-    role.setDataScope(parseDataScope(request.dataScope()));
+    DataScope dataScope = parseDataScope(request.dataScope());
+    role.setDataScope(dataScope);
     role.setStatus(request.status());
     role.setRemark(request.remark());
     role.setPermissions(resolvePermissions(request.permissionCodes()));
+    if (dataScope == DataScope.ASSIGNED) {
+      role.setDataUsers(resolveDataUsers(request.assignedUserIds()));
+    } else {
+      role.setDataUsers(new HashSet<>());
+    }
   }
 
   private DataScope parseDataScope(String value) {
@@ -120,5 +128,26 @@ public class SysRoleCommandService {
       permissions.add(permission);
     }
     return permissions;
+  }
+
+  private Set<SysUser> resolveDataUsers(List<Long> assignedUserIds) {
+    Set<SysUser> users = new LinkedHashSet<>();
+    if (assignedUserIds == null || assignedUserIds.isEmpty()) {
+      return users;
+    }
+    for (Long userId : assignedUserIds) {
+      if (userId == null || userId <= 0) {
+        continue;
+      }
+      SysUser user =
+          userRepository
+              .findById(userId)
+              .orElseThrow(
+                  () ->
+                      new ResponseStatusException(
+                          HttpStatus.BAD_REQUEST, "Invalid assigned user: " + userId));
+      users.add(user);
+    }
+    return users;
   }
 }

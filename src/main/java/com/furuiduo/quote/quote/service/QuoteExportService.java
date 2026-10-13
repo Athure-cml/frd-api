@@ -79,7 +79,8 @@ public class QuoteExportService {
       String pickUpAddress,
       String fumigationPoint,
       String ssl,
-      String followUpByName) {
+      String followUpByName,
+      Long createdBy) {
     List<QuoteOrder> orders;
     if (RequestIds.present(ids)) {
       orders =
@@ -104,7 +105,8 @@ public class QuoteExportService {
               pickUpAddress,
               fumigationPoint,
               ssl,
-              followUpByName);
+              followUpByName,
+              createdBy);
     }
     if (orders.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "没有可导出的报价单");
@@ -116,7 +118,7 @@ public class QuoteExportService {
   public byte[] exportByIds(SysUser user, List<Long> ids) {
     return export(
         user, ids, null, null, null, null, null, null, null, null, null, null, null, null, null,
-        null);
+        null, null);
   }
 
   private byte[] writeWorkbook(List<QuoteOrder> orders) {

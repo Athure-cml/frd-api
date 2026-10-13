@@ -299,14 +299,13 @@ public class DestAddressController {
     }
   }
 
-  /** 主数据查看，或熏蒸/卡车成本查看（录入下拉） */
+  /** 城市/邮编下拉：主数据查看，或报价/成本业务页支撑读取 */
   private void requireSelect(SysUser user) {
     if (permissionService.hasPermission(user, PermissionCodes.MD_DEST_ADDRESS_VIEW)
-        || permissionService.hasPermission(user, PermissionCodes.COST_FUMIGATION_VIEW)
-        || permissionService.hasPermission(user, PermissionCodes.COST_ROAD_VIEW)) {
+        || permissionService.canUseQuoteLookups(user)) {
       return;
     }
-    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少地址选项读取权限");
   }
 
   private void requireManage(SysUser user) {

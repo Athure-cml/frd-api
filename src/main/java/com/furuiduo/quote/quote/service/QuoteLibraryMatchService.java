@@ -88,6 +88,32 @@ public class QuoteLibraryMatchService {
     }
   }
 
+  /** 已过期不可引入报价单；匹配侧同样只取生效中/未生效。 */
+  public void requireImportable(QuoteCostType type, Long costId) {
+    requireInLibrary(type, costId);
+    boolean importable =
+        switch (type) {
+          case ROAD ->
+              costRoadRepository
+                  .findById(costId)
+                  .map(QuoteCostMatchSupport::isImportable)
+                  .orElse(false);
+          case SEA ->
+              costSeaRepository
+                  .findById(costId)
+                  .map(QuoteCostMatchSupport::isImportable)
+                  .orElse(false);
+          case FUMIGATION ->
+              costFumigationRepository
+                  .findById(costId)
+                  .map(QuoteCostMatchSupport::isImportable)
+                  .orElse(false);
+        };
+    if (!importable) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "已过期的报价库数据不可引入报价单");
+    }
+  }
+
   public List<CostRoad> filterRoadInLibrary(List<CostRoad> roads) {
     Set<Long> ids = quoteLibraryEntryService.entryCostIds(CostHighlightMode.road);
     return roads.stream().filter(road -> ids.contains(road.getId())).toList();
@@ -135,7 +161,7 @@ public class QuoteLibraryMatchService {
       LocalDate quoteDate,
       boolean fumigationEnabled,
       String oakType) {
-    requireInLibrary(type, costId);
+    requireImportable(type, costId);
     return switch (type) {
       case ROAD -> buildRoadSheetFields(loadRoadRow(costId), fumigationEnabled, oakType);
       case SEA -> buildSeaSheetFields(loadSeaRow(costId));

@@ -154,7 +154,7 @@ public class InlandPorController {
       @RequestParam(required = false) String region,
       @RequestParam(required = false) Long polId,
       @RequestParam(required = false) String ids) {
-    requireView(authService.requireUser(authorization));
+    requireModuleView(authService.requireUser(authorization));
     byte[] bytes = inlandPorService.exportExcel(name, region, polId, RequestIds.parse(ids));
     String filename =
         URLEncoder.encode("内陆提货点POR.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
@@ -167,9 +167,18 @@ public class InlandPorController {
         .body(bytes);
   }
 
+  /** 内陆 POR：主数据查看，或业务页下拉支撑读取 */
   private void requireView(SysUser user) {
+    if (permissionService.hasPermission(user, PermissionCodes.MD_INLAND_POR_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少内陆提货点选项读取权限");
+  }
+
+  private void requireModuleView(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.MD_INLAND_POR_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少内陆提货点查看权限");
     }
   }
 

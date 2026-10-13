@@ -105,10 +105,13 @@ public class UsStateController {
     return ApiResponse.ok(null);
   }
 
+  /** 州列表常被报价筛选当作下拉：主数据查看或报价业务支撑读取均可 */
   private void requireView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.MD_US_STATE_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    if (permissionService.hasPermission(user, PermissionCodes.MD_US_STATE_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
     }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少州选项读取权限");
   }
 
   private void requireManage(SysUser user) {

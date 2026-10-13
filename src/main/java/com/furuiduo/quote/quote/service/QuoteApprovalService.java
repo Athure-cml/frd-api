@@ -30,11 +30,11 @@ import com.furuiduo.quote.quote.repository.QuoteOrderRepository;
 import com.furuiduo.quote.quote.support.QuoteApprovalPrintSnapshotSupport;
 import com.furuiduo.quote.quote.support.QuoteApprovalSupport;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
-import com.furuiduo.quote.sys.entity.DataScope;
 import com.furuiduo.quote.sys.entity.SysDepartment;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.repository.SysDepartmentRepository;
 import com.furuiduo.quote.sys.service.PermissionService;
+import com.furuiduo.quote.sys.support.DataScopeFilter;
 
 @Service
 public class QuoteApprovalService {
@@ -66,8 +66,7 @@ public class QuoteApprovalService {
 
   public PageResult<QuoteApprovalListItem> list(
       SysUser user, int page, int pageSize, String approvalNo, String status) {
-    DataScope dataScope = permissionService.getEffectiveDataScope(user);
-    Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+    DataScopeFilter scope = DataScopeFilter.from(user, permissionService);
     Pageable pageable =
         PageRequest.of(
             Math.max(page - 1, 0),
@@ -79,11 +78,13 @@ public class QuoteApprovalService {
         quoteOrderRepository.searchApprovalList(
             SearchText.orEmpty(approvalNo),
             normalizeStatusFilter(status),
-            dataScope == DataScope.ALL,
-            dataScope == DataScope.DEPT,
-            dataScope == DataScope.SELF,
-            deptId,
-            user.getId(),
+            scope.scopeAll(),
+            scope.scopeDept(),
+            scope.scopeAssigned(),
+            scope.scopeSelf(),
+            scope.deptId(),
+            scope.userId(),
+            scope.assignedUserIds(),
             PageRequest.of(0, 2000, pageable.getSort()));
 
     List<Long> ids = result.getContent().stream().map(QuoteOrder::getId).toList();

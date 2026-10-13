@@ -97,13 +97,15 @@ public class QuoteCostMatchService {
         .flatMap(sea -> quoteLibraryMatchService.matchSea(sea, keys))
         .ifPresent(matches::add);
 
-    List<CostFumigation> fums =
-        costFumigationRepository.matchByStation(
-            SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
-    QuoteCostMatchSupport.firstActiveFumigation(
-            quoteLibraryMatchService.filterFumigationInLibrary(fums))
-        .flatMap(fum -> quoteLibraryMatchService.matchFumigation(fum, keys))
-        .ifPresent(matches::add);
+    String fumigationStation = QuoteCostMatchKeys.fumigationStation(request);
+    if (QuoteCostMatchSupport.hasFumigationStationKey(fumigationStation)) {
+      List<CostFumigation> fums =
+          costFumigationRepository.matchByStation(SearchText.orEmpty(fumigationStation));
+      QuoteCostMatchSupport.firstActiveFumigation(
+              quoteLibraryMatchService.filterFumigationInLibrary(fums))
+          .flatMap(fum -> quoteLibraryMatchService.matchFumigation(fum, keys))
+          .ifPresent(matches::add);
+    }
 
     if (matches.isEmpty()) {
       return new QuoteMatchCostsResponse(false, emptySuggested(), List.of());
@@ -146,9 +148,12 @@ public class QuoteCostMatchService {
                 .orElse(null);
           }
           case FUMIGATION -> {
+            String station = QuoteCostMatchKeys.fumigationStation(request);
+            if (!QuoteCostMatchSupport.hasFumigationStationKey(station)) {
+              yield null;
+            }
             List<CostFumigation> fums =
-                costFumigationRepository.matchByStation(
-                    SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
+                costFumigationRepository.matchByStation(SearchText.orEmpty(station));
             yield QuoteCostMatchSupport.firstActiveFumigation(
                     quoteLibraryMatchService.filterFumigationInLibrary(fums))
                 .flatMap(fum -> quoteLibraryMatchService.matchFumigation(fum, keys))

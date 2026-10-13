@@ -92,8 +92,16 @@ public class QuoteSheetGenerateService {
     }
 
     String fumigationPoint = trim(request.fumigationPoint());
-    boolean fumigationEnabled =
-        !isBlank(fumigationPoint) || Boolean.TRUE.equals(request.fumigationEnabled());
+    boolean fumigationService = Boolean.TRUE.equals(request.fumigationEnabled());
+    boolean fumigationEnabled = fumigationService || !isBlank(fumigationPoint);
+    if (fumigationService) {
+      if (isBlank(fumigationPoint)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择熏蒸点");
+      }
+      if (isBlank(request.oakType())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择 OAK / NON-OAK");
+      }
+    }
 
     // Date：自动读取系统当前日期，格式 yyyy-MM-dd
     LocalDate quoteDate =
@@ -189,23 +197,24 @@ public class QuoteSheetGenerateService {
       }
     }
 
-    // 熏蒸费：匹配报价库
-    List<CostFumigation> fums =
-        costFumigationRepository.matchByStation(
-            SearchText.orEmpty(QuoteCostMatchKeys.fumigationStation(request)));
-    var activeFum =
-        QuoteCostMatchSupport.firstActiveFumigation(
-            quoteLibraryMatchService.filterFumigationInLibrary(fums));
-    if (fumigationEnabled && activeFum.isPresent()) {
-      CostFumigation fum = activeFum.get();
-      var fumMatch = quoteLibraryMatchService.matchFumigation(fum, matchKeys);
-      if (fumMatch.isPresent()) {
-        matches.add(fumMatch.get());
-        FumigationCostResponse libraryRow =
-            quoteLibraryMatchService.loadFumigationRow(fum.getId());
-        FumigationRates rates = resolveFumigationRates(libraryRow, quoteDate);
-        fmNonOakAmount = rates.nonOak() != null ? rates.nonOak() : BigDecimal.ZERO;
-        fmOakAmount = rates.oak() != null ? rates.oak() : BigDecimal.ZERO;
+    // 熏蒸费：仅按熏蒸点（STATION）匹配；未填熏蒸点不匹配
+    if (QuoteCostMatchSupport.hasFumigationStationKey(fumigationPoint)) {
+      List<CostFumigation> fums =
+          costFumigationRepository.matchByStation(SearchText.orEmpty(fumigationPoint));
+      var activeFum =
+          QuoteCostMatchSupport.firstActiveFumigation(
+              quoteLibraryMatchService.filterFumigationInLibrary(fums));
+      if (activeFum.isPresent()) {
+        CostFumigation fum = activeFum.get();
+        var fumMatch = quoteLibraryMatchService.matchFumigation(fum, matchKeys);
+        if (fumMatch.isPresent()) {
+          matches.add(fumMatch.get());
+          FumigationCostResponse libraryRow =
+              quoteLibraryMatchService.loadFumigationRow(fum.getId());
+          FumigationRates rates = resolveFumigationRates(libraryRow, quoteDate);
+          fmNonOakAmount = rates.nonOak() != null ? rates.nonOak() : BigDecimal.ZERO;
+          fmOakAmount = rates.oak() != null ? rates.oak() : BigDecimal.ZERO;
+        }
       }
     }
 

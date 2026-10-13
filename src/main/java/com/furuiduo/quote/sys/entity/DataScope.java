@@ -1,8 +1,10 @@
 package com.furuiduo.quote.sys.entity;
 
 public enum DataScope {
-  ALL(3),
-  DEPT(2),
+  ALL(4),
+  DEPT(3),
+  /** 本人 + 角色指定用户 */
+  ASSIGNED(2),
   SELF(1);
 
   private final int priority;

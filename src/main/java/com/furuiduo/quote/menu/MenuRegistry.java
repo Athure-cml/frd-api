@@ -57,17 +57,17 @@ public final class MenuRegistry {
                 .meta("title", "page.quote.list")
                 .requirePermission(PermissionCodes.QUOTE_VIEW))
         .child(
-            MenuRouteDto.of("QuoteLibraryRoad", "/quotes/library/road")
-                .component("/quote/library/road/index")
-                .meta("icon", "lucide:truck")
-                .meta("title", "page.quote.library.road")
-                .requirePermission(PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW))
-        .child(
             MenuRouteDto.of("QuoteLibrarySea", "/quotes/library/sea")
                 .component("/quote/library/sea/index")
                 .meta("icon", "lucide:ship")
                 .meta("title", "page.quote.library.sea")
                 .requirePermission(PermissionCodes.QUOTE_LIBRARY_SEA_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteLibraryRoad", "/quotes/library/road")
+                .component("/quote/library/road/index")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.quote.library.road")
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW))
         .child(
             MenuRouteDto.of("QuoteLibraryFumigation", "/quotes/library/fumigation")
                 .component("/quote/library/fumigation/index")
@@ -78,22 +78,22 @@ public final class MenuRegistry {
 
   private static MenuRouteDto costLibrary() {
     return MenuRouteDto.of("CostLibrary", "/cost-library")
-        .redirect("/cost-library/road")
+        .redirect("/cost-library/sea")
         .meta("icon", "lucide:database")
         .meta("order", 3)
         .meta("title", "page.costLibrary.title")
-        .child(
-            MenuRouteDto.of("CostLibraryRoad", "/cost-library/road")
-                .component("/cost-library/road/index")
-                .meta("icon", "lucide:truck")
-                .meta("title", "page.costLibrary.road")
-                .requirePermission(PermissionCodes.COST_ROAD_VIEW))
         .child(
             MenuRouteDto.of("CostLibrarySea", "/cost-library/sea")
                 .component("/cost-library/sea/index")
                 .meta("icon", "lucide:ship")
                 .meta("title", "page.costLibrary.sea")
                 .requirePermission(PermissionCodes.COST_SEA_VIEW))
+        .child(
+            MenuRouteDto.of("CostLibraryRoad", "/cost-library/road")
+                .component("/cost-library/road/index")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.costLibrary.road")
+                .requirePermission(PermissionCodes.COST_ROAD_VIEW))
         .child(
             MenuRouteDto.of("CostLibraryFumigation", "/cost-library/fumigation")
                 .component("/cost-library/fumigation/index")
@@ -106,20 +106,13 @@ public final class MenuRegistry {
   /** 成本库下的「视图模板」子菜单 */
   private static MenuRouteDto viewTemplates() {
     return MenuRouteDto.of("CostTemplateManage", "/cost-library/templates")
-        .redirect("/cost-library/templates/road")
+        .redirect("/cost-library/templates/sea")
         .meta("icon", "lucide:columns-3")
         .meta("title", "page.costLibrary.template.menuTitle")
         .requireAnyPermission(
-            CostTemplatePermissionCodes.ROAD_VIEW,
             CostTemplatePermissionCodes.SEA_VIEW,
+            CostTemplatePermissionCodes.ROAD_VIEW,
             CostTemplatePermissionCodes.FUMIGATION_VIEW)
-        .child(
-            MenuRouteDto.of("CostTemplateRoad", "/cost-library/templates/road")
-                .component("/cost-library/templates/index")
-                .meta("costMode", "road")
-                .meta("icon", "lucide:truck")
-                .meta("title", "page.costLibrary.template.roadMenu")
-                .requirePermission(CostTemplatePermissionCodes.ROAD_VIEW))
         .child(
             MenuRouteDto.of("CostTemplateSea", "/cost-library/templates/sea")
                 .component("/cost-library/templates/index")
@@ -127,6 +120,13 @@ public final class MenuRegistry {
                 .meta("icon", "lucide:ship")
                 .meta("title", "page.costLibrary.template.seaMenu")
                 .requirePermission(CostTemplatePermissionCodes.SEA_VIEW))
+        .child(
+            MenuRouteDto.of("CostTemplateRoad", "/cost-library/templates/road")
+                .component("/cost-library/templates/index")
+                .meta("costMode", "road")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.costLibrary.template.roadMenu")
+                .requirePermission(CostTemplatePermissionCodes.ROAD_VIEW))
         .child(
             MenuRouteDto.of("CostTemplateFumigation", "/cost-library/templates/fumigation")
                 .component("/cost-library/templates/index")

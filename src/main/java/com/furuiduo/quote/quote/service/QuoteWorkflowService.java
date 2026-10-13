@@ -64,7 +64,7 @@ public class QuoteWorkflowService {
 
   /** 草稿 → 待审批 */
   @Transactional
-  public QuoteDetailResponse submitForApproval(SysUser user, Long id) {
+  public QuoteDetailResponse submitForApproval(SysUser user, Long id, String comment) {
     QuoteOrder order = requireOperableOrder(user, id);
     if (QuoteStatusSupport.normalize(order.getStatus()) != QuoteStatus.DRAFT) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿可提交审批");
@@ -72,6 +72,7 @@ public class QuoteWorkflowService {
     if (order.getDeletedAt() != null) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除");
     }
+    String trimmedComment = comment == null ? "" : comment.trim();
     order.setStatus(QuoteStatus.PENDING_APPROVAL);
     order.setSubmittedAt(LocalDateTime.now());
     order.setUpdatedAt(LocalDateTime.now());
@@ -80,12 +81,14 @@ public class QuoteWorkflowService {
     String printSnapshot =
         QuoteApprovalPrintSnapshotSupport.serialize(
             saved, quoteCostMatchService.listSnapshots(saved.getId(), null));
-    String submitComment = null;
+    String submitComment = trimmedComment.isEmpty() ? null : trimmedComment;
     if (saved.getRevisionNo() != null
         && saved.getRevisionNo() > 0
         && saved.getChangeReason() != null
         && !saved.getChangeReason().isBlank()) {
-      submitComment = "变更原因：" + saved.getChangeReason().trim();
+      String changePart = "变更原因：" + saved.getChangeReason().trim();
+      submitComment =
+          submitComment == null ? changePart : changePart + "\n" + submitComment;
     }
     quoteApprovalLogService.append(
         saved.getId(),

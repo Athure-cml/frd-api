@@ -92,8 +92,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String sortOrder,
       @RequestParam(required = false) Boolean highlightOnly) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.COST_ROAD_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW);
     return ApiResponse.ok(
         quoteLibraryService.listRoad(
             user,
@@ -139,8 +138,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String sortOrder,
       @RequestParam(required = false) Boolean highlightOnly) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.COST_SEA_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW);
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
@@ -182,10 +180,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String sortOrder,
       @RequestParam(required = false) Boolean highlightOnly) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW);
     String regionFilter = firstNonBlank(region, port);
     return ApiResponse.ok(
         quoteLibraryService.listFumigation(
@@ -210,12 +205,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteRoad(request, user));
   }
 
@@ -227,12 +217,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteSea(request, user));
   }
 
@@ -244,12 +229,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteFumigation(request, user));
   }
 
@@ -261,14 +241,8 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.COST_ROAD_VIEW);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
     return ApiResponse.ok(
         quoteLibraryMutationService.getEditContext(CostHighlightMode.road, id));
   }
@@ -281,14 +255,8 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.COST_SEA_VIEW);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
     return ApiResponse.ok(
         quoteLibraryMutationService.getEditContext(CostHighlightMode.sea, id));
   }
@@ -301,16 +269,8 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_VIEW);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
     return ApiResponse.ok(
         quoteLibraryMutationService.getEditContext(CostHighlightMode.fumigation, id));
   }
@@ -323,12 +283,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.resetRoad(id));
   }
 
@@ -340,12 +295,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.resetSea(id));
   }
 
@@ -357,12 +307,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.resetFumigation(id));
   }
 
@@ -375,12 +320,7 @@ public class QuoteLibraryController {
       @PathVariable Long id,
       @RequestBody QuoteLibraryUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.updateRoad(id, request, user));
   }
 
@@ -393,12 +333,7 @@ public class QuoteLibraryController {
       @PathVariable Long id,
       @RequestBody QuoteLibraryUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.updateSea(id, request, user));
   }
 
@@ -411,12 +346,7 @@ public class QuoteLibraryController {
       @PathVariable Long id,
       @RequestBody QuoteLibraryUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.updateFumigation(id, request, user));
   }
 
@@ -428,12 +358,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.batchUpdateRoad(request, user));
   }
 
@@ -445,12 +370,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.batchUpdateSea(request, user));
   }
 
@@ -462,12 +382,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchUpdateRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.batchUpdateFumigation(request, user));
   }
 
@@ -479,12 +394,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE);
     quoteLibraryMutationService.deleteRoad(id);
     return ApiResponse.ok(null);
   }
@@ -497,12 +407,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_DELETE,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_DELETE);
     quoteLibraryMutationService.deleteSea(id);
     return ApiResponse.ok(null);
   }
@@ -515,12 +420,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE);
     quoteLibraryMutationService.deleteFumigation(id);
     return ApiResponse.ok(null);
   }
@@ -533,12 +433,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchDeleteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE,
-        PermissionCodes.COST_ROAD_VIEW,
-        PermissionCodes.COST_ROAD_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE);
     quoteLibraryMutationService.batchDeleteRoad(request);
     return ApiResponse.ok(null);
   }
@@ -551,12 +446,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchDeleteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_SEA_DELETE,
-        PermissionCodes.COST_SEA_VIEW,
-        PermissionCodes.COST_SEA_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_DELETE);
     quoteLibraryMutationService.batchDeleteSea(request);
     return ApiResponse.ok(null);
   }
@@ -569,12 +459,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryBatchDeleteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryDelete(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE,
-        PermissionCodes.COST_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_EDIT);
+    requireQuoteLibraryDelete(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE);
     quoteLibraryMutationService.batchDeleteFumigation(request);
     return ApiResponse.ok(null);
   }
@@ -599,8 +484,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String ids,
       @RequestParam(required = false) String columns) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.COST_ROAD_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW);
     byte[] bytes =
         quoteLibraryExportService.exportRoad(
             user,
@@ -643,8 +527,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String ids,
       @RequestParam(required = false) String columns) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.COST_SEA_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW);
     String polFilter = firstNonBlank(pol, origin);
     String podFilter = firstNonBlank(pod, destination);
     String sslFilter = firstNonBlank(ssl, carrier);
@@ -683,10 +566,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String ids,
       @RequestParam(required = false) String columns) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryView(
-        user,
-        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
-        PermissionCodes.COST_FUMIGATION_VIEW);
+    requireQuoteLibraryView(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW);
     String regionFilter = firstNonBlank(region, port);
     byte[] bytes =
         quoteLibraryExportService.exportFumigation(
@@ -713,43 +593,26 @@ public class QuoteLibraryController {
         .body(bytes);
   }
 
-  private void requireQuoteLibraryView(
-      SysUser user, String libraryViewPermission, String costViewPermission) {
+  /** 报价库权限与成本库独立：仅有报价库权限即可查看/维护报价库。 */
+  private void requireQuoteLibraryView(SysUser user, String libraryViewPermission) {
     if (!permissionService.hasPermission(user, libraryViewPermission)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价库查看权限");
-    }
-    if (!permissionService.hasPermission(user, costViewPermission)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少成本库查看权限");
     }
   }
 
   private void requireQuoteLibraryEdit(
-      SysUser user,
-      String libraryViewPermission,
-      String libraryEditPermission,
-      String costViewPermission,
-      String costEditPermission) {
-    requireQuoteLibraryView(user, libraryViewPermission, costViewPermission);
+      SysUser user, String libraryViewPermission, String libraryEditPermission) {
+    requireQuoteLibraryView(user, libraryViewPermission);
     if (!permissionService.hasPermission(user, libraryEditPermission)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价库编辑权限");
-    }
-    if (!permissionService.hasPermission(user, costEditPermission)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少成本库编辑权限");
     }
   }
 
   private void requireQuoteLibraryDelete(
-      SysUser user,
-      String libraryViewPermission,
-      String libraryDeletePermission,
-      String costViewPermission,
-      String costEditPermission) {
-    requireQuoteLibraryView(user, libraryViewPermission, costViewPermission);
+      SysUser user, String libraryViewPermission, String libraryDeletePermission) {
+    requireQuoteLibraryView(user, libraryViewPermission);
     if (!permissionService.hasPermission(user, libraryDeletePermission)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价库删除权限");
-    }
-    if (!permissionService.hasPermission(user, costEditPermission)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少成本库编辑权限");
     }
   }
 

@@ -220,7 +220,7 @@ public class SupplierController {
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String typeId,
       @RequestParam(required = false) String ids) {
-    require(authService.requireUser(authorization), category, "view");
+    requireModuleView(authService.requireUser(authorization), category);
     byte[] bytes =
         supplierCommandService.exportExcel(
             category, code, name, status, typeId, RequestIds.parse(ids));
@@ -246,6 +246,19 @@ public class SupplierController {
     if (permissionService.hasPermission(user, legacy)) {
       return;
     }
-    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    // 业务页下拉/联想可读供应商，导出仍走上面的模块 view 权限
+    if ("view".equals(action) && permissionService.canUseQuoteLookups(user)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少供应商权限");
+  }
+
+  private void requireModuleView(SysUser user, String category) {
+    String modern = SupplierPermissionCodes.of(category, "view");
+    if (permissionService.hasPermission(user, modern)
+        || permissionService.hasPermission(user, "supplier:view")) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少供应商查看权限");
   }
 }

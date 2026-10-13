@@ -195,7 +195,10 @@ public class CustomerController {
       @RequestParam(required = false) String name,
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String ids) {
-    requireView(authService.requireUser(authorization));
+    SysUser exportUser = authService.requireUser(authorization);
+    if (!permissionService.hasPermission(exportUser, PermissionCodes.CUSTOMER_VIEW)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户查看权限");
+    }
     byte[] bytes =
         customerCommandService.exportExcel(code, name, status, RequestIds.parse(ids));
     String filename =
@@ -209,27 +212,33 @@ public class CustomerController {
         .body(bytes);
   }
 
+  /**
+   * 客户列表/详情：客户库查看权限，或报价相关权限（报价单筛选/录入需选客户）。
+   * 新建/编辑/删除/导入导出仍仅客户库权限。
+   */
   private void requireView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    if (permissionService.hasPermission(user, PermissionCodes.CUSTOMER_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
     }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户选项读取权限");
   }
 
   private void requireCreate(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_CREATE)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户新建权限");
     }
   }
 
   private void requireEdit(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_EDIT)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户编辑权限");
     }
   }
 
   private void requireDelete(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_DELETE)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户删除权限");
     }
   }
 }

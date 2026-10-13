@@ -114,10 +114,16 @@ public class SysUserController {
     return ApiResponse.ok(null);
   }
 
+  /**
+   * 用户列表：系统用户查看，或报价单筛选「操作人」下拉（仅有报价查看权限也可读选项）。
+   * 写操作仍仅系统用户管理权限。
+   */
   private void requireView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SYS_USER_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    if (permissionService.hasPermission(user, PermissionCodes.SYS_USER_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
     }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少用户选项读取权限");
   }
 
   private void requireManage(SysUser user) {

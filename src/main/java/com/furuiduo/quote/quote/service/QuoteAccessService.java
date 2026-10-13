@@ -1,5 +1,7 @@
 package com.furuiduo.quote.quote.service;
 
+import java.util.Set;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +41,12 @@ public class QuoteAccessService {
     if (scope == DataScope.DEPT) {
       Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
       if (deptId != null && deptId.equals(order.getDeptId())) {
+        return;
+      }
+    }
+    if (scope == DataScope.ASSIGNED) {
+      Set<Long> assigned = permissionService.resolveAssignedDataUserIds(user);
+      if (order.getCreatedBy() != null && assigned.contains(order.getCreatedBy())) {
         return;
       }
     }

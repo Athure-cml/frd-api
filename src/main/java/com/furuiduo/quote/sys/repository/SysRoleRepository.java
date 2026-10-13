@@ -11,14 +11,14 @@ import com.furuiduo.quote.sys.entity.SysRole;
 
 public interface SysRoleRepository extends JpaRepository<SysRole, Long> {
 
-  @EntityGraph(attributePaths = {"permissions"})
+  @EntityGraph(attributePaths = {"permissions", "dataUsers"})
   Optional<SysRole> findWithPermissionsByCode(String code);
 
-  @EntityGraph(attributePaths = {"permissions"})
+  @EntityGraph(attributePaths = {"permissions", "dataUsers"})
   @Query("select r from SysRole r order by r.id")
   List<SysRole> findAllWithPermissions();
 
-  @EntityGraph(attributePaths = {"permissions"})
+  @EntityGraph(attributePaths = {"permissions", "dataUsers"})
   @Query("select r from SysRole r where r.id = :id")
   Optional<SysRole> findWithPermissionsById(Long id);
 

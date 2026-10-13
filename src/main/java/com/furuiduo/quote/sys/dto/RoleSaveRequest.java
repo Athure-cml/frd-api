@@ -11,7 +11,9 @@ import jakarta.validation.constraints.Size;
 public record RoleSaveRequest(
     @NotBlank @Size(max = 64) @Schema(description = "角色编码") String code,
     @NotBlank @Size(max = 64) @Schema(description = "角色名称") String name,
-    @NotBlank @Schema(description = "数据权限：ALL|DEPT|SELF") String dataScope,
+    @NotBlank @Schema(description = "数据权限：ALL|DEPT|ASSIGNED|SELF") String dataScope,
     @NotNull @Schema(description = "状态：1 启用，0 停用") Integer status,
     @Size(max = 255) @Schema(description = "备注") String remark,
-    @Schema(description = "权限码列表") List<String> permissionCodes) {}
+    @Schema(description = "权限码列表") List<String> permissionCodes,
+    @Schema(description = "指定数据可见用户 ID（dataScope=ASSIGNED 时生效；不含本人，本人始终可见）")
+        List<Long> assignedUserIds) {}

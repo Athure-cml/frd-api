@@ -195,7 +195,7 @@ public class ShippingLineController {
       @RequestParam(required = false) String name,
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String ids) {
-    requireView(authService.requireUser(authorization));
+    requireModuleView(authService.requireUser(authorization));
     byte[] bytes = commandService.exportExcel(code, name, status, RequestIds.parse(ids));
     String filename =
         URLEncoder.encode("船公司.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
@@ -208,9 +208,18 @@ public class ShippingLineController {
         .body(bytes);
   }
 
+  /** 列表/详情：船公司查看，或业务页下拉支撑读取 */
   private void requireView(SysUser user) {
+    if (permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司选项读取权限");
+  }
+
+  private void requireModuleView(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司查看权限");
     }
   }
 

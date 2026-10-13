@@ -195,7 +195,7 @@ public class AgentController {
       @RequestParam(required = false) String name,
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String ids) {
-    requireView(authService.requireUser(authorization));
+    requireModuleView(authService.requireUser(authorization));
     byte[] bytes = commandService.exportExcel(code, name, status, RequestIds.parse(ids));
     String filename =
         URLEncoder.encode("代理商.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
@@ -208,9 +208,18 @@ public class AgentController {
         .body(bytes);
   }
 
+  /** 列表/详情：代理商查看，或业务页下拉支撑读取 */
   private void requireView(SysUser user) {
+    if (permissionService.hasPermission(user, PermissionCodes.AGENT_VIEW)
+        || permissionService.canUseQuoteLookups(user)) {
+      return;
+    }
+    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少代理商选项读取权限");
+  }
+
+  private void requireModuleView(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.AGENT_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少代理商查看权限");
     }
   }
 

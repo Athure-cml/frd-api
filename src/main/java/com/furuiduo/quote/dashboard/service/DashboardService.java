@@ -569,9 +569,14 @@ public class DashboardService {
         order.getCurrency() == null || order.getCurrency().isBlank()
             ? "USD"
             : order.getCurrency();
+    String operatorName =
+        order.getCreatedByName() == null || order.getCreatedByName().isBlank()
+            ? ""
+            : order.getCreatedByName().trim();
     return new WorkspacePipelineDto(
         order.getId(),
         order.getQuoteNo(),
+        operatorName,
         order.getCustomerName() == null ? "" : order.getCustomerName(),
         serviceTypes,
         amount,

@@ -32,6 +32,7 @@ import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
 import com.furuiduo.quote.quote.dto.QuoteApprovalCommentRequest;
 import com.furuiduo.quote.quote.dto.QuoteApprovalHistoryItem;
+import com.furuiduo.quote.quote.dto.QuoteSubmitRequest;
 import com.furuiduo.quote.quote.dto.QuoteWithdrawRequest;
 import com.furuiduo.quote.quote.dto.QuoteApplyCostImportRequest;
 import com.furuiduo.quote.quote.dto.QuoteApplyCostImportResponse;
@@ -131,6 +132,7 @@ public class QuoteController {
       @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName,
+      @RequestParam(required = false) Long createdBy,
       @RequestParam(required = false) String libraryMode,
       @RequestParam(required = false) Long libraryCostId) {
     SysUser user = authService.requireUser(authorization);
@@ -154,6 +156,7 @@ public class QuoteController {
             fumigationPoint,
             ssl,
             followUpByName,
+            createdBy,
             libraryMode,
             libraryCostId));
   }
@@ -294,10 +297,12 @@ public class QuoteController {
   @PostMapping("/{id}/submit")
   public ApiResponse<QuoteDetailResponse> submit(
       @RequestHeader(value = "Authorization", required = false) String authorization,
-      @PathVariable Long id) {
+      @PathVariable Long id,
+      @RequestBody(required = false) @Valid QuoteSubmitRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireSubmit(user);
-    return ApiResponse.ok(quoteWorkflowService.submitForApproval(user, id));
+    String comment = body != null ? body.comment() : null;
+    return ApiResponse.ok(quoteWorkflowService.submitForApproval(user, id, comment));
   }
 
   @Operation(
@@ -448,7 +453,8 @@ public class QuoteController {
       @RequestParam(required = false) String pickUpAddress,
       @RequestParam(required = false) String fumigationPoint,
       @RequestParam(required = false) String ssl,
-      @RequestParam(required = false) String followUpByName) {
+      @RequestParam(required = false) String followUpByName,
+      @RequestParam(required = false) Long createdBy) {
     SysUser user = authService.requireUser(authorization);
     requireExport(user);
     byte[] bytes =
@@ -468,7 +474,8 @@ public class QuoteController {
             pickUpAddress,
             fumigationPoint,
             ssl,
-            followUpByName);
+            followUpByName,
+            createdBy);
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

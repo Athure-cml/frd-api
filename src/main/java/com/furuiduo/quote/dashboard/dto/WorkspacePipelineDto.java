@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record WorkspacePipelineDto(
     @Schema(description = "报价单 ID") Long id,
     @Schema(description = "报价单号") String quoteNo,
+    @Schema(description = "操作人") String operatorName,
     @Schema(description = "客户名称") String customerName,
     @Schema(description = "服务类型") List<String> serviceTypes,
     @Schema(description = "报价金额") BigDecimal totalAmount,

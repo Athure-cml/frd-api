@@ -69,19 +69,30 @@ public final class CostValidityStatus {
     return matchesFilterWithEffective(current, statusFilter, null, validityTexts);
   }
 
-  /** 列表/导出筛选：空则不过滤；按「生效期+有效期推算后的状态」匹配。 */
+  /**
+   * 列表/导出筛选：空则不过滤；按「生效期+有效期推算后的状态」匹配。
+   * 支持逗号/管道分隔多选（任一命中即可），如 {@code active,pending}。
+   */
   public static boolean matchesFilterWithEffective(
       CostStatus current, String statusFilter, String effectiveText, String... validityTexts) {
     if (statusFilter == null || statusFilter.isBlank()) {
       return true;
     }
-    CostStatus expected;
-    try {
-      expected = CostStatus.valueOf(statusFilter.trim().toLowerCase(Locale.ROOT));
-    } catch (IllegalArgumentException ex) {
-      return false;
+    CostStatus actual = resolveWithEffective(current, effectiveText, validityTexts);
+    for (String part : statusFilter.split("[,|]")) {
+      if (part == null || part.isBlank()) {
+        continue;
+      }
+      try {
+        CostStatus expected = CostStatus.valueOf(part.trim().toLowerCase(Locale.ROOT));
+        if (actual == expected) {
+          return true;
+        }
+      } catch (IllegalArgumentException ignored) {
+        // skip unknown token
+      }
     }
-    return resolveWithEffective(current, effectiveText, validityTexts) == expected;
+    return false;
   }
 
   public static boolean matchesFilterRoad(

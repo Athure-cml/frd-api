@@ -183,7 +183,8 @@ public class CostGridTemplateController {
   }
 
   private boolean hasViewPermission(SysUser user, String mode) {
-    return permissionService.hasPermission(user, viewPermission(mode));
+    return permissionService.hasPermission(user, viewPermission(mode))
+        || permissionService.canViewCostTemplateForQuoteLibrary(user, mode);
   }
 
   private boolean hasEditPermission(SysUser user, String mode) {
