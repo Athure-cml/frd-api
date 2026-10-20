@@ -36,8 +36,9 @@ public class QuoteLibraryApplyService {
     QuoteRuleContext noFmCtx = buildContext(por, null, false);
     QuoteRuleContext fmCtx = buildContext(por, null, true);
     BigDecimal allInNoFm = applyTruckingFee(row.allInNoFm(), noFmCtx);
-    BigDecimal allInFmOneWay = applyTruckingFee(row.allInFmOneWay(), fmCtx);
-    BigDecimal allInFmRound = applyTruckingFee(row.allInFmRound(), fmCtx);
+    // ALL IN FM：成本为空或 0 时不套报价规则，避免「无价格」被加成 0+加价
+    BigDecimal allInFmOneWay = applyTruckingFeeIfPresent(row.allInFmOneWay(), fmCtx);
+    BigDecimal allInFmRound = applyTruckingFeeIfPresent(row.allInFmRound(), fmCtx);
     return new RoadCostResponse(
         row.id(),
         row.zipCode(),
@@ -268,17 +269,26 @@ public class QuoteLibraryApplyService {
     return quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", base, ctx);
   }
 
-  private BigDecimal applyFmNonOak(BigDecimal base, QuoteRuleContext ctx) {
-    if (base == null) {
-      return null;
+  /** ALL IN FM NON OAK / OAK：仅有正数成本时才套 TRUCKING_FEE 规则 */
+  private BigDecimal applyTruckingFeeIfPresent(BigDecimal base, QuoteRuleContext ctx) {
+    if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
+      return base;
     }
-    return quoteRuleEngine.applyDecimalTarget(
-        "FM_NON_OAK", base, ctx);
+    return applyTruckingFee(base, ctx);
   }
 
+  /** 熏蒸 NON OAK：成本为空或 0 时不套规则，避免无价格被加成 0+加价 */
+  private BigDecimal applyFmNonOak(BigDecimal base, QuoteRuleContext ctx) {
+    if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
+      return base;
+    }
+    return quoteRuleEngine.applyDecimalTarget("FM_NON_OAK", base, ctx);
+  }
+
+  /** 熏蒸 OAK：成本为空或 0 时不套规则，避免无价格被加成 0+加价 */
   private BigDecimal applyFmOak(BigDecimal base, QuoteRuleContext ctx) {
-    if (base == null) {
-      return null;
+    if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
+      return base;
     }
     return quoteRuleEngine.applyDecimalTarget("FM_OAK", base, ctx);
   }

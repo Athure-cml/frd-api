@@ -181,7 +181,7 @@ public class CustomerController {
       @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
-    requireCreate(user);
+    requireImport(user);
     return ApiResponse.ok(customerCommandService.importExcel(user, file, dryRun));
   }
 
@@ -196,11 +196,12 @@ public class CustomerController {
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String ids) {
     SysUser exportUser = authService.requireUser(authorization);
-    if (!permissionService.hasPermission(exportUser, PermissionCodes.CUSTOMER_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户查看权限");
-    }
+    requireExport(exportUser);
+    boolean includeCode =
+        permissionService.hasPermission(exportUser, PermissionCodes.CUSTOMER_IMPORT);
     byte[] bytes =
-        customerCommandService.exportExcel(code, name, status, RequestIds.parse(ids));
+        customerCommandService.exportExcel(
+            code, name, status, RequestIds.parse(ids), includeCode);
     String filename =
         URLEncoder.encode("客户.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
@@ -227,6 +228,18 @@ public class CustomerController {
   private void requireCreate(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_CREATE)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户新建权限");
+    }
+  }
+
+  private void requireImport(SysUser user) {
+    if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_IMPORT)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户导入权限");
+    }
+  }
+
+  private void requireExport(SysUser user) {
+    if (!permissionService.hasPermission(user, PermissionCodes.CUSTOMER_EXPORT)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少客户导出权限");
     }
   }
 

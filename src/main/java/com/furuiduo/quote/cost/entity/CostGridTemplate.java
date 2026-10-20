@@ -26,8 +26,15 @@ public class CostGridTemplate {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
+  /** cost：成本库；quote：报价库。两套模板不共用。 */
+  @Column(length = 16)
+  private String library = LIBRARY_COST;
+
   @Column(nullable = false, length = 16)
   private String mode;
+
+  public static final String LIBRARY_COST = "cost";
+  public static final String LIBRARY_QUOTE = "quote";
 
   @Column(nullable = false, length = 64)
   private String code;

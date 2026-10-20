@@ -98,7 +98,7 @@ public class SysRoleCommandService {
     role.setRemark(request.remark());
     role.setPermissions(resolvePermissions(request.permissionCodes()));
     if (dataScope == DataScope.ASSIGNED) {
-      role.setDataUsers(resolveDataUsers(request.assignedUserIds()));
+      role.setDataUsers(resolveDataUsers(role, request.assignedUserIds()));
     } else {
       role.setDataUsers(new HashSet<>());
     }
@@ -130,7 +130,7 @@ public class SysRoleCommandService {
     return permissions;
   }
 
-  private Set<SysUser> resolveDataUsers(List<Long> assignedUserIds) {
+  private Set<SysUser> resolveDataUsers(SysRole role, List<Long> assignedUserIds) {
     Set<SysUser> users = new LinkedHashSet<>();
     if (assignedUserIds == null || assignedUserIds.isEmpty()) {
       return users;
@@ -146,8 +146,26 @@ public class SysRoleCommandService {
                   () ->
                       new ResponseStatusException(
                           HttpStatus.BAD_REQUEST, "Invalid assigned user: " + userId));
+      if (belongsToRole(user, role)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能指定当前角色内的用户");
+      }
       users.add(user);
     }
     return users;
+  }
+
+  private boolean belongsToRole(SysUser user, SysRole role) {
+    if (user.getRoles() == null) {
+      return false;
+    }
+    for (SysRole owned : user.getRoles()) {
+      if (role.getId() != null && role.getId().equals(owned.getId())) {
+        return true;
+      }
+      if (role.getCode() != null && role.getCode().equals(owned.getCode())) {
+        return true;
+      }
+    }
+    return false;
   }
 }

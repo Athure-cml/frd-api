@@ -65,35 +65,68 @@ public final class PermissionCodes {
   public static final String QUOTE_LIBRARY_FUMIGATION_EDIT = "quote:library:fumigation:edit";
   public static final String QUOTE_LIBRARY_FUMIGATION_DELETE = "quote:library:fumigation:delete";
 
+  public static final String QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW =
+      QuoteLibraryTemplatePermissionCodes.ROAD_VIEW;
+  public static final String QUOTE_LIBRARY_ROAD_TEMPLATE_EDIT =
+      QuoteLibraryTemplatePermissionCodes.ROAD_EDIT;
+  public static final String QUOTE_LIBRARY_ROAD_TEMPLATE_DELETE =
+      QuoteLibraryTemplatePermissionCodes.ROAD_DELETE;
+  public static final String QUOTE_LIBRARY_SEA_TEMPLATE_VIEW =
+      QuoteLibraryTemplatePermissionCodes.SEA_VIEW;
+  public static final String QUOTE_LIBRARY_SEA_TEMPLATE_EDIT =
+      QuoteLibraryTemplatePermissionCodes.SEA_EDIT;
+  public static final String QUOTE_LIBRARY_SEA_TEMPLATE_DELETE =
+      QuoteLibraryTemplatePermissionCodes.SEA_DELETE;
+  public static final String QUOTE_LIBRARY_FUMIGATION_TEMPLATE_VIEW =
+      QuoteLibraryTemplatePermissionCodes.FUMIGATION_VIEW;
+  public static final String QUOTE_LIBRARY_FUMIGATION_TEMPLATE_EDIT =
+      QuoteLibraryTemplatePermissionCodes.FUMIGATION_EDIT;
+  public static final String QUOTE_LIBRARY_FUMIGATION_TEMPLATE_DELETE =
+      QuoteLibraryTemplatePermissionCodes.FUMIGATION_DELETE;
+
   public static final String CUSTOMER_VIEW = "customer:view";
   public static final String CUSTOMER_CREATE = "customer:create";
+  public static final String CUSTOMER_IMPORT = "customer:import";
+  public static final String CUSTOMER_EXPORT = "customer:export";
   public static final String CUSTOMER_EDIT = "customer:edit";
   public static final String CUSTOMER_DELETE = "customer:delete";
 
   public static final String SUPPLIER_TRUCK_VIEW = "supplier:truck:view";
   public static final String SUPPLIER_TRUCK_CREATE = "supplier:truck:create";
+  public static final String SUPPLIER_TRUCK_IMPORT = "supplier:truck:import";
+  public static final String SUPPLIER_TRUCK_EXPORT = "supplier:truck:export";
   public static final String SUPPLIER_TRUCK_EDIT = "supplier:truck:edit";
   public static final String SUPPLIER_TRUCK_DELETE = "supplier:truck:delete";
   public static final String SUPPLIER_FUMIGATION_VIEW = "supplier:fumigation:view";
   public static final String SUPPLIER_FUMIGATION_CREATE = "supplier:fumigation:create";
+  public static final String SUPPLIER_FUMIGATION_IMPORT = "supplier:fumigation:import";
+  public static final String SUPPLIER_FUMIGATION_EXPORT = "supplier:fumigation:export";
   public static final String SUPPLIER_FUMIGATION_EDIT = "supplier:fumigation:edit";
   public static final String SUPPLIER_FUMIGATION_DELETE = "supplier:fumigation:delete";
   public static final String SUPPLIER_YARD_VIEW = "supplier:yard:view";
   public static final String SUPPLIER_YARD_CREATE = "supplier:yard:create";
+  public static final String SUPPLIER_YARD_IMPORT = "supplier:yard:import";
+  public static final String SUPPLIER_YARD_EXPORT = "supplier:yard:export";
   public static final String SUPPLIER_YARD_EDIT = "supplier:yard:edit";
   public static final String SUPPLIER_YARD_DELETE = "supplier:yard:delete";
   public static final String SUPPLIER_OTHER_VIEW = "supplier:other:view";
   public static final String SUPPLIER_OTHER_CREATE = "supplier:other:create";
+  public static final String SUPPLIER_OTHER_IMPORT = "supplier:other:import";
+  public static final String SUPPLIER_OTHER_EXPORT = "supplier:other:export";
   public static final String SUPPLIER_OTHER_EDIT = "supplier:other:edit";
   public static final String SUPPLIER_OTHER_DELETE = "supplier:other:delete";
 
   public static final String SHIPPING_LINE_VIEW = "shipping_line:view";
   public static final String SHIPPING_LINE_CREATE = "shipping_line:create";
+  public static final String SHIPPING_LINE_IMPORT = "shipping_line:import";
+  public static final String SHIPPING_LINE_EXPORT = "shipping_line:export";
   public static final String SHIPPING_LINE_EDIT = "shipping_line:edit";
   public static final String SHIPPING_LINE_DELETE = "shipping_line:delete";
 
   public static final String AGENT_VIEW = "agent:view";
   public static final String AGENT_CREATE = "agent:create";
+  public static final String AGENT_IMPORT = "agent:import";
+  public static final String AGENT_EXPORT = "agent:export";
   public static final String AGENT_EDIT = "agent:edit";
   public static final String AGENT_DELETE = "agent:delete";
 
@@ -168,32 +201,55 @@ public final class PermissionCodes {
       QUOTE_LIBRARY_FUMIGATION_VIEW,
       QUOTE_LIBRARY_FUMIGATION_EDIT,
       QUOTE_LIBRARY_FUMIGATION_DELETE,
+      QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW,
+      QUOTE_LIBRARY_ROAD_TEMPLATE_EDIT,
+      QUOTE_LIBRARY_ROAD_TEMPLATE_DELETE,
+      QUOTE_LIBRARY_SEA_TEMPLATE_VIEW,
+      QUOTE_LIBRARY_SEA_TEMPLATE_EDIT,
+      QUOTE_LIBRARY_SEA_TEMPLATE_DELETE,
+      QUOTE_LIBRARY_FUMIGATION_TEMPLATE_VIEW,
+      QUOTE_LIBRARY_FUMIGATION_TEMPLATE_EDIT,
+      QUOTE_LIBRARY_FUMIGATION_TEMPLATE_DELETE,
       CUSTOMER_VIEW,
       CUSTOMER_CREATE,
+      CUSTOMER_IMPORT,
+      CUSTOMER_EXPORT,
       CUSTOMER_EDIT,
       CUSTOMER_DELETE,
       SUPPLIER_TRUCK_VIEW,
       SUPPLIER_TRUCK_CREATE,
+      SUPPLIER_TRUCK_IMPORT,
+      SUPPLIER_TRUCK_EXPORT,
       SUPPLIER_TRUCK_EDIT,
       SUPPLIER_TRUCK_DELETE,
       SUPPLIER_FUMIGATION_VIEW,
       SUPPLIER_FUMIGATION_CREATE,
+      SUPPLIER_FUMIGATION_IMPORT,
+      SUPPLIER_FUMIGATION_EXPORT,
       SUPPLIER_FUMIGATION_EDIT,
       SUPPLIER_FUMIGATION_DELETE,
       SUPPLIER_YARD_VIEW,
       SUPPLIER_YARD_CREATE,
+      SUPPLIER_YARD_IMPORT,
+      SUPPLIER_YARD_EXPORT,
       SUPPLIER_YARD_EDIT,
       SUPPLIER_YARD_DELETE,
       SUPPLIER_OTHER_VIEW,
       SUPPLIER_OTHER_CREATE,
+      SUPPLIER_OTHER_IMPORT,
+      SUPPLIER_OTHER_EXPORT,
       SUPPLIER_OTHER_EDIT,
       SUPPLIER_OTHER_DELETE,
       SHIPPING_LINE_VIEW,
       SHIPPING_LINE_CREATE,
+      SHIPPING_LINE_IMPORT,
+      SHIPPING_LINE_EXPORT,
       SHIPPING_LINE_EDIT,
       SHIPPING_LINE_DELETE,
       AGENT_VIEW,
       AGENT_CREATE,
+      AGENT_IMPORT,
+      AGENT_EXPORT,
       AGENT_EDIT,
       AGENT_DELETE,
       CURRENCY_VIEW,

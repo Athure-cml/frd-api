@@ -160,7 +160,8 @@ public class QuoteSheetGenerateService {
 
     // 卡车费：匹配报价库
     if (!Boolean.TRUE.equals(request.skipRoadMatch())
-        && QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+        && QuoteCostMatchSupport.hasRoadLocationKeys(
+            request.zipCode(), request.city(), request.state())) {
       List<CostRoad> roads =
           costRoadRepository.matchByRoute(
               SearchText.orEmpty(request.zipCode()),

@@ -73,7 +73,44 @@ public final class MenuRegistry {
                 .component("/quote/library/fumigation/index")
                 .meta("icon", "lucide:flame")
                 .meta("title", "page.quote.library.fumigation")
-                .requirePermission(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW));
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW))
+        .child(quoteLibraryTemplates());
+  }
+
+  /** 报价库下的「视图模板」，与成本库模板分开。 */
+  private static MenuRouteDto quoteLibraryTemplates() {
+    return MenuRouteDto.of("QuoteTemplateManage", "/quotes/library/templates")
+        .redirect("/quotes/library/templates/sea")
+        .meta("icon", "lucide:columns-3")
+        .meta("title", "page.quote.library.template.menuTitle")
+        .requireAnyPermission(
+            PermissionCodes.QUOTE_LIBRARY_SEA_TEMPLATE_VIEW,
+            PermissionCodes.QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW,
+            PermissionCodes.QUOTE_LIBRARY_FUMIGATION_TEMPLATE_VIEW)
+        .child(
+            MenuRouteDto.of("QuoteTemplateSea", "/quotes/library/templates/sea")
+                .component("/cost-library/templates/index")
+                .meta("costMode", "sea")
+                .meta("templateLibrary", "quote")
+                .meta("icon", "lucide:ship")
+                .meta("title", "page.quote.library.template.seaMenu")
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_SEA_TEMPLATE_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteTemplateRoad", "/quotes/library/templates/road")
+                .component("/cost-library/templates/index")
+                .meta("costMode", "road")
+                .meta("templateLibrary", "quote")
+                .meta("icon", "lucide:truck")
+                .meta("title", "page.quote.library.template.roadMenu")
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW))
+        .child(
+            MenuRouteDto.of("QuoteTemplateFumigation", "/quotes/library/templates/fumigation")
+                .component("/cost-library/templates/index")
+                .meta("costMode", "fumigation")
+                .meta("templateLibrary", "quote")
+                .meta("icon", "lucide:flame")
+                .meta("title", "page.quote.library.template.fumigationMenu")
+                .requirePermission(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_TEMPLATE_VIEW));
   }
 
   private static MenuRouteDto costLibrary() {

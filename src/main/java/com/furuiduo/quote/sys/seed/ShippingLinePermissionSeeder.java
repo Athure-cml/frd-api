@@ -28,10 +28,12 @@ public class ShippingLinePermissionSeeder implements ApplicationRunner {
 
   private static final List<PermDef> PERMISSIONS =
       List.of(
-          new PermDef(PermissionCodes.SHIPPING_LINE_VIEW, "船公司-查看", 67),
-          new PermDef(PermissionCodes.SHIPPING_LINE_CREATE, "船公司-新建", 68),
-          new PermDef(PermissionCodes.SHIPPING_LINE_EDIT, "船公司-编辑", 69),
-          new PermDef(PermissionCodes.SHIPPING_LINE_DELETE, "船公司-删除", 70));
+          new PermDef(PermissionCodes.SHIPPING_LINE_VIEW, "船公司-查看", 87),
+          new PermDef(PermissionCodes.SHIPPING_LINE_CREATE, "船公司-新建", 88),
+          new PermDef(PermissionCodes.SHIPPING_LINE_IMPORT, "船公司-导入", 89),
+          new PermDef(PermissionCodes.SHIPPING_LINE_EXPORT, "船公司-导出", 90),
+          new PermDef(PermissionCodes.SHIPPING_LINE_EDIT, "船公司-编辑", 91),
+          new PermDef(PermissionCodes.SHIPPING_LINE_DELETE, "船公司-删除", 92));
 
   private static final Set<String> ROLES_WITH_ALL =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -117,6 +119,13 @@ public class ShippingLinePermissionSeeder implements ApplicationRunner {
     } else if (roleCodes.contains(PermissionCodes.QUOTE_VIEW)
         || roleCodes.contains(PermissionCodes.COST_SEA_VIEW)) {
       addIfPresent(permissions, PermissionCodes.SHIPPING_LINE_VIEW, grants);
+    }
+
+    if (roleCodes.contains(PermissionCodes.SHIPPING_LINE_CREATE)
+        || grants.stream()
+            .anyMatch((p) -> PermissionCodes.SHIPPING_LINE_CREATE.equals(p.getCode()))) {
+      addIfPresent(permissions, PermissionCodes.SHIPPING_LINE_IMPORT, grants);
+      addIfPresent(permissions, PermissionCodes.SHIPPING_LINE_EXPORT, grants);
     }
 
     return grants;

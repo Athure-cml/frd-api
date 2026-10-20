@@ -39,20 +39,28 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
       List.of(
           new PermDef(PermissionCodes.SUPPLIER_TRUCK_VIEW, "卡车供应商-查看", 63),
           new PermDef(PermissionCodes.SUPPLIER_TRUCK_CREATE, "卡车供应商-新建", 64),
-          new PermDef(PermissionCodes.SUPPLIER_TRUCK_EDIT, "卡车供应商-编辑", 65),
-          new PermDef(PermissionCodes.SUPPLIER_TRUCK_DELETE, "卡车供应商-删除", 66),
-          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_VIEW, "熏蒸供应商-查看", 67),
-          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_CREATE, "熏蒸供应商-新建", 68),
-          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_EDIT, "熏蒸供应商-编辑", 69),
-          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_DELETE, "熏蒸供应商-删除", 70),
-          new PermDef(PermissionCodes.SUPPLIER_YARD_VIEW, "仓库堆场-查看", 71),
-          new PermDef(PermissionCodes.SUPPLIER_YARD_CREATE, "仓库堆场-新建", 72),
-          new PermDef(PermissionCodes.SUPPLIER_YARD_EDIT, "仓库堆场-编辑", 73),
-          new PermDef(PermissionCodes.SUPPLIER_YARD_DELETE, "仓库堆场-删除", 74),
-          new PermDef(PermissionCodes.SUPPLIER_OTHER_VIEW, "其他供应商-查看", 75),
-          new PermDef(PermissionCodes.SUPPLIER_OTHER_CREATE, "其他供应商-新建", 76),
-          new PermDef(PermissionCodes.SUPPLIER_OTHER_EDIT, "其他供应商-编辑", 77),
-          new PermDef(PermissionCodes.SUPPLIER_OTHER_DELETE, "其他供应商-删除", 78));
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_IMPORT, "卡车供应商-导入", 65),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_EXPORT, "卡车供应商-导出", 66),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_EDIT, "卡车供应商-编辑", 67),
+          new PermDef(PermissionCodes.SUPPLIER_TRUCK_DELETE, "卡车供应商-删除", 68),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_VIEW, "熏蒸供应商-查看", 69),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_CREATE, "熏蒸供应商-新建", 70),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_IMPORT, "熏蒸供应商-导入", 71),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_EXPORT, "熏蒸供应商-导出", 72),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_EDIT, "熏蒸供应商-编辑", 73),
+          new PermDef(PermissionCodes.SUPPLIER_FUMIGATION_DELETE, "熏蒸供应商-删除", 74),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_VIEW, "仓库堆场-查看", 75),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_CREATE, "仓库堆场-新建", 76),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_IMPORT, "仓库堆场-导入", 77),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_EXPORT, "仓库堆场-导出", 78),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_EDIT, "仓库堆场-编辑", 79),
+          new PermDef(PermissionCodes.SUPPLIER_YARD_DELETE, "仓库堆场-删除", 80),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_VIEW, "其他供应商-查看", 81),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_CREATE, "其他供应商-新建", 82),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_IMPORT, "其他供应商-导入", 83),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_EXPORT, "其他供应商-导出", 84),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_EDIT, "其他供应商-编辑", 85),
+          new PermDef(PermissionCodes.SUPPLIER_OTHER_DELETE, "其他供应商-删除", 86));
 
   private static final Set<String> ROLES_WITH_ALL =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -161,6 +169,15 @@ public class SupplierPermissionSeeder implements ApplicationRunner {
         || roleCodes.contains(PermissionCodes.COST_FUMIGATION_VIEW)) {
       for (String category : SupplierPermissionCodes.CATEGORIES) {
         addIfPresent(permissions, SupplierPermissionCodes.view(category), grants);
+      }
+    }
+
+    for (String category : SupplierPermissionCodes.CATEGORIES) {
+      String createCode = SupplierPermissionCodes.create(category);
+      if (roleCodes.contains(createCode)
+          || grants.stream().anyMatch((p) -> createCode.equals(p.getCode()))) {
+        addIfPresent(permissions, SupplierPermissionCodes.importAction(category), grants);
+        addIfPresent(permissions, SupplierPermissionCodes.exportAction(category), grants);
       }
     }
 

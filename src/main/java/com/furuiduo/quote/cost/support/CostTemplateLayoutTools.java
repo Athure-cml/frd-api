@@ -54,13 +54,138 @@ public final class CostTemplateLayoutTools {
     if ("fumigation".equals(mode)) {
       next = ensureFumigationGroupsIncludeEffDates(next);
       next = ensureFumigationRemarkField(next);
+      next = clearSeededIndoorRequired(next);
     }
     if ("road".equals(mode)) {
       next = ensureRoadStationField(next);
       next = ensureRoadFeeUnitFields(next);
       next = ensureRoadRemarkField(next);
+      next = renameStaleRoadTitles(next);
     }
+    next = alignCatalogDateFields(next);
     return next;
+  }
+
+  /** 旧默认把卡车供应商列写成中文，成本库模板表头是 SUPPLIER。 */
+  private static CostTableTemplateLayout renameStaleRoadTitles(CostTableTemplateLayout layout) {
+    if (layout == null || layout.fieldOverrides() == null) {
+      return layout;
+    }
+    CostTableFieldOverride supplier = layout.fieldOverrides().get("supplier");
+    if (supplier == null || supplier.title() == null) {
+      return layout;
+    }
+    String title = supplier.title().trim();
+    if (!"卡车供应商".equals(title) && !"供应商".equals(title)) {
+      return layout;
+    }
+    Map<String, CostTableFieldOverride> overrides = new LinkedHashMap<>(layout.fieldOverrides());
+    overrides.put(
+        "supplier",
+        new CostTableFieldOverride(
+            supplier.visible(),
+            supplier.width(),
+            supplier.minWidth(),
+            supplier.fixed(),
+            "SUPPLIER",
+            supplier.required(),
+            supplier.align(),
+            supplier.bgColor(),
+            supplier.sortable()));
+    return new CostTableTemplateLayout(
+        layout.groups(), layout.fieldOrder(), overrides, layout.fields(), layout.customFields());
+  }
+
+  private static final java.util.Set<String> CATALOG_DATE_FIELDS =
+      java.util.Set.of(
+          "cf_road_eff",
+          "cf_sea_freight_eff",
+          "cf_sea_bunker_eff",
+          "cf_sea_others_eff",
+          "cf_fum_outdoor_eff",
+          "cf_fum_indoor_eff");
+
+  private static final java.util.Set<String> SEEDED_INDOOR_REQUIRED_FIELDS =
+      java.util.Set.of("indoorNonOak", "indoorOak", "indoorValidity", "address", "cf_fum_indoor_eff");
+
+  /**
+   * 旧默认把室内熏蒸、地址标成必填。成本库模板只强制室外和 REGION/STATION，这里只清掉仍是种子形态（无自定义标题）的必填。
+   */
+  private static CostTableTemplateLayout clearSeededIndoorRequired(CostTableTemplateLayout layout) {
+    if (layout == null) {
+      return null;
+    }
+    boolean changed = false;
+    Map<String, CostTableFieldOverride> overrides =
+        layout.fieldOverrides() == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(layout.fieldOverrides());
+    for (String field : SEEDED_INDOOR_REQUIRED_FIELDS) {
+      CostTableFieldOverride override = overrides.get(field);
+      if (override == null || !Boolean.TRUE.equals(override.required())) {
+        continue;
+      }
+      if (override.title() != null && !override.title().isBlank()) {
+        continue;
+      }
+      overrides.put(
+          field,
+          new CostTableFieldOverride(
+              override.visible(),
+              override.width(),
+              override.minWidth(),
+              override.fixed(),
+              override.title(),
+              null,
+              override.align(),
+              override.bgColor(),
+              override.sortable()));
+      changed = true;
+    }
+    List<CostTableCustomFieldDef> customFields = layout.customFields();
+    if (customFields != null) {
+      List<CostTableCustomFieldDef> nextCustom = new ArrayList<>();
+      for (CostTableCustomFieldDef def : customFields) {
+        if (def != null
+            && "cf_fum_indoor_eff".equals(def.field())
+            && Boolean.TRUE.equals(def.required())) {
+          nextCustom.add(new CostTableCustomFieldDef(def.field(), def.title(), false, def.dataType()));
+          changed = true;
+        } else {
+          nextCustom.add(def);
+        }
+      }
+      customFields = nextCustom;
+    }
+    if (!changed) {
+      return layout;
+    }
+    return new CostTableTemplateLayout(
+        layout.groups(), layout.fieldOrder(), overrides, layout.fields(), customFields);
+  }
+
+  /** 生效期自定义列与成本库默认模板一样按日期存，不再落成文本。 */
+  private static CostTableTemplateLayout alignCatalogDateFields(CostTableTemplateLayout layout) {
+    if (layout == null || layout.customFields() == null || layout.customFields().isEmpty()) {
+      return layout;
+    }
+    boolean changed = false;
+    List<CostTableCustomFieldDef> customFields = new ArrayList<>();
+    for (CostTableCustomFieldDef def : layout.customFields()) {
+      if (def != null
+          && CATALOG_DATE_FIELDS.contains(def.field())
+          && (def.dataType() == null || "text".equalsIgnoreCase(def.dataType()))) {
+        customFields.add(new CostTableCustomFieldDef(def.field(), def.title(), def.required(), "date"));
+        changed = true;
+      } else {
+        customFields.add(def);
+      }
+    }
+    if (!changed) {
+      return layout;
+    }
+    return new CostTableTemplateLayout(
+        layout.groups(), layout.fieldOrder(), layout.fieldOverrides(), layout.fields(), customFields);
   }
 
   private static CostTableTemplateLayout ensureRoadRemarkField(CostTableTemplateLayout layout) {

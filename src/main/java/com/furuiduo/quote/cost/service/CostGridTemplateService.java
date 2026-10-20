@@ -13,6 +13,9 @@ import com.furuiduo.quote.cost.dto.CostTableTemplateResponse;
 import com.furuiduo.quote.cost.dto.CostTableTemplateSaveRequest;
 import com.furuiduo.quote.cost.dto.TemplateExcelFile;
 import com.furuiduo.quote.cost.entity.CostGridTemplate;
+
+import static com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_COST;
+import static com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_QUOTE;
 import com.furuiduo.quote.cost.repository.CostGridTemplateRepository;
 import com.furuiduo.quote.cost.support.CostFieldCatalog;
 import com.furuiduo.quote.cost.support.CostTemplateCodeGenerator;
@@ -32,8 +35,13 @@ public class CostGridTemplateService {
   }
 
   public List<CostTableTemplateResponse> listByMode(String mode) {
+    return listByLibrary(LIBRARY_COST, mode);
+  }
+
+  public List<CostTableTemplateResponse> listByLibrary(String library, String mode) {
+    String normalizedLibrary = normalizeLibrary(library);
     String normalized = normalizeMode(mode);
-    return repository.findByModeOrderByIdAsc(normalized).stream()
+    return repository.findByLibraryAndModeOrderByIdAsc(normalizedLibrary, normalized).stream()
         .sorted(
             (a, b) -> {
               if (a.isDefaultTemplate() != b.isDefaultTemplate()) {
@@ -49,13 +57,27 @@ public class CostGridTemplateService {
   }
 
   public CostTableTemplateResponse getById(Long id) {
-    return CostTableTemplateResponse.from(requireEntity(id));
+    return getById(LIBRARY_COST, id);
+  }
+
+  public CostTableTemplateResponse getById(String library, Long id) {
+    return CostTableTemplateResponse.from(requireEntity(library, id));
   }
 
   public CostGridTemplate requireEntity(Long id) {
-    return repository
-        .findById(id)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Template not found"));
+    return requireEntity(LIBRARY_COST, id);
+  }
+
+  public CostGridTemplate requireEntity(String library, Long id) {
+    CostGridTemplate entity =
+        repository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Template not found"));
+    if (!normalizeLibrary(library).equals(normalizeLibrary(entity.getLibrary()))) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Template not found");
+    }
+    return entity;
   }
 
   public String normalizeMode(String mode) {
@@ -72,19 +94,39 @@ public class CostGridTemplateService {
     return normalized;
   }
 
+  public String normalizeLibrary(String library) {
+    if (library == null || library.isBlank()) {
+      return LIBRARY_COST;
+    }
+    String normalized = library.trim().toLowerCase(Locale.ROOT);
+    if (!LIBRARY_COST.equals(normalized) && !LIBRARY_QUOTE.equals(normalized)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid library: " + library);
+    }
+    return normalized;
+  }
+
   @Transactional
   public CostTableTemplateResponse create(CostTableTemplateSaveRequest request) {
+    return create(LIBRARY_COST, request);
+  }
+
+  @Transactional
+  public CostTableTemplateResponse create(String library, CostTableTemplateSaveRequest request) {
+    String normalizedLibrary = normalizeLibrary(library);
     String mode = normalizeMode(request.mode());
-    String code = templateCodeGenerator.next(mode);
+    String code = templateCodeGenerator.next(normalizedLibrary, mode);
     String name = normalizeName(request.name());
     CostTableTemplateLayout layout = normalizeLayout(mode, request.layout());
 
     CostGridTemplate entity = new CostGridTemplate();
+    entity.setLibrary(normalizedLibrary);
     entity.setMode(mode);
     entity.setCode(code);
     entity.setName(name);
     entity.setLayout(layout);
-    boolean isDefault = Boolean.TRUE.equals(request.isDefault()) || repository.countByMode(mode) == 0;
+    boolean isDefault =
+        Boolean.TRUE.equals(request.isDefault())
+            || repository.countByLibraryAndMode(normalizedLibrary, mode) == 0;
     entity.setDefaultTemplate(isDefault);
     entity.touch();
     repository.save(entity);
@@ -97,7 +139,13 @@ public class CostGridTemplateService {
 
   @Transactional
   public CostTableTemplateResponse update(Long id, CostTableTemplateSaveRequest request) {
-    CostGridTemplate entity = requireEntity(id);
+    return update(LIBRARY_COST, id, request);
+  }
+
+  @Transactional
+  public CostTableTemplateResponse update(
+      String library, Long id, CostTableTemplateSaveRequest request) {
+    CostGridTemplate entity = requireEntity(library, id);
     String mode = entity.getMode();
     if (!mode.equals(normalizeMode(request.mode()))) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "mode cannot be changed");
@@ -111,7 +159,7 @@ public class CostGridTemplateService {
       entity.setDefaultTemplate(true);
       clearOtherDefaults(entity);
     } else if (entity.isDefaultTemplate()) {
-      long count = repository.countByMode(mode);
+      long count = repository.countByLibraryAndMode(entity.getLibrary(), mode);
       if (count <= 1) {
         // 唯一模板必须保持默认
         entity.setDefaultTemplate(true);
@@ -131,9 +179,14 @@ public class CostGridTemplateService {
 
   @Transactional
   public void delete(Long id) {
-    CostGridTemplate entity = requireEntity(id);
+    delete(LIBRARY_COST, id);
+  }
+
+  @Transactional
+  public void delete(String library, Long id) {
+    CostGridTemplate entity = requireEntity(library, id);
     if (entity.isDefaultTemplate()) {
-      long count = repository.countByMode(entity.getMode());
+      long count = repository.countByLibraryAndMode(entity.getLibrary(), entity.getMode());
       if (count <= 1) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "Cannot delete the only default template");
@@ -146,7 +199,12 @@ public class CostGridTemplateService {
 
   @Transactional
   public CostTableTemplateResponse setDefault(Long id) {
-    CostGridTemplate entity = requireEntity(id);
+    return setDefault(LIBRARY_COST, id);
+  }
+
+  @Transactional
+  public CostTableTemplateResponse setDefault(String library, Long id) {
+    CostGridTemplate entity = requireEntity(library, id);
     entity.setDefaultTemplate(true);
     entity.touch();
     repository.save(entity);
@@ -165,27 +223,41 @@ public class CostGridTemplateService {
   }
 
   public CostTableTemplateLayout resolveExportLayout(String mode, Long templateId) {
+    return resolveExportLayout(LIBRARY_COST, mode, templateId);
+  }
+
+  public CostTableTemplateLayout resolveExportLayout(String library, String mode, Long templateId) {
+    String normalizedLibrary = normalizeLibrary(library);
     String normalized = normalizeMode(mode);
     if (templateId != null) {
-      CostGridTemplate entity = requireEntity(templateId);
+      CostGridTemplate entity = requireEntity(normalizedLibrary, templateId);
       if (!entity.getMode().equals(normalized)) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模板与成本库类型不匹配");
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模板与类型不匹配");
       }
       return entity.getLayout();
     }
     return repository
-        .findFirstByModeAndDefaultTemplateTrue(normalized)
+        .findFirstByLibraryAndModeAndDefaultTemplateTrue(normalizedLibrary, normalized)
         .map(CostGridTemplate::getLayout)
         .orElseGet(() -> defaultLayoutForMode(normalized));
   }
 
   public TemplateExcelFile exportById(Long id) {
-    CostGridTemplate entity = requireEntity(id);
+    return exportById(LIBRARY_COST, id);
+  }
+
+  public TemplateExcelFile exportById(String library, Long id) {
+    CostGridTemplate entity = requireEntity(library, id);
     return buildExport(
         entity.getMode(), entity.getCode(), entity.getName(), entity.getLayout(), false);
   }
 
   public TemplateExcelFile exportPreview(CostTableTemplateSaveRequest request) {
+    return exportPreview(LIBRARY_COST, request);
+  }
+
+  public TemplateExcelFile exportPreview(String library, CostTableTemplateSaveRequest request) {
+    normalizeLibrary(library);
     String mode = normalizeMode(request.mode());
     String code = resolvePreviewCode(mode, request.code());
     String name = normalizeName(request.name());
@@ -209,7 +281,7 @@ public class CostGridTemplateService {
 
   private void clearOtherDefaults(CostGridTemplate current) {
     repository
-        .findByModeOrderByIdAsc(current.getMode())
+        .findByLibraryAndModeOrderByIdAsc(current.getLibrary(), current.getMode())
         .forEach(
             item -> {
               if (!item.getId().equals(current.getId()) && item.isDefaultTemplate()) {
@@ -222,10 +294,12 @@ public class CostGridTemplateService {
 
   /** 取消当前默认后，自动将同 mode 下另一条模板设为默认，避免零默认。 */
   private void promoteAnotherDefault(CostGridTemplate cleared) {
-    if (repository.findFirstByModeAndDefaultTemplateTrue(cleared.getMode()).isPresent()) {
+    if (repository
+        .findFirstByLibraryAndModeAndDefaultTemplateTrue(cleared.getLibrary(), cleared.getMode())
+        .isPresent()) {
       return;
     }
-    repository.findByModeOrderByIdAsc(cleared.getMode()).stream()
+    repository.findByLibraryAndModeOrderByIdAsc(cleared.getLibrary(), cleared.getMode()).stream()
         .filter(item -> !item.getId().equals(cleared.getId()))
         .findFirst()
         .ifPresent(

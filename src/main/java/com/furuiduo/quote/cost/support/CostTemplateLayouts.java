@@ -111,7 +111,7 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("state", titledRequired("STATE"));
     fieldOverrides.put("por", titledRequired("POR"));
     fieldOverrides.put("station", titled("STATION"));
-    fieldOverrides.put("supplier", titledRequired("卡车供应商"));
+    fieldOverrides.put("supplier", titledRequired("SUPPLIER"));
     fieldOverrides.put("baseFreight", titled("BASE"));
     fieldOverrides.put("fsc", titled("FSC"));
     fieldOverrides.put("chassis", titled("CHASSIS"));
@@ -145,7 +145,7 @@ public final class CostTemplateLayouts {
             new CostTableCustomFieldDef(
                 ROAD_EXTRA_CHASSIS_UNIT, "EXTRA CHASSIS UNIT", null, "text"),
             new CostTableCustomFieldDef(ROAD_WAITING_UNIT, "WAITING UNIT", null, "text"),
-            new CostTableCustomFieldDef(ROAD_EFF, "EFFECTIVE TIME", null, "text"),
+            new CostTableCustomFieldDef(ROAD_EFF, "EFFECTIVE TIME", null, "date"),
             new CostTableCustomFieldDef(ROAD_REMARK, "REMARK", null, "text"));
 
     // 单行英文表头（无分组），对齐业务 Excel
@@ -208,9 +208,9 @@ public final class CostTemplateLayouts {
 
     List<CostTableCustomFieldDef> customFields =
         List.of(
-            new CostTableCustomFieldDef(SEA_FREIGHT_EFF, "生效期", null, "text"),
-            new CostTableCustomFieldDef(SEA_BUNKER_EFF, "生效期", null, "text"),
-            new CostTableCustomFieldDef(SEA_OTHERS_EFF, "生效期", null, "text"));
+            new CostTableCustomFieldDef(SEA_FREIGHT_EFF, "生效期", null, "date"),
+            new CostTableCustomFieldDef(SEA_BUNKER_EFF, "生效期", null, "date"),
+            new CostTableCustomFieldDef(SEA_OTHERS_EFF, "生效期", null, "date"));
 
     return new CostTableTemplateLayout(
         List.of(
@@ -257,17 +257,12 @@ public final class CostTemplateLayouts {
     fieldOverrides.put("outdoorOak", requiredOverride());
     fieldOverrides.put(FUM_OUTDOOR_EFF, requiredOverride());
     fieldOverrides.put("outdoorValidity", requiredOverride());
-    fieldOverrides.put("indoorNonOak", requiredOverride());
-    fieldOverrides.put("indoorOak", requiredOverride());
-    fieldOverrides.put(FUM_INDOOR_EFF, requiredOverride());
-    fieldOverrides.put("indoorValidity", requiredOverride());
-    fieldOverrides.put("address", requiredOverride());
     fieldOverrides.put("remark", titled("备注"));
 
     List<CostTableCustomFieldDef> customFields =
         List.of(
-            new CostTableCustomFieldDef(FUM_OUTDOOR_EFF, "生效期", true, "text"),
-            new CostTableCustomFieldDef(FUM_INDOOR_EFF, "生效期", true, "text"));
+            new CostTableCustomFieldDef(FUM_OUTDOOR_EFF, "生效期", true, "date"),
+            new CostTableCustomFieldDef(FUM_INDOOR_EFF, "生效期", false, "date"));
 
     return new CostTableTemplateLayout(
         List.of(

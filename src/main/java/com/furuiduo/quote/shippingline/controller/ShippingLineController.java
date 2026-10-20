@@ -181,7 +181,7 @@ public class ShippingLineController {
       @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
-    requireCreate(user);
+    requireImport(user);
     return ApiResponse.ok(commandService.importExcel(user, file, dryRun));
   }
 
@@ -195,8 +195,12 @@ public class ShippingLineController {
       @RequestParam(required = false) String name,
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String ids) {
-    requireModuleView(authService.requireUser(authorization));
-    byte[] bytes = commandService.exportExcel(code, name, status, RequestIds.parse(ids));
+    SysUser exportUser = authService.requireUser(authorization);
+    requireExport(exportUser);
+    boolean includeCode =
+        permissionService.hasPermission(exportUser, PermissionCodes.SHIPPING_LINE_IMPORT);
+    byte[] bytes =
+        commandService.exportExcel(code, name, status, RequestIds.parse(ids), includeCode);
     String filename =
         URLEncoder.encode("船公司.xlsx", StandardCharsets.UTF_8).replace("+", "%20");
     return ResponseEntity.ok()
@@ -217,15 +221,21 @@ public class ShippingLineController {
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司选项读取权限");
   }
 
-  private void requireModuleView(SysUser user) {
-    if (!permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_VIEW)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司查看权限");
-    }
-  }
-
   private void requireCreate(SysUser user) {
     if (!permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_CREATE)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+    }
+  }
+
+  private void requireImport(SysUser user) {
+    if (!permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_IMPORT)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司导入权限");
+    }
+  }
+
+  private void requireExport(SysUser user) {
+    if (!permissionService.hasPermission(user, PermissionCodes.SHIPPING_LINE_EXPORT)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少船公司导出权限");
     }
   }
 

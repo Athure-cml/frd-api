@@ -205,7 +205,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
+    requireCostEdit(user, PermissionCodes.COST_ROAD_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteRoad(request, user));
   }
 
@@ -217,7 +217,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
+    requireCostEdit(user, PermissionCodes.COST_SEA_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteSea(request, user));
   }
 
@@ -229,7 +229,7 @@ public class QuoteLibraryController {
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @RequestBody QuoteLibraryPromoteRequest request) {
     SysUser user = authService.requireUser(authorization);
-    requireQuoteLibraryEdit(user, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW, PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
+    requireCostEdit(user, PermissionCodes.COST_FUMIGATION_EDIT);
     return ApiResponse.ok(quoteLibraryMutationService.promoteFumigation(request, user));
   }
 
@@ -591,6 +591,13 @@ public class QuoteLibraryController {
             MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(bytes);
+  }
+
+  /** 入报价库从成本库发起，只要求对应成本库编辑权限。 */
+  private void requireCostEdit(SysUser user, String costEditPermission) {
+    if (!permissionService.hasPermission(user, costEditPermission)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少成本库编辑权限");
+    }
   }
 
   /** 报价库权限与成本库独立：仅有报价库权限即可查看/维护报价库。 */

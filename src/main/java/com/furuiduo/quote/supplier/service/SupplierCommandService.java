@@ -169,7 +169,13 @@ public class SupplierCommandService {
 
   @Transactional(readOnly = true)
   public byte[] exportExcel(
-      String category, String code, String name, Integer status, String typeId, List<Long> ids) {
+      String category,
+      String code,
+      String name,
+      Integer status,
+      String typeId,
+      List<Long> ids,
+      boolean includeCode) {
     String normalized = resolveCategory(category);
     List<Supplier> items;
     if (RequestIds.present(ids)) {
@@ -196,14 +202,18 @@ public class SupplierCommandService {
     Map<Long, String> typeNames = SupplierOtherTypes.loadNameMap(supplierTypeRepository);
     boolean withTypes = SupplierCategories.supportsTypes(normalized);
     boolean withFormulas = SupplierCategories.supportsFormulas(normalized);
+    String[] headers =
+        PartyMasterExcelSupport.exportHeaders(exportHeaders(normalized), includeCode);
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Suppliers");
-      CostExcelSupport.writeHeaderRow(sheet, exportHeaders(normalized));
+      CostExcelSupport.writeHeaderRow(sheet, headers);
       int rowIndex = 1;
       for (Supplier item : items) {
         Row row = sheet.createRow(rowIndex++);
         int col = 0;
-        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
+        if (includeCode) {
+          row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
+        }
         row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getName()));
         row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getShortName()));
         if (withTypes) {

@@ -108,8 +108,8 @@ public class PermissionService {
         PermissionCodes.COST_FUMIGATION_VIEW);
   }
 
-  /** 报价库页读取成本表头模板：有对应报价库查看即可，不要求成本库/模板管理权限。 */
-  public boolean canViewCostTemplateForQuoteLibrary(SysUser user, String mode) {
+  /** 报价库列表读取本库视图模板：有对应报价库查看即可。 */
+  public boolean canViewQuoteLibrary(SysUser user, String mode) {
     if (mode == null) {
       return false;
     }

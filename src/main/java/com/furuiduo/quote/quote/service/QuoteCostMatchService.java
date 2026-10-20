@@ -73,7 +73,8 @@ public class QuoteCostMatchService {
 
     List<QuoteCostMatchItemDto> matches = new ArrayList<>();
 
-    if (QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+    if (QuoteCostMatchSupport.hasRoadLocationKeys(
+        request.zipCode(), request.city(), request.state())) {
       List<CostRoad> roads =
           costRoadRepository.matchByRoute(
               SearchText.orEmpty(request.zipCode()),
@@ -119,7 +120,8 @@ public class QuoteCostMatchService {
     QuoteCostMatchItemDto match =
         switch (type) {
           case ROAD -> {
-            if (!QuoteCostMatchSupport.hasRoadLocationKeys(request.city(), request.state())) {
+            if (!QuoteCostMatchSupport.hasRoadLocationKeys(
+                request.zipCode(), request.city(), request.state())) {
               yield null;
             }
             List<CostRoad> roads =

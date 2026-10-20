@@ -132,7 +132,9 @@ public class QuoteLibraryExportService {
       Boolean highlightOnly,
       List<Long> ids,
       String columnsJson) {
-    CostTableTemplateLayout layout = templateService.resolveExportLayout("fumigation", null);
+    CostTableTemplateLayout layout =
+        templateService.resolveExportLayout(
+            com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_QUOTE, "fumigation", null);
     List<FumigationCostResponse> rows =
         quoteLibraryService.listFumigationForExport(
             user, region, station, outdoorValidity, indoorValidity, status, highlightOnly, ids);

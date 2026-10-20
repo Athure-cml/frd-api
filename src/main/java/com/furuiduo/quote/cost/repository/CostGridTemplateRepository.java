@@ -13,14 +13,22 @@ import com.furuiduo.quote.cost.entity.CostGridTemplate;
 
 public interface CostGridTemplateRepository extends JpaRepository<CostGridTemplate, Long> {
 
-  List<CostGridTemplate> findByModeOrderByIdAsc(String mode);
+  List<CostGridTemplate> findByLibraryAndModeOrderByIdAsc(String library, String mode);
 
-  long countByMode(String mode);
+  long countByLibraryAndMode(String library, String mode);
 
-  Optional<CostGridTemplate> findByModeAndCode(String mode, String code);
+  Optional<CostGridTemplate> findByLibraryAndModeAndCode(String library, String mode, String code);
 
-  Optional<CostGridTemplate> findFirstByModeAndDefaultTemplateTrue(String mode);
+  Optional<CostGridTemplate> findFirstByLibraryAndModeAndDefaultTemplateTrue(
+      String library, String mode);
 
-  @Query("SELECT t.code FROM CostGridTemplate t WHERE t.code LIKE :prefix ORDER BY t.code DESC")
-  Page<String> findCodesByPrefix(@Param("prefix") String prefix, Pageable pageable);
+  @Query(
+      "SELECT t.code FROM CostGridTemplate t WHERE t.library = :library AND t.code LIKE :prefix ORDER BY t.code DESC")
+  Page<String> findCodesByLibraryAndPrefix(
+      @Param("library") String library, @Param("prefix") String prefix, Pageable pageable);
+
+  @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+  @Query(
+      "UPDATE CostGridTemplate t SET t.library = 'cost' WHERE t.library IS NULL OR t.library = ''")
+  int backfillCostLibrary();
 }

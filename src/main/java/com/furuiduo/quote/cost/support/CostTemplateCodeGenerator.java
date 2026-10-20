@@ -3,6 +3,7 @@ package com.furuiduo.quote.cost.support;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import com.furuiduo.quote.cost.entity.CostGridTemplate;
 import com.furuiduo.quote.cost.repository.CostGridTemplateRepository;
 
 @Component
@@ -14,11 +15,12 @@ public class CostTemplateCodeGenerator {
     this.repository = repository;
   }
 
-  public String next(String mode) {
-    String prefix = mode + "_tpl_";
+  public String next(String library, String mode) {
+    String prefix =
+        CostGridTemplate.LIBRARY_QUOTE.equals(library) ? "q_" + mode + "_tpl_" : mode + "_tpl_";
     int seq =
         repository
-            .findCodesByPrefix(prefix + "%", PageRequest.of(0, 1))
+            .findCodesByLibraryAndPrefix(library, prefix + "%", PageRequest.of(0, 1))
             .stream()
             .findFirst()
             .map(code -> Integer.parseInt(code.substring(prefix.length())) + 1)

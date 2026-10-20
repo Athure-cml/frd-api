@@ -10,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.cost.dto.CostTableTemplateLayout;
 import com.furuiduo.quote.cost.entity.CostGridTemplate;
+
+import static com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_COST;
+import static com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_QUOTE;
 import com.furuiduo.quote.cost.repository.CostGridTemplateRepository;
 import com.furuiduo.quote.cost.support.CostTemplateLayoutTools;
 import com.furuiduo.quote.cost.support.CostTemplateLayouts;
@@ -32,10 +35,17 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    fillBuiltinIfEmpty("road", "road_default", CostTemplateLayouts.roadDefault());
-    fillBuiltinIfEmpty("sea", "sea_default", CostTemplateLayouts.seaDefault());
+    fillBuiltinIfEmpty(LIBRARY_COST, "road", "road_default", CostTemplateLayouts.roadDefault());
+    fillBuiltinIfEmpty(LIBRARY_COST, "sea", "sea_default", CostTemplateLayouts.seaDefault());
     fillBuiltinIfEmpty(
-        "fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
+        LIBRARY_COST, "fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
+    fillBuiltinIfEmpty(LIBRARY_QUOTE, "road", "q_road_default", CostTemplateLayouts.roadDefault());
+    fillBuiltinIfEmpty(LIBRARY_QUOTE, "sea", "q_sea_default", CostTemplateLayouts.seaDefault());
+    fillBuiltinIfEmpty(
+        LIBRARY_QUOTE,
+        "fumigation",
+        "q_fumigation_default",
+        CostTemplateLayouts.fumigationDefault());
 
     for (CostGridTemplate template : repository.findAll()) {
       CostTableTemplateLayout current = template.getLayout();
@@ -49,9 +59,10 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
     }
   }
 
-  private void fillBuiltinIfEmpty(String mode, String code, CostTableTemplateLayout target) {
+  private void fillBuiltinIfEmpty(
+      String library, String mode, String code, CostTableTemplateLayout target) {
     repository
-        .findByModeAndCode(mode, code)
+        .findByLibraryAndModeAndCode(library, mode, code)
         .filter(template -> template.getLayout() == null)
         .ifPresent(
             template -> {

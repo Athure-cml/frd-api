@@ -1,11 +1,26 @@
 package com.furuiduo.quote.common;
 
+import java.util.Arrays;
 import java.util.Locale;
 
 /** Shared helpers for customer / supplier / shipping-line / agent Excel import-export. */
 public final class PartyMasterExcelSupport {
 
   private PartyMasterExcelSupport() {}
+
+  /**
+   * 导出表头：无导入（create）权限时去掉首列「编码」。
+   * 导入模板仍使用完整表头，不受此影响。
+   */
+  public static String[] exportHeaders(String[] fullHeaders, boolean includeCode) {
+    if (includeCode || fullHeaders == null || fullHeaders.length == 0) {
+      return fullHeaders;
+    }
+    if (!"编码".equals(fullHeaders[0])) {
+      return fullHeaders;
+    }
+    return Arrays.copyOfRange(fullHeaders, 1, fullHeaders.length);
+  }
 
   public static String nullToEmpty(String value) {
     return value == null ? "" : value;

@@ -28,10 +28,12 @@ public class AgentPermissionSeeder implements ApplicationRunner {
 
   private static final List<PermDef> PERMISSIONS =
       List.of(
-          new PermDef(PermissionCodes.AGENT_VIEW, "代理商-查看", 71),
-          new PermDef(PermissionCodes.AGENT_CREATE, "代理商-新建", 72),
-          new PermDef(PermissionCodes.AGENT_EDIT, "代理商-编辑", 73),
-          new PermDef(PermissionCodes.AGENT_DELETE, "代理商-删除", 74));
+          new PermDef(PermissionCodes.AGENT_VIEW, "代理商-查看", 93),
+          new PermDef(PermissionCodes.AGENT_CREATE, "代理商-新建", 94),
+          new PermDef(PermissionCodes.AGENT_IMPORT, "代理商-导入", 95),
+          new PermDef(PermissionCodes.AGENT_EXPORT, "代理商-导出", 96),
+          new PermDef(PermissionCodes.AGENT_EDIT, "代理商-编辑", 97),
+          new PermDef(PermissionCodes.AGENT_DELETE, "代理商-删除", 98));
 
   private static final Set<String> ROLES_WITH_ALL =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -117,6 +119,12 @@ public class AgentPermissionSeeder implements ApplicationRunner {
     } else if (roleCodes.contains(PermissionCodes.QUOTE_VIEW)
         || roleCodes.contains(PermissionCodes.COST_SEA_VIEW)) {
       addIfPresent(permissions, PermissionCodes.AGENT_VIEW, grants);
+    }
+
+    if (roleCodes.contains(PermissionCodes.AGENT_CREATE)
+        || grants.stream().anyMatch((p) -> PermissionCodes.AGENT_CREATE.equals(p.getCode()))) {
+      addIfPresent(permissions, PermissionCodes.AGENT_IMPORT, grants);
+      addIfPresent(permissions, PermissionCodes.AGENT_EXPORT, grants);
     }
 
     return grants;

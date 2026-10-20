@@ -343,7 +343,11 @@ public class QuoteController {
       @RequestBody @Valid QuoteApprovalCommentRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireApprove(user);
-    return ApiResponse.ok(quoteWorkflowService.rejectApproval(user, id, body.comment()));
+    String comment = body != null ? body.comment() : null;
+    if (comment == null || comment.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写审批意见");
+    }
+    return ApiResponse.ok(quoteWorkflowService.rejectApproval(user, id, comment));
   }
 
   @Operation(

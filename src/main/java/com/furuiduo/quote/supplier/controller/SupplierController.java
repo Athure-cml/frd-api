@@ -204,7 +204,7 @@ public class SupplierController {
       @RequestParam(required = false, defaultValue = "false") boolean dryRun)
       throws IOException {
     SysUser user = authService.requireUser(authorization);
-    require(user, category, "create");
+    require(user, category, "import");
     return ApiResponse.ok(supplierCommandService.importExcel(user, file, category, dryRun));
   }
 
@@ -220,10 +220,12 @@ public class SupplierController {
       @RequestParam(required = false) Integer status,
       @RequestParam(required = false) String typeId,
       @RequestParam(required = false) String ids) {
-    requireModuleView(authService.requireUser(authorization), category);
+    SysUser exportUser = authService.requireUser(authorization);
+    require(exportUser, category, "export");
+    boolean includeCode = hasImportPermission(exportUser, category);
     byte[] bytes =
         supplierCommandService.exportExcel(
-            category, code, name, status, typeId, RequestIds.parse(ids));
+            category, code, name, status, typeId, RequestIds.parse(ids), includeCode);
     String filename =
         URLEncoder.encode(SupplierCategories.exportFilename(category), StandardCharsets.UTF_8)
             .replace("+", "%20");
@@ -253,12 +255,9 @@ public class SupplierController {
     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少供应商权限");
   }
 
-  private void requireModuleView(SysUser user, String category) {
-    String modern = SupplierPermissionCodes.of(category, "view");
-    if (permissionService.hasPermission(user, modern)
-        || permissionService.hasPermission(user, "supplier:view")) {
-      return;
-    }
-    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少供应商查看权限");
+  /** 导入权限：有则可导出编码列 */
+  private boolean hasImportPermission(SysUser user, String category) {
+    String modern = SupplierPermissionCodes.importAction(category);
+    return permissionService.hasPermission(user, modern);
   }
 }

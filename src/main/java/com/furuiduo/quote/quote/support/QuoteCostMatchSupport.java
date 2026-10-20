@@ -107,12 +107,22 @@ public final class QuoteCostMatchSupport {
     return allIn != null ? allIn : BigDecimal.valueOf(Long.MAX_VALUE);
   }
 
-  /** 卡车成本匹配要求 city、state 均已填写。 */
-  public static boolean hasRoadLocationKeys(String city, String state) {
-    return city != null
-        && !city.isBlank()
-        && state != null
-        && !state.isBlank();
+  /**
+   * 卡车报价库匹配前置条件：
+   * <ul>
+   *   <li>有 zip code：可匹配（有 city/state 时一并纳入）
+   *   <li>无 zip code：city 与 state 都必须有
+   * </ul>
+   */
+  public static boolean hasRoadLocationKeys(String zipCode, String city, String state) {
+    if (isNotBlank(zipCode)) {
+      return true;
+    }
+    return isNotBlank(city) && isNotBlank(state);
+  }
+
+  private static boolean isNotBlank(String value) {
+    return value != null && !value.isBlank();
   }
 
   /** 熏蒸成本匹配要求已填写熏蒸点（对应成本库 STATION）。 */

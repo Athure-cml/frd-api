@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.sys.CostTemplatePermissionCodes;
 import com.furuiduo.quote.sys.PermissionCodes;
+import com.furuiduo.quote.sys.QuoteLibraryTemplatePermissionCodes;
 import com.furuiduo.quote.sys.entity.PermissionType;
 import com.furuiduo.quote.sys.entity.SysPermission;
 import com.furuiduo.quote.sys.entity.SysRole;
@@ -22,7 +23,7 @@ import com.furuiduo.quote.sys.repository.SysPermissionRepository;
 import com.furuiduo.quote.sys.repository.SysRoleRepository;
 
 @Component
-@Order(100)
+@Order(106)
 public class TemplatePermissionSeeder implements ApplicationRunner {
 
   private record PermDef(String code, String name, int sort) {}
@@ -37,7 +38,19 @@ public class TemplatePermissionSeeder implements ApplicationRunner {
           new PermDef(PermissionCodes.COST_SEA_TEMPLATE_DELETE, "海运模板-删除", 41),
           new PermDef(PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW, "熏蒸模板-查看", 42),
           new PermDef(PermissionCodes.COST_FUMIGATION_TEMPLATE_EDIT, "熏蒸模板-编辑", 43),
-          new PermDef(PermissionCodes.COST_FUMIGATION_TEMPLATE_DELETE, "熏蒸模板-删除", 44));
+          new PermDef(PermissionCodes.COST_FUMIGATION_TEMPLATE_DELETE, "熏蒸模板-删除", 44),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW, "卡车报价库模板-查看", 66),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_ROAD_TEMPLATE_EDIT, "卡车报价库模板-编辑", 67),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_ROAD_TEMPLATE_DELETE, "卡车报价库模板-删除", 68),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_SEA_TEMPLATE_VIEW, "海运报价库模板-查看", 69),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_SEA_TEMPLATE_EDIT, "海运报价库模板-编辑", 70),
+          new PermDef(PermissionCodes.QUOTE_LIBRARY_SEA_TEMPLATE_DELETE, "海运报价库模板-删除", 71),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_FUMIGATION_TEMPLATE_VIEW, "熏蒸报价库模板-查看", 72),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_FUMIGATION_TEMPLATE_EDIT, "熏蒸报价库模板-编辑", 73),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_FUMIGATION_TEMPLATE_DELETE, "熏蒸报价库模板-删除", 74));
 
   private final SysPermissionRepository permissionRepository;
   private final SysRoleRepository roleRepository;
@@ -133,7 +146,47 @@ public class TemplatePermissionSeeder implements ApplicationRunner {
         PermissionCodes.COST_RAIL_EDIT,
         grants);
 
+    grantByQuoteLibrary(
+        roleCodes,
+        templatePermissions,
+        grants,
+        "road",
+        PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
+        PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT);
+    grantByQuoteLibrary(
+        roleCodes,
+        templatePermissions,
+        grants,
+        "sea",
+        PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
+        PermissionCodes.QUOTE_LIBRARY_SEA_EDIT);
+    grantByQuoteLibrary(
+        roleCodes,
+        templatePermissions,
+        grants,
+        "fumigation",
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT);
+
     return grants;
+  }
+
+  private void grantByQuoteLibrary(
+      Set<String> roleCodes,
+      Map<String, SysPermission> templatePermissions,
+      Set<SysPermission> grants,
+      String mode,
+      String viewCode,
+      String editCode) {
+    if (roleCodes.contains(editCode)) {
+      addIfPresent(templatePermissions, QuoteLibraryTemplatePermissionCodes.view(mode), grants);
+      addIfPresent(templatePermissions, QuoteLibraryTemplatePermissionCodes.edit(mode), grants);
+      addIfPresent(templatePermissions, QuoteLibraryTemplatePermissionCodes.delete(mode), grants);
+      return;
+    }
+    if (roleCodes.contains(viewCode)) {
+      addIfPresent(templatePermissions, QuoteLibraryTemplatePermissionCodes.view(mode), grants);
+    }
   }
 
   private void grantByCostPermission(

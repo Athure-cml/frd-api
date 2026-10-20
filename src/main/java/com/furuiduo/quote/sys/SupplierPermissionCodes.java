@@ -2,7 +2,7 @@ package com.furuiduo.quote.sys;
 
 import java.util.Locale;
 
-/** 供应商按分类的权限码：supplier:{truck|fumigation|yard|other}:{view|create|edit|delete} */
+/** 供应商按分类的权限码：supplier:{truck|fumigation|yard|other}:{view|create|import|export|edit|delete} */
 public final class SupplierPermissionCodes {
 
   public static final String TRUCK = "truck";
@@ -11,7 +11,7 @@ public final class SupplierPermissionCodes {
   public static final String OTHER = "other";
 
   public static final String[] CATEGORIES = {TRUCK, FUMIGATION, YARD, OTHER};
-  public static final String[] ACTIONS = {"view", "create", "edit", "delete"};
+  public static final String[] ACTIONS = {"view", "create", "import", "export", "edit", "delete"};
 
   private SupplierPermissionCodes() {}
 
@@ -36,6 +36,14 @@ public final class SupplierPermissionCodes {
 
   public static String create(String category) {
     return of(category, "create");
+  }
+
+  public static String importAction(String category) {
+    return of(category, "import");
+  }
+
+  public static String exportAction(String category) {
+    return of(category, "export");
   }
 
   public static String edit(String category) {

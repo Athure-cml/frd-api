@@ -30,8 +30,10 @@ public class CustomerPermissionSeeder implements ApplicationRunner {
       List.of(
           new PermDef(PermissionCodes.CUSTOMER_VIEW, "客户-查看", 45),
           new PermDef(PermissionCodes.CUSTOMER_CREATE, "客户-新建", 46),
-          new PermDef(PermissionCodes.CUSTOMER_EDIT, "客户-编辑", 47),
-          new PermDef(PermissionCodes.CUSTOMER_DELETE, "客户-删除", 48));
+          new PermDef(PermissionCodes.CUSTOMER_IMPORT, "客户-导入", 47),
+          new PermDef(PermissionCodes.CUSTOMER_EXPORT, "客户-导出", 48),
+          new PermDef(PermissionCodes.CUSTOMER_EDIT, "客户-编辑", 49),
+          new PermDef(PermissionCodes.CUSTOMER_DELETE, "客户-删除", 50));
 
   private static final Set<String> ROLES_WITH_ALL_CUSTOMER =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -69,11 +71,13 @@ public class CustomerPermissionSeeder implements ApplicationRunner {
                   () -> {
                     SysPermission created = new SysPermission();
                     created.setCode(def.code());
-                    created.setName(def.name());
                     created.setType(PermissionType.API);
-                    created.setSort(def.sort());
-                    return permissionRepository.save(created);
+                    return created;
                   });
+      permission.setName(def.name());
+      permission.setType(PermissionType.API);
+      permission.setSort(def.sort());
+      permission = permissionRepository.save(permission);
       map.put(def.code(), permission);
     }
     return map;
@@ -118,6 +122,14 @@ public class CustomerPermissionSeeder implements ApplicationRunner {
       customerPermissions.values().forEach(grants::add);
     } else if (roleCodes.contains(PermissionCodes.QUOTE_VIEW)) {
       addIfPresent(customerPermissions, PermissionCodes.CUSTOMER_VIEW, grants);
+    }
+
+    // 兼容：已有「新建」的角色自动获得导入/导出
+    if (roleCodes.contains(PermissionCodes.CUSTOMER_CREATE)
+        || grants.stream()
+            .anyMatch((p) -> PermissionCodes.CUSTOMER_CREATE.equals(p.getCode()))) {
+      addIfPresent(customerPermissions, PermissionCodes.CUSTOMER_IMPORT, grants);
+      addIfPresent(customerPermissions, PermissionCodes.CUSTOMER_EXPORT, grants);
     }
 
     return grants;

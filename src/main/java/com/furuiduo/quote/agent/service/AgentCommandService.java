@@ -146,7 +146,8 @@ public class AgentCommandService {
   }
 
   @Transactional(readOnly = true)
-  public byte[] exportExcel(String code, String name, Integer status, List<Long> ids) {
+  public byte[] exportExcel(
+      String code, String name, Integer status, List<Long> ids, boolean includeCode) {
     List<Agent> items;
     if (RequestIds.present(ids)) {
       items =
@@ -166,21 +167,25 @@ public class AgentCommandService {
               .search(SearchText.orEmpty(code), SearchText.orEmpty(name), status, pageable)
               .getContent();
     }
+    String[] headers = PartyMasterExcelSupport.exportHeaders(EXPORT_HEADERS, includeCode);
     try (Workbook workbook = new XSSFWorkbook()) {
       Sheet sheet = workbook.createSheet("Agents");
-      CostExcelSupport.writeHeaderRow(sheet, EXPORT_HEADERS);
+      CostExcelSupport.writeHeaderRow(sheet, headers);
       int rowIndex = 1;
       for (Agent item : items) {
         Row row = sheet.createRow(rowIndex++);
-        row.createCell(0).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
-        row.createCell(1).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getName()));
-        row.createCell(2).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getShortName()));
-        row.createCell(3)
+        int col = 0;
+        if (includeCode) {
+          row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getCode()));
+        }
+        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getName()));
+        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getShortName()));
+        row.createCell(col++)
             .setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getContactName()));
-        row.createCell(4).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
-        row.createCell(5).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
-        row.createCell(6).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
-        row.createCell(7).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
+        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getPhone()));
+        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getEmail()));
+        row.createCell(col++).setCellValue(PartyMasterExcelSupport.nullToEmpty(item.getRemark()));
+        row.createCell(col).setCellValue(PartyMasterExcelSupport.statusLabel(item.getStatus()));
       }
       return CostExcelSupport.writeWorkbook(workbook);
     } catch (IOException ex) {
