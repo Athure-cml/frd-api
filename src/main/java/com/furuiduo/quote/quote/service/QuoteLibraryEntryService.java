@@ -1,6 +1,7 @@
 package com.furuiduo.quote.quote.service;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,7 @@ import com.furuiduo.quote.cost.repository.CostFumigationRepository;
 import com.furuiduo.quote.cost.repository.CostRoadRepository;
 import com.furuiduo.quote.cost.repository.CostSeaRepository;
 import com.furuiduo.quote.quote.dto.QuoteLibraryPromoteResult;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.quote.entity.QuoteLibraryEntry;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
 import com.furuiduo.quote.quote.repository.QuoteLibraryEntryRepository;
@@ -62,7 +64,16 @@ public class QuoteLibraryEntryService {
 
   public Set<Long> resolveQuoteLibraryRestrictIds(
       CostHighlightMode mode, Set<Long> highlightRestrictIds) {
-    Set<Long> entryIds = entryCostIds(mode);
+    return resolveQuoteLibraryRestrictIds(mode, highlightRestrictIds, null);
+  }
+
+  /**
+   * 报价库列表限制 ID；{@code confirmStatusFilter} 支持逗号/管道分隔多选（如 {@code
+   * pendingConfirm,confirmed}）。
+   */
+  public Set<Long> resolveQuoteLibraryRestrictIds(
+      CostHighlightMode mode, Set<Long> highlightRestrictIds, String confirmStatusFilter) {
+    Set<Long> entryIds = entryCostIds(mode, confirmStatusFilter);
     if (entryIds.isEmpty()) {
       return Set.of();
     }
@@ -72,6 +83,37 @@ public class QuoteLibraryEntryService {
     Set<Long> intersection = new HashSet<>(entryIds);
     intersection.retainAll(highlightRestrictIds);
     return intersection;
+  }
+
+  private Set<Long> entryCostIds(CostHighlightMode mode, String confirmStatusFilter) {
+    Set<QuoteLibraryConfirmStatus> statuses = parseConfirmStatuses(confirmStatusFilter);
+    if (statuses == null) {
+      return entryCostIds(mode);
+    }
+    if (statuses.isEmpty()) {
+      return Set.of();
+    }
+    Set<Long> ids = entryRepository.findCostIdsByCostModeAndConfirmStatusIn(mode, statuses);
+    return ids == null ? Set.of() : ids;
+  }
+
+  /** null=不过滤；空集合=无匹配状态 token。 */
+  private static Set<QuoteLibraryConfirmStatus> parseConfirmStatuses(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    Set<QuoteLibraryConfirmStatus> statuses = new HashSet<>();
+    for (String part : raw.split("[,|]")) {
+      if (part == null || part.isBlank()) {
+        continue;
+      }
+      try {
+        statuses.add(QuoteLibraryConfirmStatus.valueOf(part.trim()));
+      } catch (IllegalArgumentException ignored) {
+        // skip unknown token
+      }
+    }
+    return statuses;
   }
 
   /**
@@ -305,11 +347,64 @@ public class QuoteLibraryEntryService {
       QuoteLibraryEntry entry = new QuoteLibraryEntry();
       entry.setCostMode(mode);
       entry.setCostId(id);
+      entry.setConfirmStatus(QuoteLibraryConfirmStatus.pendingConfirm);
       entry.setPromotedBy(user);
       entryRepository.save(entry);
       promoted++;
     }
     return new QuoteLibraryPromoteResult(promoted, skipped, notFound);
+  }
+
+  /** 批量加载报价库确认状态；不在库中的 costId 不出现在结果中。 */
+  public Map<Long, QuoteLibraryConfirmStatus> loadConfirmStatuses(
+      CostHighlightMode mode, Collection<Long> costIds) {
+    if (costIds == null || costIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, QuoteLibraryConfirmStatus> map = new HashMap<>();
+    for (QuoteLibraryEntry entry : entryRepository.findByCostModeAndCostIdIn(mode, costIds)) {
+      map.put(
+          entry.getCostId(),
+          entry.getConfirmStatus() == null
+              ? QuoteLibraryConfirmStatus.confirmed
+              : entry.getConfirmStatus());
+    }
+    return map;
+  }
+
+  @Transactional
+  public void markPendingConfirm(CostHighlightMode mode, Long costId) {
+    markPendingConfirm(mode, List.of(costId));
+  }
+
+  @Transactional
+  public void markPendingConfirm(CostHighlightMode mode, Collection<Long> costIds) {
+    if (costIds == null || costIds.isEmpty()) {
+      return;
+    }
+    List<QuoteLibraryEntry> entries = entryRepository.findByCostModeAndCostIdIn(mode, costIds);
+    for (QuoteLibraryEntry entry : entries) {
+      entry.setConfirmStatus(QuoteLibraryConfirmStatus.pendingConfirm);
+    }
+    entryRepository.saveAll(entries);
+  }
+
+  @Transactional
+  public int confirm(CostHighlightMode mode, Collection<Long> costIds) {
+    if (costIds == null || costIds.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要确认的记录");
+    }
+    requireInLibrary(mode, costIds);
+    List<QuoteLibraryEntry> entries = entryRepository.findByCostModeAndCostIdIn(mode, costIds);
+    int confirmed = 0;
+    for (QuoteLibraryEntry entry : entries) {
+      if (entry.getConfirmStatus() != QuoteLibraryConfirmStatus.confirmed) {
+        entry.setConfirmStatus(QuoteLibraryConfirmStatus.confirmed);
+        confirmed++;
+      }
+    }
+    entryRepository.saveAll(entries);
+    return confirmed;
   }
 
   @Transactional

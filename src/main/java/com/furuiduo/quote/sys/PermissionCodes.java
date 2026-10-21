@@ -57,12 +57,15 @@ public final class PermissionCodes {
 
   public static final String QUOTE_LIBRARY_ROAD_VIEW = "quote:library:road:view";
   public static final String QUOTE_LIBRARY_ROAD_EDIT = "quote:library:road:edit";
+  public static final String QUOTE_LIBRARY_ROAD_CONFIRM = "quote:library:road:confirm";
   public static final String QUOTE_LIBRARY_ROAD_DELETE = "quote:library:road:delete";
   public static final String QUOTE_LIBRARY_SEA_VIEW = "quote:library:sea:view";
   public static final String QUOTE_LIBRARY_SEA_EDIT = "quote:library:sea:edit";
+  public static final String QUOTE_LIBRARY_SEA_CONFIRM = "quote:library:sea:confirm";
   public static final String QUOTE_LIBRARY_SEA_DELETE = "quote:library:sea:delete";
   public static final String QUOTE_LIBRARY_FUMIGATION_VIEW = "quote:library:fumigation:view";
   public static final String QUOTE_LIBRARY_FUMIGATION_EDIT = "quote:library:fumigation:edit";
+  public static final String QUOTE_LIBRARY_FUMIGATION_CONFIRM = "quote:library:fumigation:confirm";
   public static final String QUOTE_LIBRARY_FUMIGATION_DELETE = "quote:library:fumigation:delete";
 
   public static final String QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW =
@@ -194,12 +197,15 @@ public final class PermissionCodes {
       QUOTE_DELETE,
       QUOTE_LIBRARY_ROAD_VIEW,
       QUOTE_LIBRARY_ROAD_EDIT,
+      QUOTE_LIBRARY_ROAD_CONFIRM,
       QUOTE_LIBRARY_ROAD_DELETE,
       QUOTE_LIBRARY_SEA_VIEW,
       QUOTE_LIBRARY_SEA_EDIT,
+      QUOTE_LIBRARY_SEA_CONFIRM,
       QUOTE_LIBRARY_SEA_DELETE,
       QUOTE_LIBRARY_FUMIGATION_VIEW,
       QUOTE_LIBRARY_FUMIGATION_EDIT,
+      QUOTE_LIBRARY_FUMIGATION_CONFIRM,
       QUOTE_LIBRARY_FUMIGATION_DELETE,
       QUOTE_LIBRARY_ROAD_TEMPLATE_VIEW,
       QUOTE_LIBRARY_ROAD_TEMPLATE_EDIT,

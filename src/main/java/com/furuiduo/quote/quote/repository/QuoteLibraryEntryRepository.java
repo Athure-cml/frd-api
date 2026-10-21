@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.furuiduo.quote.cost.entity.CostHighlightMode;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.quote.entity.QuoteLibraryEntry;
 
 public interface QuoteLibraryEntryRepository extends JpaRepository<QuoteLibraryEntry, Long> {
@@ -24,4 +25,10 @@ public interface QuoteLibraryEntryRepository extends JpaRepository<QuoteLibraryE
 
   @Query("select e.costId from QuoteLibraryEntry e where e.costMode = :mode")
   Set<Long> findCostIdsByCostMode(@Param("mode") CostHighlightMode mode);
+
+  @Query(
+      "select e.costId from QuoteLibraryEntry e where e.costMode = :mode and e.confirmStatus in :statuses")
+  Set<Long> findCostIdsByCostModeAndConfirmStatusIn(
+      @Param("mode") CostHighlightMode mode,
+      @Param("statuses") Collection<QuoteLibraryConfirmStatus> statuses);
 }

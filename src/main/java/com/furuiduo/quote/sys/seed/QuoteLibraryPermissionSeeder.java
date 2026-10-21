@@ -33,28 +33,37 @@ public class QuoteLibraryPermissionSeeder implements ApplicationRunner {
           new PermDef(
               PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT, "卡车报价库-编辑", PermissionType.API, 58),
           new PermDef(
-              PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE, "卡车报价库-删除", PermissionType.API, 59),
+              PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM, "卡车报价库-确认", PermissionType.API, 59),
           new PermDef(
-              PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, "海运报价库-查看", PermissionType.MENU, 60),
+              PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE, "卡车报价库-删除", PermissionType.API, 60),
           new PermDef(
-              PermissionCodes.QUOTE_LIBRARY_SEA_EDIT, "海运报价库-编辑", PermissionType.API, 61),
+              PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, "海运报价库-查看", PermissionType.MENU, 61),
           new PermDef(
-              PermissionCodes.QUOTE_LIBRARY_SEA_DELETE, "海运报价库-删除", PermissionType.API, 62),
+              PermissionCodes.QUOTE_LIBRARY_SEA_EDIT, "海运报价库-编辑", PermissionType.API, 62),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM, "海运报价库-确认", PermissionType.API, 63),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_SEA_DELETE, "海运报价库-删除", PermissionType.API, 64),
           new PermDef(
               PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
               "熏蒸报价库-查看",
               PermissionType.MENU,
-              63),
+              65),
           new PermDef(
               PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT,
               "熏蒸报价库-编辑",
               PermissionType.API,
-              64),
+              66),
+          new PermDef(
+              PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM,
+              "熏蒸报价库-确认",
+              PermissionType.API,
+              67),
           new PermDef(
               PermissionCodes.QUOTE_LIBRARY_FUMIGATION_DELETE,
               "熏蒸报价库-删除",
               PermissionType.API,
-              65));
+              68));
 
   private static final Set<String> ROLES_WITH_ALL =
       Set.of("super_admin", "admin", "dept_manager", "sales");
@@ -160,6 +169,25 @@ public class QuoteLibraryPermissionSeeder implements ApplicationRunner {
         || (roleCodes.contains(PermissionCodes.QUOTE_EDIT)
             && roleCodes.contains(PermissionCodes.COST_FUMIGATION_EDIT))) {
       grants.add(permissions.get(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT));
+    }
+
+    if (roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM)
+        || roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_ROAD_EDIT)
+        || (roleCodes.contains(PermissionCodes.QUOTE_EDIT)
+            && roleCodes.contains(PermissionCodes.COST_ROAD_EDIT))) {
+      grants.add(permissions.get(PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM));
+    }
+    if (roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM)
+        || roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_SEA_EDIT)
+        || (roleCodes.contains(PermissionCodes.QUOTE_EDIT)
+            && roleCodes.contains(PermissionCodes.COST_SEA_EDIT))) {
+      grants.add(permissions.get(PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM));
+    }
+    if (roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM)
+        || roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_EDIT)
+        || (roleCodes.contains(PermissionCodes.QUOTE_EDIT)
+            && roleCodes.contains(PermissionCodes.COST_FUMIGATION_EDIT))) {
+      grants.add(permissions.get(PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM));
     }
 
     if (roleCodes.contains(PermissionCodes.QUOTE_LIBRARY_ROAD_DELETE)

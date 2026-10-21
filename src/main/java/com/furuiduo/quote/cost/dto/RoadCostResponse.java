@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostStatus;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -43,7 +44,8 @@ public record RoadCostResponse(
     @Schema(description = "部门常用标记") CostHighlightView highlight,
     @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
     @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked,
-    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount) {
+    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount,
+    @Schema(description = "报价库确认状态") QuoteLibraryConfirmStatus confirmStatus) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -86,7 +88,8 @@ public record RoadCostResponse(
         highlight,
         false,
         false,
-        0L);
+        0L,
+        null);
   }
 
   public RoadCostResponse withHighlight(CostHighlightView highlight) {
@@ -122,7 +125,8 @@ public record RoadCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public RoadCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
@@ -158,7 +162,8 @@ public record RoadCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public RoadCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
@@ -198,6 +203,44 @@ public record RoadCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount == null ? 0L : quoteCount);
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
+  }
+
+  public RoadCostResponse withConfirmStatus(QuoteLibraryConfirmStatus confirmStatus) {
+    return new RoadCostResponse(
+        id,
+        zipCode,
+        city,
+        state,
+        por,
+        station,
+        pol,
+        supplier,
+        baseFreight,
+        fsc,
+        chassis,
+        triTandemAxle,
+        split,
+        stopOff,
+        allInNoFm,
+        allInFmOneWay,
+        allInFmRound,
+        waitingFee,
+        redelivery,
+        prepull,
+        nsLift,
+        otherFee,
+        remark,
+        validDate,
+        logYardNameAddress,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked,
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
   }
 }

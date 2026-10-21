@@ -23,6 +23,7 @@ import com.furuiduo.quote.cost.service.CostFumigationService;
 import com.furuiduo.quote.cost.service.CostRoadService;
 import com.furuiduo.quote.cost.service.CostSeaService;
 import com.furuiduo.quote.cost.support.CostHighlightQuerySupport;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.sys.entity.SysUser;
 
 @Service
@@ -84,13 +85,15 @@ public class QuoteLibraryService {
       String effectiveDate,
       String validDate,
       String status,
+      String confirmStatus,
       String sortField,
       String sortOrder,
       Boolean highlightOnly) {
     Set<Long> restrictIds =
         quoteLibraryEntryService.resolveQuoteLibraryRestrictIds(
             CostHighlightMode.road,
-            highlightQuerySupport.resolveRestrictIds(CostHighlightMode.road, user, highlightOnly));
+            highlightQuerySupport.resolveRestrictIds(CostHighlightMode.road, user, highlightOnly),
+            confirmStatus);
     PageResult<RoadCostResponse> result =
         highlightService.enrichRoadPage(
             user,
@@ -126,6 +129,7 @@ public class QuoteLibraryService {
       String freightValidDate,
       String freightEffDate,
       String status,
+      String confirmStatus,
       String remark,
       String sortField,
       String sortOrder,
@@ -133,7 +137,8 @@ public class QuoteLibraryService {
     Set<Long> restrictIds =
         quoteLibraryEntryService.resolveQuoteLibraryRestrictIds(
             CostHighlightMode.sea,
-            highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly));
+            highlightQuerySupport.resolveRestrictIds(CostHighlightMode.sea, user, highlightOnly),
+            confirmStatus);
     PageResult<FreightCostResponse> result =
         highlightService.enrichSeaPage(
             user,
@@ -165,6 +170,7 @@ public class QuoteLibraryService {
       String outdoorValidity,
       String indoorValidity,
       String status,
+      String confirmStatus,
       String sortField,
       String sortOrder,
       Boolean highlightOnly) {
@@ -172,7 +178,8 @@ public class QuoteLibraryService {
         quoteLibraryEntryService.resolveQuoteLibraryRestrictIds(
             CostHighlightMode.fumigation,
             highlightQuerySupport.resolveRestrictIds(
-                CostHighlightMode.fumigation, user, highlightOnly));
+                CostHighlightMode.fumigation, user, highlightOnly),
+            confirmStatus);
     PageResult<FumigationCostResponse> result =
         highlightService.enrichFumigationPage(
             user,
@@ -202,6 +209,7 @@ public class QuoteLibraryService {
       String effectiveDate,
       String validDate,
       String status,
+      String confirmStatus,
       Boolean highlightOnly,
       List<Long> ids) {
     if (ids != null && !ids.isEmpty()) {
@@ -219,6 +227,7 @@ public class QuoteLibraryService {
         effectiveDate,
         validDate,
         status,
+        confirmStatus,
         highlightOnly);
   }
 
@@ -233,6 +242,7 @@ public class QuoteLibraryService {
       String freightValidDate,
       String freightEffDate,
       String status,
+      String confirmStatus,
       String remark,
       Boolean highlightOnly,
       List<Long> ids) {
@@ -250,6 +260,7 @@ public class QuoteLibraryService {
         freightValidDate,
         freightEffDate,
         status,
+        confirmStatus,
         remark,
         highlightOnly);
   }
@@ -261,13 +272,21 @@ public class QuoteLibraryService {
       String outdoorValidity,
       String indoorValidity,
       String status,
+      String confirmStatus,
       Boolean highlightOnly,
       List<Long> ids) {
     if (ids != null && !ids.isEmpty()) {
       return listFumigationByIds(user, ids);
     }
     return listAllFumigationForExport(
-        user, region, station, outdoorValidity, indoorValidity, status, highlightOnly);
+        user,
+        region,
+        station,
+        outdoorValidity,
+        indoorValidity,
+        status,
+        confirmStatus,
+        highlightOnly);
   }
 
   public List<RoadCostResponse> applyRoadQuoteRows(List<RoadCostResponse> rows) {
@@ -377,6 +396,7 @@ public class QuoteLibraryService {
       String effectiveDate,
       String validDate,
       String status,
+      String confirmStatus,
       Boolean highlightOnly) {
     java.util.ArrayList<RoadCostResponse> rows = new java.util.ArrayList<>();
     int page = 1;
@@ -397,6 +417,7 @@ public class QuoteLibraryService {
               effectiveDate,
               validDate,
               status,
+              confirmStatus,
               null,
               null,
               highlightOnly);
@@ -421,6 +442,7 @@ public class QuoteLibraryService {
       String freightValidDate,
       String freightEffDate,
       String status,
+      String confirmStatus,
       String remark,
       Boolean highlightOnly) {
     java.util.ArrayList<FreightCostResponse> rows = new java.util.ArrayList<>();
@@ -441,6 +463,7 @@ public class QuoteLibraryService {
               freightValidDate,
               freightEffDate,
               status,
+              confirmStatus,
               remark,
               null,
               null,
@@ -462,6 +485,7 @@ public class QuoteLibraryService {
       String outdoorValidity,
       String indoorValidity,
       String status,
+      String confirmStatus,
       Boolean highlightOnly) {
     java.util.ArrayList<FumigationCostResponse> rows = new java.util.ArrayList<>();
     int page = 1;
@@ -477,6 +501,7 @@ public class QuoteLibraryService {
               outdoorValidity,
               indoorValidity,
               status,
+              confirmStatus,
               null,
               null,
               highlightOnly);
@@ -496,6 +521,8 @@ public class QuoteLibraryService {
         quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.road, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.road, ids);
+    Map<Long, QuoteLibraryConfirmStatus> confirmStatuses =
+        quoteLibraryEntryService.loadConfirmStatuses(CostHighlightMode.road, ids);
     return new PageResult<>(
         source.items().stream()
             .map(
@@ -505,7 +532,11 @@ public class QuoteLibraryService {
                       quoteLibraryApplyService.applyRoadOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
                   long count = quoteCounts.getOrDefault(row.id(), 0L);
-                  return merged.withQuoteUsage(count > 0, count);
+                  return merged
+                      .withQuoteUsage(count > 0, count)
+                      .withConfirmStatus(
+                          confirmStatuses.getOrDefault(
+                              row.id(), QuoteLibraryConfirmStatus.confirmed));
                 })
             .toList(),
         source.total());
@@ -517,6 +548,8 @@ public class QuoteLibraryService {
         quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.sea, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.sea, ids);
+    Map<Long, QuoteLibraryConfirmStatus> confirmStatuses =
+        quoteLibraryEntryService.loadConfirmStatuses(CostHighlightMode.sea, ids);
     return new PageResult<>(
         source.items().stream()
             .map(
@@ -526,7 +559,11 @@ public class QuoteLibraryService {
                       quoteLibraryApplyService.applySeaOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
                   long count = quoteCounts.getOrDefault(row.id(), 0L);
-                  return merged.withQuoteUsage(count > 0, count);
+                  return merged
+                      .withQuoteUsage(count > 0, count)
+                      .withConfirmStatus(
+                          confirmStatuses.getOrDefault(
+                              row.id(), QuoteLibraryConfirmStatus.confirmed));
                 })
             .toList(),
         source.total());
@@ -539,6 +576,8 @@ public class QuoteLibraryService {
         quoteLibraryUsageService.loadQuoteCounts(CostHighlightMode.fumigation, ids);
     Map<Long, Map<String, BigDecimal>> overrides =
         quoteLibraryOverrideService.loadOverrides(CostHighlightMode.fumigation, ids);
+    Map<Long, QuoteLibraryConfirmStatus> confirmStatuses =
+        quoteLibraryEntryService.loadConfirmStatuses(CostHighlightMode.fumigation, ids);
     return new PageResult<>(
         source.items().stream()
             .map(
@@ -548,7 +587,11 @@ public class QuoteLibraryService {
                       quoteLibraryApplyService.applyFumigationOverrides(
                           ruled, overrides.getOrDefault(row.id(), Map.of()));
                   long count = quoteCounts.getOrDefault(row.id(), 0L);
-                  return merged.withQuoteUsage(count > 0, count);
+                  return merged
+                      .withQuoteUsage(count > 0, count)
+                      .withConfirmStatus(
+                          confirmStatuses.getOrDefault(
+                              row.id(), QuoteLibraryConfirmStatus.confirmed));
                 })
             .toList(),
         source.total());

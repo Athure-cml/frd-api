@@ -186,10 +186,11 @@ public class QuoteSheetGenerateService {
                   libraryRow.allInFmRound(),
                   fumigationEnabled,
                   request.oakType());
-          nsLift = libraryRow.nsLift();
-          chassis = resolveExtraChassis(libraryRow);
-          waiting = libraryRow.waitingFee();
-          redeliveryFee = libraryRow.redelivery();
+          // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
+          nsLift = new BigDecimal("150");
+          chassis = new BigDecimal("45");
+          waiting = new BigDecimal("100");
+          redeliveryFee = null;
           truckRemark =
               trim(
                   QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(

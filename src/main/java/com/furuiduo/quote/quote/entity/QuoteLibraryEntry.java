@@ -38,6 +38,10 @@ public class QuoteLibraryEntry {
   @Column(name = "cost_id", nullable = false)
   private Long costId;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "confirm_status", nullable = false, length = 32)
+  private QuoteLibraryConfirmStatus confirmStatus = QuoteLibraryConfirmStatus.pendingConfirm;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "promoted_by")
   private SysUser promotedBy;
@@ -59,6 +63,9 @@ public class QuoteLibraryEntry {
     }
     if (promotedAt == null) {
       promotedAt = now;
+    }
+    if (confirmStatus == null) {
+      confirmStatus = QuoteLibraryConfirmStatus.pendingConfirm;
     }
     updatedAt = now;
   }

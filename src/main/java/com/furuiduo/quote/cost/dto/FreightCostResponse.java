@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.entity.CostStatus;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -39,7 +40,8 @@ public record FreightCostResponse(
     @Schema(description = "部门常用标记") CostHighlightView highlight,
     @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
     @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked,
-    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount) {
+    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount,
+    @Schema(description = "报价库确认状态") QuoteLibraryConfirmStatus confirmStatus) {
 
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -78,7 +80,8 @@ public record FreightCostResponse(
         highlight,
         false,
         false,
-        0L);
+        0L,
+        null);
   }
 
   public FreightCostResponse withHighlight(CostHighlightView highlight) {
@@ -110,7 +113,8 @@ public record FreightCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public FreightCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
@@ -142,7 +146,8 @@ public record FreightCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public FreightCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
@@ -178,7 +183,8 @@ public record FreightCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount == null ? 0L : quoteCount);
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
   }
 
   private static Map<String, Object> migrateSeaExtraFields(Map<String, Object> extraFields) {
@@ -203,5 +209,38 @@ public record FreightCostResponse(
     }
     map.remove(from);
     return true;
+  }
+
+  public FreightCostResponse withConfirmStatus(QuoteLibraryConfirmStatus confirmStatus) {
+    return new FreightCostResponse(
+        id,
+        por,
+        pol,
+        pod,
+        cnShortName,
+        enProductName,
+        containerType,
+        freight,
+        freightValidDate,
+        buc,
+        bucValidDate,
+        ebs,
+        ebsValidDate,
+        gri,
+        griValidDate,
+        others,
+        othersValidDate,
+        allIn,
+        ssl,
+        agent,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked,
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
   }
 }

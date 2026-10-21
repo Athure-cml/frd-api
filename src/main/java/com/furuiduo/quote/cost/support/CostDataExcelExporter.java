@@ -207,8 +207,11 @@ public final class CostDataExcelExporter {
       case "remark" -> item.getRemark();
       case "status" ->
           formatStatusLabel(
-              CostValidityStatus.resolve(
-                  item.getStatus(), item.getOutdoorValidity(), item.getIndoorValidity()));
+              CostValidityStatus.resolveFumigation(
+                  item.getStatus(),
+                  item.getExtraFields(),
+                  item.getOutdoorValidity(),
+                  item.getIndoorValidity()));
       case "updatedAt" ->
           item.getUpdatedAt() == null ? null : item.getUpdatedAt().format(UPDATED_AT_FORMATTER);
       default -> null;

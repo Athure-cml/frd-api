@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.furuiduo.quote.quoterule.OceanFreightRounding;
 import com.furuiduo.quote.quoterule.PorListMatcher;
 import com.furuiduo.quote.quoterule.QuoteRuleContext;
 import com.furuiduo.quote.quoterule.TruckingFeeRounding;
@@ -51,8 +52,12 @@ public class QuoteRuleEngine {
       }
       result = calculateDecimal(rule, result, context);
     }
-    if ("TRUCKING_FEE".equals(normalize(targetField))) {
+    String field = normalize(targetField);
+    if ("TRUCKING_FEE".equals(field)) {
       return TruckingFeeRounding.apply(result);
+    }
+    if ("OCEAN_FREIGHT".equals(field)) {
+      return OceanFreightRounding.apply(result);
     }
     return result;
   }

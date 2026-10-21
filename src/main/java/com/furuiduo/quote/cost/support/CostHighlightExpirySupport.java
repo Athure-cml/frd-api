@@ -68,8 +68,11 @@ public class CostHighlightExpirySupport {
   }
 
   private boolean isFumigationExpired(CostFumigation entity) {
-    return CostValidityStatus.resolve(
-            entity.getStatus(), entity.getOutdoorValidity(), entity.getIndoorValidity())
+    return CostValidityStatus.resolveFumigation(
+            entity.getStatus(),
+            entity.getExtraFields(),
+            entity.getOutdoorValidity(),
+            entity.getIndoorValidity())
         == CostStatus.expired;
   }
 }

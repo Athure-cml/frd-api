@@ -15,6 +15,12 @@ public final class CostValidityStatus {
 
   public static final String ROAD_EFFECTIVE_FIELD = "cf_road_eff";
 
+  /** 熏蒸 FM-OUTDOOR 生效期（extra_fields）。 */
+  public static final String FUM_OUTDOOR_EFF_FIELD = "cf_fum_outdoor_eff";
+
+  /** 熏蒸 FM-INDOOR 生效期（extra_fields）。 */
+  public static final String FUM_INDOOR_EFF_FIELD = "cf_fum_indoor_eff";
+
   private static final Pattern RANGE =
       Pattern.compile(
           "^(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})\\s*[-–—~至到]\\s*(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})$");
@@ -64,6 +70,18 @@ public final class CostValidityStatus {
     return resolveWithEffective(current, roadEffective(extraFields), validDate);
   }
 
+  /**
+   * 熏蒸状态：未生效取两个生效期中最早；生效中/已过期取两个有效期中最晚。
+   */
+  public static CostStatus resolveFumigation(
+      CostStatus current,
+      Map<String, Object> extraFields,
+      String outdoorValidity,
+      String indoorValidity) {
+    return resolveWithEffective(
+        current, fumigationEarliestEffective(extraFields), outdoorValidity, indoorValidity);
+  }
+
   public static boolean matchesFilter(
       CostStatus current, String statusFilter, String... validityTexts) {
     return matchesFilterWithEffective(current, statusFilter, null, validityTexts);
@@ -101,8 +119,29 @@ public final class CostValidityStatus {
         current, statusFilter, roadEffective(extraFields), validDate);
   }
 
+  public static boolean matchesFilterFumigation(
+      CostStatus current,
+      String statusFilter,
+      Map<String, Object> extraFields,
+      String outdoorValidity,
+      String indoorValidity) {
+    return matchesFilterWithEffective(
+        current,
+        statusFilter,
+        fumigationEarliestEffective(extraFields),
+        outdoorValidity,
+        indoorValidity);
+  }
+
   public static String roadEffective(Map<String, Object> extraFields) {
     return extraFieldText(extraFields, ROAD_EFFECTIVE_FIELD);
+  }
+
+  /** 熏蒸未生效：两个生效期取最早一个。 */
+  public static String fumigationEarliestEffective(Map<String, Object> extraFields) {
+    return earliestEffectiveRaw(
+        extraFieldText(extraFields, FUM_OUTDOOR_EFF_FIELD),
+        extraFieldText(extraFields, FUM_INDOOR_EFF_FIELD));
   }
 
   public static String extraFieldText(Map<String, Object> extraFields, String key) {
@@ -122,6 +161,26 @@ public final class CostValidityStatus {
       return null;
     }
     return tryParseRangeStart(raw);
+  }
+
+  /** 多个生效期文本中取起始日最早的原文；皆无法解析则 null。 */
+  private static String earliestEffectiveRaw(String... texts) {
+    LocalDate earliest = null;
+    String chosen = null;
+    if (texts == null) {
+      return null;
+    }
+    for (String text : texts) {
+      LocalDate start = parseEffectiveDate(text);
+      if (start == null) {
+        continue;
+      }
+      if (earliest == null || start.isBefore(earliest)) {
+        earliest = start;
+        chosen = text;
+      }
+    }
+    return chosen;
   }
 
   private static LocalDate latestEndDate(String... validityTexts) {

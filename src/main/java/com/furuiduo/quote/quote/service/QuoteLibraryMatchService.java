@@ -191,10 +191,11 @@ public class QuoteLibraryMatchService {
         null,
         null,
         truckingFee,
-        row.nsLift(),
-        resolveExtraChassis(row),
-        row.waitingFee(),
-        row.redelivery(),
+        // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
+        new BigDecimal("150"),
+        new BigDecimal("45"),
+        new BigDecimal("100"),
+        null,
         QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(
             QuoteCostSnapshotMapper.roadSnapshotFromResponse(row)),
         null,

@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.furuiduo.quote.cost.entity.CostFumigation;
 import com.furuiduo.quote.cost.entity.CostStatus;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
 
@@ -29,7 +30,8 @@ public record FumigationCostResponse(
     @Schema(description = "部门常用标记") CostHighlightView highlight,
     @Schema(description = "是否已入报价库") Boolean inQuoteLibrary,
     @Schema(description = "是否已被报价单引用锁定") Boolean quoteOrderLocked,
-    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount) {
+    @Schema(description = "引用该报价库记录的报价单数量") Long quoteCount,
+    @Schema(description = "报价库确认状态") QuoteLibraryConfirmStatus confirmStatus) {
 
   public static FumigationCostResponse from(CostFumigation entity) {
     return from(entity, null);
@@ -37,8 +39,11 @@ public record FumigationCostResponse(
 
   public static FumigationCostResponse from(CostFumigation entity, CostHighlightView highlight) {
     CostStatus status =
-        CostValidityStatus.resolve(
-            entity.getStatus(), entity.getOutdoorValidity(), entity.getIndoorValidity());
+        CostValidityStatus.resolveFumigation(
+            entity.getStatus(),
+            entity.getExtraFields(),
+            entity.getOutdoorValidity(),
+            entity.getIndoorValidity());
     return new FumigationCostResponse(
         entity.getId(),
         entity.getRegion(),
@@ -57,7 +62,8 @@ public record FumigationCostResponse(
         highlight,
         false,
         false,
-        0L);
+        0L,
+        null);
   }
 
   public FumigationCostResponse withHighlight(CostHighlightView highlight) {
@@ -79,7 +85,8 @@ public record FumigationCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public FumigationCostResponse withInQuoteLibrary(Boolean inQuoteLibrary) {
@@ -101,7 +108,8 @@ public record FumigationCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount);
+        quoteCount,
+        confirmStatus);
   }
 
   public FumigationCostResponse withQuoteOrderLocked(Boolean quoteOrderLocked) {
@@ -127,6 +135,30 @@ public record FumigationCostResponse(
         highlight,
         inQuoteLibrary,
         quoteOrderLocked,
-        quoteCount == null ? 0L : quoteCount);
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
+  }
+
+  public FumigationCostResponse withConfirmStatus(QuoteLibraryConfirmStatus confirmStatus) {
+    return new FumigationCostResponse(
+        id,
+        region,
+        station,
+        outdoorNonOak,
+        outdoorOak,
+        outdoorValidity,
+        indoorNonOak,
+        indoorOak,
+        indoorValidity,
+        address,
+        remark,
+        status,
+        extraFields,
+        updatedAt,
+        highlight,
+        inQuoteLibrary,
+        quoteOrderLocked,
+        quoteCount == null ? 0L : quoteCount,
+        confirmStatus);
   }
 }

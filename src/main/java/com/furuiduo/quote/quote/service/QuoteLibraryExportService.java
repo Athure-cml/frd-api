@@ -50,6 +50,7 @@ public class QuoteLibraryExportService {
       String effectiveDate,
       String validDate,
       String status,
+      String confirmStatus,
       Boolean highlightOnly,
       List<Long> ids,
       String columnsJson) {
@@ -66,6 +67,7 @@ public class QuoteLibraryExportService {
             effectiveDate,
             validDate,
             status,
+            confirmStatus,
             highlightOnly,
             ids);
     if (rows.isEmpty()) {
@@ -91,6 +93,7 @@ public class QuoteLibraryExportService {
       String freightValidDate,
       String freightEffDate,
       String status,
+      String confirmStatus,
       String remark,
       Boolean highlightOnly,
       List<Long> ids,
@@ -107,6 +110,7 @@ public class QuoteLibraryExportService {
             freightValidDate,
             freightEffDate,
             status,
+            confirmStatus,
             remark,
             highlightOnly,
             ids);
@@ -129,6 +133,7 @@ public class QuoteLibraryExportService {
       String outdoorValidity,
       String indoorValidity,
       String status,
+      String confirmStatus,
       Boolean highlightOnly,
       List<Long> ids,
       String columnsJson) {
@@ -137,7 +142,15 @@ public class QuoteLibraryExportService {
             com.furuiduo.quote.cost.entity.CostGridTemplate.LIBRARY_QUOTE, "fumigation", null);
     List<FumigationCostResponse> rows =
         quoteLibraryService.listFumigationForExport(
-            user, region, station, outdoorValidity, indoorValidity, status, highlightOnly, ids);
+            user,
+            region,
+            station,
+            outdoorValidity,
+            indoorValidity,
+            status,
+            confirmStatus,
+            highlightOnly,
+            ids);
     if (rows.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "没有可导出的报价库数据");
     }

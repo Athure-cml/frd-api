@@ -22,10 +22,12 @@ import com.furuiduo.quote.cost.repository.CostSeaRepository;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchDeleteRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchUpdateRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchUpdateResult;
+import com.furuiduo.quote.quote.dto.QuoteLibraryConfirmResult;
 import com.furuiduo.quote.quote.dto.QuoteLibraryEditContext;
 import com.furuiduo.quote.quote.dto.QuoteLibraryPromoteRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryPromoteResult;
 import com.furuiduo.quote.quote.dto.QuoteLibraryUpdateRequest;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.quote.support.QuoteLibraryFeeSupport;
 import com.furuiduo.quote.sys.entity.SysUser;
 
@@ -112,6 +114,7 @@ public class QuoteLibraryMutationService {
     }
     QuoteLibraryFeeSupport.validateFloors(QuoteLibraryFeeSupport.roadCostFloors(entity), fields);
     quoteLibraryOverrideService.mergeOverride(CostHighlightMode.road, id, fields, user);
+    quoteLibraryEntryService.markPendingConfirm(CostHighlightMode.road, id);
     return loadRoadRow(id);
   }
 
@@ -128,6 +131,7 @@ public class QuoteLibraryMutationService {
     }
     QuoteLibraryFeeSupport.validateFloors(QuoteLibraryFeeSupport.seaCostFloors(entity), fields);
     quoteLibraryOverrideService.mergeOverride(CostHighlightMode.sea, id, fields, user);
+    quoteLibraryEntryService.markPendingConfirm(CostHighlightMode.sea, id);
     return loadSeaRow(id);
   }
 
@@ -145,7 +149,38 @@ public class QuoteLibraryMutationService {
     QuoteLibraryFeeSupport.validateFloors(
         QuoteLibraryFeeSupport.fumigationCostFloors(entity), fields);
     quoteLibraryOverrideService.mergeOverride(CostHighlightMode.fumigation, id, fields, user);
+    quoteLibraryEntryService.markPendingConfirm(CostHighlightMode.fumigation, id);
     return loadFumigationRow(id);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult confirmRoad(Long id) {
+    return confirmOne(CostHighlightMode.road, id);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult confirmSea(Long id) {
+    return confirmOne(CostHighlightMode.sea, id);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult confirmFumigation(Long id) {
+    return confirmOne(CostHighlightMode.fumigation, id);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult batchConfirmRoad(QuoteLibraryBatchDeleteRequest request) {
+    return batchConfirm(CostHighlightMode.road, request);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult batchConfirmSea(QuoteLibraryBatchDeleteRequest request) {
+    return batchConfirm(CostHighlightMode.sea, request);
+  }
+
+  @Transactional
+  public QuoteLibraryConfirmResult batchConfirmFumigation(QuoteLibraryBatchDeleteRequest request) {
+    return batchConfirm(CostHighlightMode.fumigation, request);
   }
 
   @Transactional
@@ -208,6 +243,7 @@ public class QuoteLibraryMutationService {
   private QuoteLibraryEditContext reset(CostHighlightMode mode, Long id) {
     quoteLibraryEntryService.requireInLibrary(mode, id);
     quoteLibraryOverrideService.deleteByCostId(mode, id);
+    quoteLibraryEntryService.markPendingConfirm(mode, id);
     return getEditContext(mode, id);
   }
 
@@ -277,7 +313,10 @@ public class QuoteLibraryMutationService {
         quoteLibraryOverrideService
             .loadOverrides(CostHighlightMode.road, List.of(id))
             .getOrDefault(id, Map.of());
-    return quoteLibraryApplyService.applyRoadOverrides(ruled, overrides);
+    return withConfirmStatus(
+        quoteLibraryApplyService.applyRoadOverrides(ruled, overrides),
+        CostHighlightMode.road,
+        id);
   }
 
   private FreightCostResponse loadSeaRow(Long id) {
@@ -288,7 +327,10 @@ public class QuoteLibraryMutationService {
         quoteLibraryOverrideService
             .loadOverrides(CostHighlightMode.sea, List.of(id))
             .getOrDefault(id, Map.of());
-    return quoteLibraryApplyService.applySeaOverrides(ruled, overrides);
+    return withConfirmStatus(
+        quoteLibraryApplyService.applySeaOverrides(ruled, overrides),
+        CostHighlightMode.sea,
+        id);
   }
 
   private FumigationCostResponse loadFumigationRow(Long id) {
@@ -299,7 +341,34 @@ public class QuoteLibraryMutationService {
         quoteLibraryOverrideService
             .loadOverrides(CostHighlightMode.fumigation, List.of(id))
             .getOrDefault(id, Map.of());
-    return quoteLibraryApplyService.applyFumigationOverrides(ruled, overrides);
+    return withConfirmStatus(
+        quoteLibraryApplyService.applyFumigationOverrides(ruled, overrides),
+        CostHighlightMode.fumigation,
+        id);
+  }
+
+  private RoadCostResponse withConfirmStatus(
+      RoadCostResponse row, CostHighlightMode mode, Long id) {
+    return row.withConfirmStatus(
+        quoteLibraryEntryService
+            .loadConfirmStatuses(mode, List.of(id))
+            .getOrDefault(id, QuoteLibraryConfirmStatus.confirmed));
+  }
+
+  private FreightCostResponse withConfirmStatus(
+      FreightCostResponse row, CostHighlightMode mode, Long id) {
+    return row.withConfirmStatus(
+        quoteLibraryEntryService
+            .loadConfirmStatuses(mode, List.of(id))
+            .getOrDefault(id, QuoteLibraryConfirmStatus.confirmed));
+  }
+
+  private FumigationCostResponse withConfirmStatus(
+      FumigationCostResponse row, CostHighlightMode mode, Long id) {
+    return row.withConfirmStatus(
+        quoteLibraryEntryService
+            .loadConfirmStatuses(mode, List.of(id))
+            .getOrDefault(id, QuoteLibraryConfirmStatus.confirmed));
   }
 
   private QuoteLibraryBatchUpdateResult batchUpdate(
@@ -349,7 +418,26 @@ public class QuoteLibraryMutationService {
     }
     int updated =
         quoteLibraryOverrideService.batchMergeOverrides(mode, ids, fields, user);
+    quoteLibraryEntryService.markPendingConfirm(mode, ids);
     return new QuoteLibraryBatchUpdateResult(updated);
+  }
+
+  private QuoteLibraryConfirmResult confirmOne(CostHighlightMode mode, Long id) {
+    if (id == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要确认的记录");
+    }
+    int confirmed = quoteLibraryEntryService.confirm(mode, List.of(id));
+    return new QuoteLibraryConfirmResult(confirmed);
+  }
+
+  private QuoteLibraryConfirmResult batchConfirm(
+      CostHighlightMode mode, QuoteLibraryBatchDeleteRequest request) {
+    List<Long> ids = request == null ? null : request.ids();
+    if (ids == null || ids.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要确认的记录");
+    }
+    int confirmed = quoteLibraryEntryService.confirm(mode, ids);
+    return new QuoteLibraryConfirmResult(confirmed);
   }
 
   private void batchDelete(CostHighlightMode mode, QuoteLibraryBatchDeleteRequest request) {

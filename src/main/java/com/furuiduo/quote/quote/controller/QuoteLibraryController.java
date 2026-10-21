@@ -31,6 +31,7 @@ import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchDeleteRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchUpdateRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryBatchUpdateResult;
+import com.furuiduo.quote.quote.dto.QuoteLibraryConfirmResult;
 import com.furuiduo.quote.quote.dto.QuoteLibraryEditContext;
 import com.furuiduo.quote.quote.dto.QuoteLibraryPromoteRequest;
 import com.furuiduo.quote.quote.dto.QuoteLibraryPromoteResult;
@@ -88,6 +89,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String effectiveDate,
       @RequestParam(required = false) String validDate,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
       @RequestParam(required = false) Boolean highlightOnly) {
@@ -108,6 +110,7 @@ public class QuoteLibraryController {
             effectiveDate,
             validDate,
             status,
+            confirmStatus,
             sortField,
             sortOrder,
             highlightOnly));
@@ -133,6 +136,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String freightValidDate,
       @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) String remark,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
@@ -156,6 +160,7 @@ public class QuoteLibraryController {
             freightValidDate,
             freightEffDate,
             status,
+            confirmStatus,
             remark,
             sortField,
             sortOrder,
@@ -176,6 +181,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String outdoorValidity,
       @RequestParam(required = false) String indoorValidity,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) String sortField,
       @RequestParam(required = false) String sortOrder,
       @RequestParam(required = false) Boolean highlightOnly) {
@@ -192,6 +198,7 @@ public class QuoteLibraryController {
             outdoorValidity,
             indoorValidity,
             status,
+            confirmStatus,
             sortField,
             sortOrder,
             highlightOnly));
@@ -426,6 +433,88 @@ public class QuoteLibraryController {
   }
 
   @Operation(
+      summary = "确认卡车报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/road/{id}/confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> confirmRoad(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.confirmRoad(id));
+  }
+
+  @Operation(
+      summary = "确认海运报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/sea/{id}/confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> confirmSea(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.confirmSea(id));
+  }
+
+  @Operation(
+      summary = "确认熏蒸报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/fumigation/{id}/confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> confirmFumigation(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.confirmFumigation(id));
+  }
+
+  @Operation(
+      summary = "批量确认卡车报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/road/batch-confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> batchConfirmRoad(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody QuoteLibraryBatchDeleteRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user, PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW, PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.batchConfirmRoad(request));
+  }
+
+  @Operation(
+      summary = "批量确认海运报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/sea/batch-confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> batchConfirmSea(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody QuoteLibraryBatchDeleteRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user, PermissionCodes.QUOTE_LIBRARY_SEA_VIEW, PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.batchConfirmSea(request));
+  }
+
+  @Operation(
+      summary = "批量确认熏蒸报价库记录",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/fumigation/batch-confirm")
+  public ApiResponse<QuoteLibraryConfirmResult> batchConfirmFumigation(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @RequestBody QuoteLibraryBatchDeleteRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireQuoteLibraryConfirm(
+        user,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM);
+    return ApiResponse.ok(quoteLibraryMutationService.batchConfirmFumigation(request));
+  }
+
+  @Operation(
       summary = "批量删除卡车报价库记录",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/road/batch-delete")
@@ -480,6 +569,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String effectiveDate,
       @RequestParam(required = false) String validDate,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) Boolean highlightOnly,
       @RequestParam(required = false) String ids,
       @RequestParam(required = false) String columns) {
@@ -498,6 +588,7 @@ public class QuoteLibraryController {
             effectiveDate,
             validDate,
             status,
+            confirmStatus,
             highlightOnly,
             RequestIds.parse(ids),
             columns);
@@ -522,6 +613,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String freightValidDate,
       @RequestParam(required = false) String freightEffDate,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) String remark,
       @RequestParam(required = false) Boolean highlightOnly,
       @RequestParam(required = false) String ids,
@@ -543,6 +635,7 @@ public class QuoteLibraryController {
             freightValidDate,
             freightEffDate,
             status,
+            confirmStatus,
             remark,
             highlightOnly,
             RequestIds.parse(ids),
@@ -562,6 +655,7 @@ public class QuoteLibraryController {
       @RequestParam(required = false) String outdoorValidity,
       @RequestParam(required = false) String indoorValidity,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) String confirmStatus,
       @RequestParam(required = false) Boolean highlightOnly,
       @RequestParam(required = false) String ids,
       @RequestParam(required = false) String columns) {
@@ -576,6 +670,7 @@ public class QuoteLibraryController {
             outdoorValidity,
             indoorValidity,
             status,
+            confirmStatus,
             highlightOnly,
             RequestIds.parse(ids),
             columns);
@@ -620,6 +715,14 @@ public class QuoteLibraryController {
     requireQuoteLibraryView(user, libraryViewPermission);
     if (!permissionService.hasPermission(user, libraryDeletePermission)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价库删除权限");
+    }
+  }
+
+  private void requireQuoteLibraryConfirm(
+      SysUser user, String libraryViewPermission, String libraryConfirmPermission) {
+    requireQuoteLibraryView(user, libraryViewPermission);
+    if (!permissionService.hasPermission(user, libraryConfirmPermission)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少报价库确认权限");
     }
   }
 

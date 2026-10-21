@@ -194,9 +194,10 @@ public class CostFumigationService {
             .filter(item -> matchesFumigationDateSearch(item, ov, iv))
             .filter(
                 item ->
-                    CostValidityStatus.matchesFilter(
+                    CostValidityStatus.matchesFilterFumigation(
                         item.getStatus(),
                         statusFilter,
+                        item.getExtraFields(),
                         item.getOutdoorValidity(),
                         item.getIndoorValidity()))
             .toList();
@@ -423,9 +424,10 @@ public class CostFumigationService {
                 .filter(item -> matchesFumigationDateSearch(item, ov, iv))
                 .filter(
                     item ->
-                        CostValidityStatus.matchesFilter(
+                        CostValidityStatus.matchesFilterFumigation(
                             item.getStatus(),
                             statusFilter,
+                            item.getExtraFields(),
                             item.getOutdoorValidity(),
                             item.getIndoorValidity()))
                 .sorted(Comparator.comparing(CostFumigation::getId))
@@ -482,6 +484,12 @@ public class CostFumigationService {
     CostTemplateImportSupport.applyCustomFields("fumigation", layout, row, headers, extra);
     entity.setExtraFields(extra);
     normalizeFumigationImportDates(entity, layout);
+    entity.setStatus(
+        CostValidityStatus.resolveFumigation(
+            CostStatus.active,
+            entity.getExtraFields(),
+            entity.getOutdoorValidity(),
+            entity.getIndoorValidity()));
     return entity;
   }
 
@@ -527,9 +535,6 @@ public class CostFumigationService {
             readHeader(row, headers, "FM-INDOOR VALIDITY", "FM INDOOR VALIDITY", "有效期")));
     entity.setAddress(firstNonBlank(values.get("address"), readHeader(row, headers, "ADDRESS")));
     entity.setRemark(firstNonBlank(values.get("remark"), readHeader(row, headers, "REMARK 备注", "备注", "REMARK")));
-    entity.setStatus(
-        CostValidityStatus.resolve(
-            CostStatus.active, entity.getOutdoorValidity(), entity.getIndoorValidity()));
     return entity;
   }
 
@@ -604,9 +609,6 @@ public class CostFumigationService {
       entity.setAddress(CostExcelSupport.cellString(row.getCell(8)));
     }
     entity.setExtraFields(extra);
-    entity.setStatus(
-        CostValidityStatus.resolve(
-            CostStatus.active, entity.getOutdoorValidity(), entity.getIndoorValidity()));
     return entity;
   }
 
@@ -687,12 +689,16 @@ public class CostFumigationService {
     entity.setIndoorValidity(request.indoorValidity());
     entity.setAddress(request.address());
     entity.setRemark(request.remark());
-    entity.setStatus(
-        CostValidityStatus.resolve(
-            CostStatus.active, request.outdoorValidity(), request.indoorValidity()));
+    // null 表示未传（保留旧值）；空 map 表示整包清空
     if (request.extraFields() != null) {
       entity.setExtraFields(new LinkedHashMap<>(request.extraFields()));
     }
+    entity.setStatus(
+        CostValidityStatus.resolveFumigation(
+            CostStatus.active,
+            entity.getExtraFields(),
+            entity.getOutdoorValidity(),
+            entity.getIndoorValidity()));
   }
 
   private CostFumigation requireEntity(Long id) {
