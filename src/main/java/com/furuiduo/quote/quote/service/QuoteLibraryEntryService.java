@@ -277,11 +277,14 @@ public class QuoteLibraryEntryService {
   }
 
   /**
-   * 成本修改后同步报价库：清除该成本在报价库的手动加价覆盖，使展示值按最新成本重新套用报价规则。
+   * 成本修改后同步报价库：仅当关键价格字段变化时，清除手动加价覆盖并标记引用报价单的成本异常。
+   * 续期回填有效期等非价格变更应传 {@code watchedFeesChanged=false}。
    */
   @Transactional
-  public void syncAfterCostUpdate(CostHighlightMode mode, Long costId) {
-    if (costId == null || !entryRepository.existsByCostModeAndCostId(mode, costId)) {
+  public void syncAfterCostUpdate(CostHighlightMode mode, Long costId, boolean watchedFeesChanged) {
+    if (!watchedFeesChanged
+        || costId == null
+        || !entryRepository.existsByCostModeAndCostId(mode, costId)) {
       return;
     }
     quoteLibraryOverrideService.deleteByCostId(mode, costId);
@@ -289,8 +292,9 @@ public class QuoteLibraryEntryService {
   }
 
   @Transactional
-  public void syncAfterCostUpdate(CostHighlightMode mode, Collection<Long> costIds) {
-    if (costIds == null || costIds.isEmpty()) {
+  public void syncAfterCostUpdate(
+      CostHighlightMode mode, Collection<Long> costIds, boolean watchedFeesChanged) {
+    if (!watchedFeesChanged || costIds == null || costIds.isEmpty()) {
       return;
     }
     List<Long> inLibrary =

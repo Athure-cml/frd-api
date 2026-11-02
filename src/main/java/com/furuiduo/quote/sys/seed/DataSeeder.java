@@ -148,6 +148,11 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.QUOTE_SUBMIT,
                 PermissionCodes.QUOTE_APPROVE,
                 PermissionCodes.QUOTE_EXPORT,
+                PermissionCodes.INQUIRY_VIEW,
+                PermissionCodes.INQUIRY_CREATE,
+                PermissionCodes.INQUIRY_EDIT,
+                PermissionCodes.INQUIRY_SUBMIT,
+                PermissionCodes.INQUIRY_DELETE,
                 PermissionCodes.APPROVAL_CONFIG_VIEW,
                 PermissionCodes.APPROVAL_CONFIG_MANAGE,
                 PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
@@ -192,6 +197,11 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.QUOTE_SUBMIT,
                 PermissionCodes.QUOTE_APPROVE,
                 PermissionCodes.QUOTE_EXPORT,
+                PermissionCodes.INQUIRY_VIEW,
+                PermissionCodes.INQUIRY_CREATE,
+                PermissionCodes.INQUIRY_EDIT,
+                PermissionCodes.INQUIRY_SUBMIT,
+                PermissionCodes.INQUIRY_DELETE,
                 PermissionCodes.APPROVAL_CONFIG_VIEW,
                 PermissionCodes.APPROVAL_CONFIG_MANAGE,
                 PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
@@ -232,6 +242,11 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.QUOTE_EDIT,
                 PermissionCodes.QUOTE_SUBMIT,
                 PermissionCodes.QUOTE_EXPORT,
+                PermissionCodes.INQUIRY_VIEW,
+                PermissionCodes.INQUIRY_CREATE,
+                PermissionCodes.INQUIRY_EDIT,
+                PermissionCodes.INQUIRY_SUBMIT,
+                PermissionCodes.INQUIRY_DELETE,
                 PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
                 PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
                 PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
@@ -260,6 +275,7 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW,
                 PermissionCodes.QUOTE_VIEW,
                 PermissionCodes.QUOTE_EXPORT,
+                PermissionCodes.INQUIRY_VIEW,
                 PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
                 PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
                 PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW,
@@ -282,6 +298,7 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.COST_SEA_TEMPLATE_VIEW,
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW,
                 PermissionCodes.QUOTE_VIEW,
+                PermissionCodes.INQUIRY_VIEW,
                 PermissionCodes.CUSTOMER_VIEW,
                 PermissionCodes.CURRENCY_VIEW,
                 PermissionCodes.EXCHANGE_RATE_VIEW)));
@@ -306,7 +323,8 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW,
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_EDIT,
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_DELETE,
-                PermissionCodes.QUOTE_VIEW)));
+                PermissionCodes.QUOTE_VIEW,
+                PermissionCodes.INQUIRY_VIEW)));
     roles.put(
         "finance",
         saveRole(
@@ -323,6 +341,7 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.COST_SEA_TEMPLATE_VIEW,
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW,
                 PermissionCodes.QUOTE_VIEW,
+                PermissionCodes.INQUIRY_VIEW,
                 PermissionCodes.QUOTE_APPROVE,
                 PermissionCodes.QUOTE_EXPORT,
                 PermissionCodes.APPROVAL_CONFIG_VIEW,
@@ -349,6 +368,7 @@ public class DataSeeder implements ApplicationRunner {
                 PermissionCodes.COST_SEA_TEMPLATE_VIEW,
                 PermissionCodes.COST_FUMIGATION_TEMPLATE_VIEW,
                 PermissionCodes.QUOTE_VIEW,
+                PermissionCodes.INQUIRY_VIEW,
                 PermissionCodes.CURRENCY_VIEW,
                 PermissionCodes.EXCHANGE_RATE_VIEW)));
 

@@ -36,10 +36,10 @@ public interface CostRoadRepository extends JpaRepository<CostRoad, Long> {
   @Query(
       """
       SELECT r FROM CostRoad r WHERE
-      (:zipCode = '' OR LOWER(COALESCE(r.zipCode, '')) LIKE LOWER(CONCAT('%', :zipCode, '%')))
+      (:zipCode = '' OR cast(function('regexp_like', COALESCE(r.zipCode, ''), :zipCode, 'i') as boolean))
       AND (:filterCities = false OR UPPER(TRIM(r.city)) IN :cities)
-      AND (:state = '' OR LOWER(COALESCE(r.state, '')) LIKE LOWER(CONCAT('%', :state, '%')))
-      AND (:por = '' OR LOWER(COALESCE(r.por, '')) LIKE LOWER(CONCAT('%', :por, '%')))
+      AND (:state = '' OR cast(function('regexp_like', COALESCE(r.state, ''), :state, 'i') as boolean))
+      AND (:por = '' OR cast(function('regexp_like', COALESCE(r.por, ''), :por, 'i') as boolean))
       AND (:pol = '' OR LOWER(COALESCE(r.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
       AND (:filterSuppliers = false OR UPPER(TRIM(r.supplier)) IN :suppliers)
       AND (:redelivery IS NULL OR r.redelivery = :redelivery)

@@ -47,6 +47,7 @@ import com.furuiduo.quote.cost.support.CostMasterRefValidator;
 import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
+import com.furuiduo.quote.quote.support.QuoteCostRiskFeeSupport;
 
 @Service
 public class CostFumigationService {
@@ -93,8 +94,8 @@ public class CostFumigationService {
       int pageSize,
       String region,
       String station,
-      String outdoorValidity,
-      String indoorValidity,
+      String effectiveDate,
+      String validity,
       String status,
       String sortField,
       String sortOrder,
@@ -104,13 +105,13 @@ public class CostFumigationService {
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
-    String r = SearchText.orEmpty(region);
-    String st = SearchText.orEmpty(station);
-    String ov = SearchText.orEmpty(outdoorValidity);
-    String iv = SearchText.orEmpty(indoorValidity);
+    String r = SearchText.toRegex(region);
+    String st = SearchText.toRegex(station);
+    String eff = SearchText.orEmpty(effectiveDate);
+    String valid = SearchText.orEmpty(validity);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
-    boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
+    boolean filterDates = !eff.isEmpty() || !valid.isEmpty();
     CostGridSort.Parsed sort = CostGridSort.parseFumigation(sortField, sortOrder);
     boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
 
@@ -129,7 +130,7 @@ public class CostFumigationService {
     List<CostFumigation> filtered =
         CostHighlightListFilter.filterByIds(
             findMatchingFumigation(
-                region, station, outdoorValidity, indoorValidity, status, sort),
+                region, station, effectiveDate, validity, status, sort),
             restrictToIds,
             CostFumigation::getId);
     return finalizeFumigationPage(paginate(filtered, safePage, safePageSize));
@@ -139,8 +140,8 @@ public class CostFumigationService {
   public List<Long> listIds(
       String region,
       String station,
-      String outdoorValidity,
-      String indoorValidity,
+      String effectiveDate,
+      String validity,
       String status,
       String sortField,
       String sortOrder,
@@ -148,13 +149,13 @@ public class CostFumigationService {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
       return List.of();
     }
-    String r = SearchText.orEmpty(region);
-    String st = SearchText.orEmpty(station);
-    String ov = SearchText.orEmpty(outdoorValidity);
-    String iv = SearchText.orEmpty(indoorValidity);
+    String r = SearchText.toRegex(region);
+    String st = SearchText.toRegex(station);
+    String eff = SearchText.orEmpty(effectiveDate);
+    String valid = SearchText.orEmpty(validity);
     String statusFilter = status;
     boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
-    boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
+    boolean filterDates = !eff.isEmpty() || !valid.isEmpty();
     CostGridSort.Parsed sort = CostGridSort.parseFumigation(sortField, sortOrder);
     boolean memoryPath = filterStatus || filterDates || CostGridSort.needsMemorySort(sort);
 
@@ -168,7 +169,7 @@ public class CostFumigationService {
     }
     return CostHighlightListFilter.filterByIds(
             findMatchingFumigation(
-                region, station, outdoorValidity, indoorValidity, status, sort),
+                region, station, effectiveDate, validity, status, sort),
             restrictToIds,
             CostFumigation::getId)
         .stream()
@@ -179,19 +180,19 @@ public class CostFumigationService {
   private List<CostFumigation> findMatchingFumigation(
       String region,
       String station,
-      String outdoorValidity,
-      String indoorValidity,
+      String effectiveDate,
+      String validity,
       String status,
       CostGridSort.Parsed sort) {
-    String r = SearchText.orEmpty(region);
-    String st = SearchText.orEmpty(station);
-    String ov = SearchText.orEmpty(outdoorValidity);
-    String iv = SearchText.orEmpty(indoorValidity);
+    String r = SearchText.toRegex(region);
+    String st = SearchText.toRegex(station);
+    String eff = SearchText.orEmpty(effectiveDate);
+    String valid = SearchText.orEmpty(validity);
     String statusFilter = status;
     var pageable = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "id"));
     List<CostFumigation> items =
         repository.search(r, st, false, List.of(-1L), pageable).getContent().stream()
-            .filter(item -> matchesFumigationDateSearch(item, ov, iv))
+            .filter(item -> matchesFumigationDateSearch(item, eff, valid))
             .filter(
                 item ->
                     CostValidityStatus.matchesFilterFumigation(
@@ -211,8 +212,8 @@ public class CostFumigationService {
     return findMatchingFumigation(
         CostBatchCriteriaMaps.string(criteria, "region"),
         CostBatchCriteriaMaps.string(criteria, "station"),
-        CostBatchCriteriaMaps.string(criteria, "outdoorValidity"),
-        CostBatchCriteriaMaps.string(criteria, "indoorValidity"),
+        CostBatchCriteriaMaps.string(criteria, "effectiveDate"),
+        CostBatchCriteriaMaps.string(criteria, "validity"),
         CostBatchCriteriaMaps.string(criteria, "status"),
         null);
   }
@@ -253,11 +254,16 @@ public class CostFumigationService {
     quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.fumigation, id);
     validateSave(request);
     CostFumigation entity = requireEntity(id);
+    String feeBefore = QuoteCostRiskFeeSupport.fumigationSignature(entity);
     applySave(entity, request);
     validateMasterRefs(entity);
     entity.touch();
     FumigationCostResponse saved = FumigationCostResponse.from(repository.save(entity));
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.fumigation, id);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.fumigation,
+        id,
+        QuoteCostRiskFeeSupport.changed(
+            feeBefore, QuoteCostRiskFeeSupport.fumigationSignature(entity)));
     return saved;
   }
 
@@ -300,6 +306,7 @@ public class CostFumigationService {
     int previewLimit =
         CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
     List<FumigationCostResponse> items = new ArrayList<>();
+    List<Long> feeChangedIds = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
       if (previewOnly && items.size() >= previewLimit) {
@@ -311,16 +318,22 @@ public class CostFumigationService {
         applyFumigationBatchUpdateFields(preview, fields);
         items.add(FumigationCostResponse.from(preview));
       } else {
+        String feeBefore = QuoteCostRiskFeeSupport.fumigationSignature(entity);
         applyFumigationBatchUpdateFields(entity, fields);
         entity.touch();
         repository.save(entity);
         updated++;
+        if (QuoteCostRiskFeeSupport.changed(
+            feeBefore, QuoteCostRiskFeeSupport.fumigationSignature(entity))) {
+          feeChangedIds.add(id);
+        }
       }
     }
     if (previewOnly) {
       return new CostBatchUpdateResult<>(total, items, total);
     }
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.fumigation, ids);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.fumigation, feeChangedIds, !feeChangedIds.isEmpty());
     return new CostBatchUpdateResult<>(updated, List.of(), total);
   }
 
@@ -391,8 +404,8 @@ public class CostFumigationService {
   public byte[] exportExcel(
       String region,
       String station,
-      String outdoorValidity,
-      String indoorValidity,
+      String effectiveDate,
+      String validity,
       String status,
       Long templateId,
       List<Long> ids) {
@@ -405,15 +418,15 @@ public class CostFumigationService {
     } else {
       String statusFilter = status;
       boolean filterStatus = statusFilter != null && !statusFilter.isBlank();
-      String ov = SearchText.orEmpty(outdoorValidity);
-      String iv = SearchText.orEmpty(indoorValidity);
-      boolean filterDates = !ov.isEmpty() || !iv.isEmpty();
+      String eff = SearchText.orEmpty(effectiveDate);
+      String valid = SearchText.orEmpty(validity);
+      boolean filterDates = !eff.isEmpty() || !valid.isEmpty();
       var pageable = Pageable.unpaged(Sort.by(Sort.Direction.ASC, "id"));
       items =
           repository
               .search(
-                  SearchText.orEmpty(region),
-                  SearchText.orEmpty(station),
+                  SearchText.toRegex(region),
+                  SearchText.toRegex(station),
                   false,
                   List.of(-1L),
                   pageable)
@@ -421,7 +434,7 @@ public class CostFumigationService {
       if (filterStatus || filterDates) {
         items =
             items.stream()
-                .filter(item -> matchesFumigationDateSearch(item, ov, iv))
+                .filter(item -> matchesFumigationDateSearch(item, eff, valid))
                 .filter(
                     item ->
                         CostValidityStatus.matchesFilterFumigation(
@@ -439,10 +452,16 @@ public class CostFumigationService {
     return CostDataExcelExporter.exportFumigation(items, layout);
   }
 
+  /**
+   * 列表/导出日期筛选（新版熏蒸）：生效期取 extraFields.cf_fum_eff（兼容旧版 FM-OUT/FM-IN 生效期），
+   * 有效期取 outdoor_validity 单日值。
+   */
   private boolean matchesFumigationDateSearch(
-      CostFumigation item, String outdoorSearch, String indoorSearch) {
-    return CostDateSearchFilter.matchesValidTo(item.getOutdoorValidity(), outdoorSearch)
-        && CostDateSearchFilter.matchesValidTo(item.getIndoorValidity(), indoorSearch);
+      CostFumigation item, String effectiveSearch, String validitySearch) {
+    return CostDateSearchFilter.matchesEffFrom(
+            CostValidityStatus.fumigationEarliestEffective(item.getExtraFields()),
+            effectiveSearch)
+        && CostDateSearchFilter.matchesValidTo(item.getOutdoorValidity(), validitySearch);
   }
 
   private PageResult<FumigationCostResponse> finalizeFumigationPage(

@@ -41,6 +41,12 @@ public class UsZipImportService {
   private static final Logger log = LoggerFactory.getLogger(UsZipImportService.class);
   private static final int BATCH_SIZE = 500;
   private static final Map<String, String> STATE_NAME_ZH = buildStateNameZh();
+  /**
+   * GeoNames 源数据城市名与系统标准名不一致时的定向修正。
+   * 注意：不要放"Mc X → McX"这类全量规则——库内 100+ 城市均为 GeoNames 的
+   * "Mc X" 格式，全量替换会导致导入时批量造出无空格的重复城市行。
+   */
+  private static final Map<String, String> CITY_NAME_FIXES = Map.of("Mc Gregor", "McGregor");
 
   private final MdUsStateRepository stateRepository;
   private final MdDestCityRepository cityRepository;
@@ -328,7 +334,7 @@ public class UsZipImportService {
     if (zipCode.isEmpty() || cityName.isEmpty() || stateCode.isEmpty()) {
       return null;
     }
-    return new GeonamesRow(zipCode, cityName, stateName, stateCode);
+    return new GeonamesRow(zipCode, CITY_NAME_FIXES.getOrDefault(cityName, cityName), stateName, stateCode);
   }
 
   private static int findStateCodeIndex(String[] parts) {

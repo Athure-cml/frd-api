@@ -103,7 +103,8 @@ public final class CostTemplateLayoutTools {
           "cf_sea_bunker_eff",
           "cf_sea_others_eff",
           "cf_fum_outdoor_eff",
-          "cf_fum_indoor_eff");
+          "cf_fum_indoor_eff",
+          "cf_fum_eff");
 
   private static final java.util.Set<String> SEEDED_INDOOR_REQUIRED_FIELDS =
       java.util.Set.of("indoorNonOak", "indoorOak", "indoorValidity", "address", "cf_fum_indoor_eff");

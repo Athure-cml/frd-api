@@ -1,5 +1,6 @@
 package com.furuiduo.quote.quote.support;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -16,6 +17,10 @@ public final class QuoteDateTimes {
 
   public static String format(LocalDateTime value) {
     return value == null ? null : value.format(FORMATTER);
+  }
+
+  public static String format(LocalDate value) {
+    return value == null ? null : value.format(DATE_FORMATTER);
   }
 
   public static String formatDate(LocalDateTime value) {

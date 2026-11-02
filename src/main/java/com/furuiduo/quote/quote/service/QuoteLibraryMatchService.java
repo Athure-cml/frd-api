@@ -191,7 +191,7 @@ public class QuoteLibraryMatchService {
         null,
         null,
         truckingFee,
-        // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
+        null,        // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
         new BigDecimal("150"),
         new BigDecimal("45"),
         new BigDecimal("100"),
@@ -241,6 +241,7 @@ public class QuoteLibraryMatchService {
         null,
         null,
         null,
+        null,
         null);
   }
 
@@ -248,6 +249,7 @@ public class QuoteLibraryMatchService {
       FumigationCostResponse row, LocalDate quoteDate) {
     FumigationRates rates = resolveFumigationRates(row, quoteDate);
     return new QuoteSheetFieldsDto(
+        null,
         null,
         null,
         null,

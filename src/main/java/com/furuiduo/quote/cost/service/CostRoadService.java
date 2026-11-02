@@ -56,6 +56,7 @@ import com.furuiduo.quote.cost.support.RoadAllInFormulaEvaluator;
 import com.furuiduo.quote.masterdata.dto.DestZipResolveItemResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
 import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
+import com.furuiduo.quote.quote.support.QuoteCostRiskFeeSupport;
 import com.furuiduo.quote.supplier.repository.SupplierRepository;
 
 @Service
@@ -144,11 +145,11 @@ public class CostRoadService {
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
-    String z = SearchText.orEmpty(zipCode);
+    String z = SearchText.toRegex(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
     SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
-    String st = SearchText.orEmpty(state);
-    String p = SearchText.orEmpty(por);
+    String st = SearchText.toRegex(state);
+    String p = SearchText.toRegex(por);
     String pl = SearchText.orEmpty(pol);
     String vd = SearchText.orEmpty(validDate);
     String ed = SearchText.orEmpty(effectiveDate);
@@ -220,11 +221,11 @@ public class CostRoadService {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
       return List.of();
     }
-    String z = SearchText.orEmpty(zipCode);
+    String z = SearchText.toRegex(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
     SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
-    String st = SearchText.orEmpty(state);
-    String p = SearchText.orEmpty(por);
+    String st = SearchText.toRegex(state);
+    String p = SearchText.toRegex(por);
     String pl = SearchText.orEmpty(pol);
     String vd = SearchText.orEmpty(validDate);
     String ed = SearchText.orEmpty(effectiveDate);
@@ -289,11 +290,11 @@ public class CostRoadService {
       String validDate,
       String status,
       CostGridSort.Parsed sort) {
-    String z = SearchText.orEmpty(zipCode);
+    String z = SearchText.toRegex(zipCode);
     CitySearchParams cityFilter = CitySearchParams.from(city);
     SupplierSearchParams supplierFilter = SupplierSearchParams.from(supplier);
-    String st = SearchText.orEmpty(state);
-    String p = SearchText.orEmpty(por);
+    String st = SearchText.toRegex(state);
+    String p = SearchText.toRegex(por);
     String pl = SearchText.orEmpty(pol);
     String ed = SearchText.orEmpty(effectiveDate);
     String vd = SearchText.orEmpty(validDate);
@@ -441,7 +442,7 @@ public class CostRoadService {
             CostStatus.active, source.getExtraFields(), previousValidText));
     source.touch();
     repository.save(source);
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, sourceId);
+    // 续期只回填源行有效期，不触发报价成本异常
     copyHighlightsIfRequested(sourceId, created.id());
     return created;
   }
@@ -511,13 +512,17 @@ public class CostRoadService {
   public RoadCostResponse update(Long id, RoadCostSaveRequest request) {
     quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.road, id);
     CostRoad entity = requireEntity(id);
+    String feeBefore = QuoteCostRiskFeeSupport.roadSignature(entity);
     applySave(entity, request);
     fillMissingAllInFromFormulas(entity);
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
     RoadCostResponse saved = RoadCostResponse.from(repository.save(entity));
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, id);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.road,
+        id,
+        QuoteCostRiskFeeSupport.changed(feeBefore, QuoteCostRiskFeeSupport.roadSignature(entity)));
     return saved;
   }
 
@@ -559,6 +564,7 @@ public class CostRoadService {
     int previewLimit =
         CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
     List<RoadCostResponse> items = new ArrayList<>();
+    List<Long> feeChangedIds = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
       if (previewOnly && items.size() >= previewLimit) {
@@ -573,6 +579,7 @@ public class CostRoadService {
         }
         items.add(RoadCostResponse.from(preview));
       } else {
+        String feeBefore = QuoteCostRiskFeeSupport.roadSignature(entity);
         applyRoadFieldOverrides(entity, fields, false);
         if (fields.containsKey("supplier")) {
           validateMasterRefs(entity);
@@ -580,12 +587,17 @@ public class CostRoadService {
         entity.touch();
         repository.save(entity);
         updated++;
+        if (QuoteCostRiskFeeSupport.changed(
+            feeBefore, QuoteCostRiskFeeSupport.roadSignature(entity))) {
+          feeChangedIds.add(id);
+        }
       }
     }
     if (previewOnly) {
       return new CostBatchUpdateResult<>(total, items, total);
     }
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.road, ids);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.road, feeChangedIds, !feeChangedIds.isEmpty());
     return new CostBatchUpdateResult<>(updated, List.of(), total);
   }
 
@@ -887,11 +899,11 @@ public class CostRoadService {
       items =
           repository
               .search(
-                  SearchText.orEmpty(zipCode),
+                  SearchText.toRegex(zipCode),
                   cityFilter.filterCities(),
                   cityFilter.cities(),
-                  SearchText.orEmpty(state),
-                  SearchText.orEmpty(por),
+                  SearchText.toRegex(state),
+                  SearchText.toRegex(por),
                   SearchText.orEmpty(pol),
                   supplierFilter.filterSuppliers(),
                   supplierFilter.suppliers(),
@@ -1270,9 +1282,13 @@ public class CostRoadService {
   }
 
   private void applySave(CostRoad entity, RoadCostSaveRequest request) {
-    entity.setZipCode(request.zipCode());
-    entity.setCity(request.city());
-    entity.setState(request.state());
+    // 地址规范化：缺 ZIP 用 City+State 补（多邮编/无邮编保持为空）；缺 City/State 用 ZIP 反带
+    DestAddressService.RouteAddress address =
+        destAddressService.normalizeRouteAddress(
+            request.zipCode(), request.city(), request.state());
+    entity.setZipCode(address.zipCode());
+    entity.setCity(address.city());
+    entity.setState(address.state());
     entity.setPor(request.por());
     entity.setStation(request.station());
     entity.setPol(request.pol());

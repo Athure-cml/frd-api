@@ -42,6 +42,7 @@ public final class CostTemplateLayouts {
 
   private static final String FUM_OUTDOOR_EFF = "cf_fum_outdoor_eff";
   private static final String FUM_INDOOR_EFF = "cf_fum_indoor_eff";
+  private static final String FUM_EFF = "cf_fum_eff";
 
   private static final List<String> SEA_DEFAULT_FIELD_ORDER =
       List.of(
@@ -76,8 +77,8 @@ public final class CostTemplateLayouts {
     List<String> fieldOrder =
         List.of(
             "zipCode",
-            "city",
             "state",
+            "city",
             "por",
             "station",
             "supplier",
@@ -235,7 +236,37 @@ public final class CostTemplateLayouts {
     return new CostTableFieldOverride(null, null, null, "left", null, null, null, null, null);
   }
 
+  /** 新版熏蒸默认：单级表头（截图版） */
   public static CostTableTemplateLayout fumigationDefault() {
+    List<String> fieldOrder =
+        List.of(
+            "region",
+            "station",
+            "outdoorNonOak",
+            "outdoorOak",
+            FUM_EFF,
+            "outdoorValidity",
+            "address",
+            "remark");
+    Map<String, CostTableFieldOverride> fieldOverrides = new java.util.LinkedHashMap<>();
+    fieldOverrides.put("region", titledRequired("REGION"));
+    fieldOverrides.put("station", titledRequired("STATION"));
+    fieldOverrides.put("outdoorNonOak", titledRequired("FM NON OAK"));
+    fieldOverrides.put("outdoorOak", titledRequired("FM OAK"));
+    fieldOverrides.put(FUM_EFF, titledRequired("生效期"));
+    fieldOverrides.put("outdoorValidity", titledRequired("有效期"));
+    fieldOverrides.put("address", titled("ADDRESS"));
+    fieldOverrides.put("remark", titled("备注"));
+
+    List<CostTableCustomFieldDef> customFields =
+        List.of(new CostTableCustomFieldDef(FUM_EFF, "生效期", true, "date"));
+
+    return new CostTableTemplateLayout(
+        List.of(), fieldOrder, fieldOverrides, fieldOrder, customFields);
+  }
+
+  /** 旧版熏蒸二级表头（历史快照 / legacy 模板） */
+  public static CostTableTemplateLayout fumigationLegacy() {
     List<String> fieldOrder =
         List.of(
             "region",

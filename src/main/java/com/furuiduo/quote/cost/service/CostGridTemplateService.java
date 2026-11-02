@@ -42,6 +42,7 @@ public class CostGridTemplateService {
     String normalizedLibrary = normalizeLibrary(library);
     String normalized = normalizeMode(mode);
     return repository.findByLibraryAndModeOrderByIdAsc(normalizedLibrary, normalized).stream()
+        .filter(item -> !item.isLegacy())
         .sorted(
             (a, b) -> {
               if (a.isDefaultTemplate() != b.isDefaultTemplate()) {
@@ -126,8 +127,9 @@ public class CostGridTemplateService {
     entity.setLayout(layout);
     boolean isDefault =
         Boolean.TRUE.equals(request.isDefault())
-            || repository.countByLibraryAndMode(normalizedLibrary, mode) == 0;
+            || countActiveTemplates(normalizedLibrary, mode) == 0;
     entity.setDefaultTemplate(isDefault);
+    entity.setLegacy(false);
     entity.touch();
     repository.save(entity);
 
@@ -146,6 +148,7 @@ public class CostGridTemplateService {
   public CostTableTemplateResponse update(
       String library, Long id, CostTableTemplateSaveRequest request) {
     CostGridTemplate entity = requireEntity(library, id);
+    rejectLegacyMutation(entity);
     String mode = entity.getMode();
     if (!mode.equals(normalizeMode(request.mode()))) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "mode cannot be changed");
@@ -185,6 +188,7 @@ public class CostGridTemplateService {
   @Transactional
   public void delete(String library, Long id) {
     CostGridTemplate entity = requireEntity(library, id);
+    rejectLegacyMutation(entity);
     if (entity.isDefaultTemplate()) {
       long count = repository.countByLibraryAndMode(entity.getLibrary(), entity.getMode());
       if (count <= 1) {
@@ -205,6 +209,7 @@ public class CostGridTemplateService {
   @Transactional
   public CostTableTemplateResponse setDefault(String library, Long id) {
     CostGridTemplate entity = requireEntity(library, id);
+    rejectLegacyMutation(entity);
     entity.setDefaultTemplate(true);
     entity.touch();
     repository.save(entity);
@@ -284,6 +289,9 @@ public class CostGridTemplateService {
         .findByLibraryAndModeOrderByIdAsc(current.getLibrary(), current.getMode())
         .forEach(
             item -> {
+              if (item.isLegacy()) {
+                return;
+              }
               if (!item.getId().equals(current.getId()) && item.isDefaultTemplate()) {
                 item.setDefaultTemplate(false);
                 item.touch();
@@ -294,12 +302,16 @@ public class CostGridTemplateService {
 
   /** 取消当前默认后，自动将同 mode 下另一条模板设为默认，避免零默认。 */
   private void promoteAnotherDefault(CostGridTemplate cleared) {
-    if (repository
-        .findFirstByLibraryAndModeAndDefaultTemplateTrue(cleared.getLibrary(), cleared.getMode())
-        .isPresent()) {
+    boolean hasActiveDefault =
+        repository
+            .findByLibraryAndModeOrderByIdAsc(cleared.getLibrary(), cleared.getMode())
+            .stream()
+            .anyMatch(item -> !item.isLegacy() && item.isDefaultTemplate());
+    if (hasActiveDefault) {
       return;
     }
     repository.findByLibraryAndModeOrderByIdAsc(cleared.getLibrary(), cleared.getMode()).stream()
+        .filter(item -> !item.isLegacy())
         .filter(item -> !item.getId().equals(cleared.getId()))
         .findFirst()
         .ifPresent(
@@ -308,6 +320,19 @@ public class CostGridTemplateService {
               item.touch();
               repository.save(item);
             });
+  }
+
+  private long countActiveTemplates(String library, String mode) {
+    return repository.findByLibraryAndModeOrderByIdAsc(library, mode).stream()
+        .filter(item -> !item.isLegacy())
+        .count();
+  }
+
+  private static void rejectLegacyMutation(CostGridTemplate entity) {
+    if (entity.isLegacy()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "Legacy fumigation template is locked");
+    }
   }
 
   private String resolvePreviewCode(String mode, String requestCode) {

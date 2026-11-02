@@ -2,8 +2,10 @@ package com.furuiduo.quote.cost.support;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -90,6 +92,10 @@ public class CostMasterRefValidator {
     }
     if (!CostRoadZipPlaceholder.skipsZipMasterCheck(zipCode)) {
       error = requireZip(zipCode);
+      if (error != null) {
+        return error;
+      }
+      error = requireZipCityConsistency(entity);
       if (error != null) {
         return error;
       }
@@ -217,6 +223,43 @@ public class CostMasterRefValidator {
       return missing("ZIP CODE", zip.isEmpty() ? zipCode : zip);
     }
     return null;
+  }
+
+  /**
+   * ZIP 与 CITY/STATE 一致性校验（严格拦截）：ZIP 在主数据中有映射但与填写的
+   * CITY/STATE 对不上时拒绝该行。ZIP 缺失由 tryEnrichZipFromCityState 反查补全；
+   * ZIP 为占位符（待补录 / CITY、STATE有误）时跳过。
+   */
+  private String requireZipCityConsistency(CostRoad entity) {
+    String zip = normalizeToken(entity.getZipCode());
+    String city = normalizeToken(entity.getCity());
+    String state = normalizeToken(entity.getState());
+    if (zip.isEmpty() || city.isEmpty() || state.isEmpty()) {
+      return null;
+    }
+    List<Object[]> mappings = destZipRepository.findCityStateByZipCode(zip);
+    if (mappings.isEmpty()) {
+      return null;
+    }
+    for (Object[] mapping : mappings) {
+      if (String.valueOf(mapping[0]).equalsIgnoreCase(state)
+          && String.valueOf(mapping[1]).equalsIgnoreCase(city)) {
+        return null;
+      }
+    }
+    Set<String> masterNames = new LinkedHashSet<>();
+    for (Object[] mapping : mappings) {
+      masterNames.add(String.valueOf(mapping[1]) + ", " + String.valueOf(mapping[0]));
+    }
+    return "ZIP「"
+        + zip
+        + "」在系统主数据中属于 "
+        + String.join(" / ", masterNames)
+        + "，与填写的 CITY/STATE「"
+        + city
+        + ", "
+        + state
+        + "」不匹配，请修正 Excel 后重新导入";
   }
 
   private String requirePort(String name, String label, Collection<PortType> types) {

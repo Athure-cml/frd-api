@@ -45,4 +45,36 @@ public final class SearchText {
         .distinct()
         .toList();
   }
+
+  /**
+   * 多选搜索值 → PostgreSQL 正则（各值 OR）。空串表示不筛选。
+   *
+   * <p>分隔符支持管道符（前端多选拼接）、换行、制表符；港口名/供应商名常含逗号，不可用逗号分隔。
+   * 返回值中正则元字符已转义，用户点选的名称按“包含”语义匹配（等同于原 LIKE '%x%'）。
+   */
+  public static String toRegex(String value) {
+    if (value == null || value.isBlank()) {
+      return "";
+    }
+    String regex =
+        Arrays.stream(value.split("[|\\r\\n\\t]+", -1))
+            .map(String::trim)
+            .filter(part -> !part.isEmpty())
+            .distinct()
+            .map(SearchText::escapeRegex)
+            .reduce((left, right) -> left + "|" + right)
+            .orElse("");
+    return regex;
+  }
+
+  private static String escapeRegex(String token) {
+    StringBuilder escaped = new StringBuilder(token.length() + 8);
+    for (char ch : token.toCharArray()) {
+      if ("\\^$.|?*+()[]{}".indexOf(ch) >= 0) {
+        escaped.append('\\');
+      }
+      escaped.append(ch);
+    }
+    return escaped.toString();
+  }
 }

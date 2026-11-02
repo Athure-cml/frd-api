@@ -36,6 +36,10 @@ public class QuoteOrder {
   @Column(name = "quote_no", nullable = false, unique = true, length = 32)
   private String quoteNo;
 
+  /** 来源询价单；历史报价可为空 */
+  @Column(name = "inquiry_id")
+  private Long inquiryId;
+
   /** 服务类型多选：SEA / FUMIGATION / TRUCK / INSURANCE / TRADE / OTHER */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "service_types", nullable = false)
@@ -57,6 +61,11 @@ public class QuoteOrder {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 16)
   private QuoteStatus status = QuoteStatus.DRAFT;
+
+  /** 已归档原因；仅 status=ARCHIVED 时有值 */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "archive_reason", length = 32)
+  private QuoteArchiveReason archiveReason;
 
   @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
   private BigDecimal totalAmount = BigDecimal.ZERO;
@@ -134,6 +143,10 @@ public class QuoteOrder {
   @Column(name = "trucking_fee", precision = 14, scale = 2)
   private BigDecimal truckingFee;
 
+  /** 第二条卡车费（引入 2 条卡车报价库时） */
+  @Column(name = "trucking_fee_2", precision = 14, scale = 2)
+  private BigDecimal truckingFee2;
+
   @Column(name = "ns_lift", precision = 14, scale = 2)
   private BigDecimal nsLift;
 
@@ -167,7 +180,8 @@ public class QuoteOrder {
   @Column(length = 512)
   private String remark;
 
-  @Column(name = "created_by", nullable = false)
+  /** 操作人：询价递交生成时可为空，报价员首次保存后写入 */
+  @Column(name = "created_by")
   private Long createdBy;
 
   @Column(name = "created_by_name", length = 64)
@@ -236,6 +250,17 @@ public class QuoteOrder {
   /** 软删时间：有审批记录的草稿删除后仍保留审批与打印快照 */
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /** 最近一次已报价发信状态（quote_mail_log 最新一条的冗余，供列表筛选） */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "last_mail_status", length = 20)
+  private QuoteMailStatus lastMailStatus;
+
+  @Column(name = "last_mail_at")
+  private LocalDateTime lastMailAt;
+
+  @Column(name = "last_mail_error", length = 500)
+  private String lastMailError;
 
   @OneToMany(mappedBy = "quoteOrder", cascade = CascadeType.ALL, orphanRemoval = true)
   @OrderBy("sort ASC, id ASC")

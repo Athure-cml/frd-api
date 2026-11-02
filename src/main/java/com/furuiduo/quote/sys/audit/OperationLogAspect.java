@@ -2,6 +2,7 @@ package com.furuiduo.quote.sys.audit;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -28,6 +29,8 @@ import jakarta.servlet.http.HttpServletRequest;
 @Aspect
 @Component
 public class OperationLogAspect {
+
+  private static final Pattern MAIL_URI = Pattern.compile("^/quotes/\\d+/mail(/|$)");
 
   private final AuthService authService;
   private final OperationLogService operationLogService;
@@ -60,6 +63,11 @@ public class OperationLogAspect {
 
     String requestUri = request.getRequestURI();
     if (requestUri.startsWith("/sys/operation-logs")) {
+      return joinPoint.proceed();
+    }
+    // 报价邮件相关接口由 QuoteQuotedMailService 自行记录真实发送结果（成功/失败/跳过），
+    // 这里跳过自动记录，避免出现「新建报价单」这类按 HTTP 动词兜底的错误摘要。
+    if (MAIL_URI.matcher(requestUri).find()) {
       return joinPoint.proceed();
     }
 

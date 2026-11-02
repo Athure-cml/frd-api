@@ -13,6 +13,27 @@ spring:
   # 本地密钥：复制 application-secrets.yml.example → application-secrets.yml 后填写
   config:
     import: optional:file:./application-secrets.yml,optional:classpath:application-secrets.yml
+  # 企业微信邮箱 SMTP（账号密码放 secrets / 环境变量）
+  mail:
+    host: ${QUOTE_MAIL_HOST:smtp.exmail.qq.com}
+    port: ${QUOTE_MAIL_PORT:465}
+    username: ${QUOTE_MAIL_USERNAME:}
+    password: ${QUOTE_MAIL_PASSWORD:}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+            trust: "*"
+          socketFactory:
+            class: javax.net.ssl.SSLSocketFactory
+            port: 465
+          connectiontimeout: 15000
+          timeout: 20000
+          writetimeout: 20000
   jpa:
     hibernate:
       ddl-auto: none
@@ -30,6 +51,16 @@ spring:
 
 quote:
   upload-dir: ./uploads
+  # 企业微信邮箱 / 腾讯企业邮：报价确认后发打印模板 PDF
+  mail:
+    enabled: ${QUOTE_MAIL_ENABLED:false}
+    from: ${QUOTE_MAIL_FROM:}
+    from-name: ${QUOTE_MAIL_FROM_NAME:FRD GLOBAL (SH) CO., LTD.}
+    subject-prefix: ${QUOTE_MAIL_SUBJECT_PREFIX:[福瑞多报价]}
+    # PDF 中文字体（Linux 部署请指向可用的 ttf/ttc，如 Noto Sans CJK）
+    pdf-font-path: ${QUOTE_MAIL_PDF_FONT_PATH:}
+    # Chrome/Edge 路径（生成与「报价单样式预览→打印」一致的 PDF）；空则自动探测
+    chrome-path: ${QUOTE_MAIL_CHROME_PATH:}
   cost:
     reset: ${QUOTE_COST_RESET:false}
     # 生产默认关闭：空成本库不再自动灌测试数据。本地需要样例时设 QUOTE_COST_SEED_IF_EMPTY=true

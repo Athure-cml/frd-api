@@ -21,6 +21,9 @@ public final class CostValidityStatus {
   /** 熏蒸 FM-INDOOR 生效期（extra_fields）。 */
   public static final String FUM_INDOOR_EFF_FIELD = "cf_fum_indoor_eff";
 
+  /** 新版熏蒸单一生效期（extra_fields）。 */
+  public static final String FUM_EFF_FIELD = "cf_fum_eff";
+
   private static final Pattern RANGE =
       Pattern.compile(
           "^(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})\\s*[-–—~至到]\\s*(\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2})$");
@@ -137,8 +140,14 @@ public final class CostValidityStatus {
     return extraFieldText(extraFields, ROAD_EFFECTIVE_FIELD);
   }
 
-  /** 熏蒸未生效：两个生效期取最早一个。 */
+  /**
+   * 熏蒸生效期：新版单一生效期 cf_fum_eff 优先；旧版取 FM-OUTDOOR / FM-INDOOR 中较早一个。
+   */
   public static String fumigationEarliestEffective(Map<String, Object> extraFields) {
+    String single = extraFieldText(extraFields, FUM_EFF_FIELD);
+    if (single != null && !single.isBlank()) {
+      return single;
+    }
     return earliestEffectiveRaw(
         extraFieldText(extraFields, FUM_OUTDOOR_EFF_FIELD),
         extraFieldText(extraFields, FUM_INDOOR_EFF_FIELD));

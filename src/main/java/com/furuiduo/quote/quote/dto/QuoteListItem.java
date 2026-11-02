@@ -24,6 +24,7 @@ public record QuoteListItem(
     @Schema(description = "运输方式") String transportMode,
     @Schema(description = "路线摘要") String routeSummary,
     @Schema(description = "状态") String status,
+    @Schema(description = "归档原因：SUPERSEDED|QUOTED_EXPIRED|PENDING_EXPIRED") String archiveReason,
     @Schema(description = "总金额") BigDecimal totalAmount,
     @Schema(description = "ALL IN（业务表费用合计）") BigDecimal allIn,
     @Schema(description = "报价日期") String quoteDate,
@@ -33,6 +34,7 @@ public record QuoteListItem(
     @Schema(description = "是否已过期") boolean expired,
     @Schema(description = "是否已作废") boolean voided,
     @Schema(description = "业务表字段") QuoteSheetFieldsDto sheet,
+    @Schema(description = "引入卡车报价库的 SUPPLIER（来自 ROAD 成本快照，不落库）") String supplier,
     @Schema(description = "创建人ID") Long createdBy,
     @Schema(description = "创建人") String createdByName,
     @Schema(description = "当前用户是否可操作（创建人或超级管理员）") boolean operable,
@@ -41,6 +43,7 @@ public record QuoteListItem(
     @Schema(description = "是否存在底层成本变更风险") boolean costRiskActive,
     @Schema(description = "成本风险说明") String costRiskReason,
     @Schema(description = "成本风险标记时间") String costRiskAt,
+    @Schema(description = "版本族根单 ID") Long rootQuoteId,
     @Schema(description = "修订号，0=原版") Integer revisionNo,
     @Schema(description = "修订标签，如 R1") String revisionLabel,
     @Schema(description = "是否当前生效版本") boolean currentVersion,
@@ -48,11 +51,16 @@ public record QuoteListItem(
         Map<String, Object> libraryRow) {
 
   public static QuoteListItem from(QuoteOrder order, boolean operable) {
-    return from(order, operable, null);
+    return from(order, operable, null, null);
   }
 
   public static QuoteListItem from(
       QuoteOrder order, boolean operable, Map<String, Object> libraryRow) {
+    return from(order, operable, libraryRow, null);
+  }
+
+  public static QuoteListItem from(
+      QuoteOrder order, boolean operable, Map<String, Object> libraryRow, String supplier) {
     Integer revisionNo = order.getRevisionNo() == null ? 0 : order.getRevisionNo();
     return new QuoteListItem(
         order.getId(),
@@ -63,7 +71,8 @@ public record QuoteListItem(
         order.getCustomerName(),
         order.getTransportMode().name(),
         order.getRouteSummary(),
-        QuoteStatusSupport.displayStatus(order.getStatus()),
+        QuoteStatusSupport.displayStatus(order),
+        order.getArchiveReason() == null ? null : order.getArchiveReason().name(),
         order.getTotalAmount(),
         QuoteSheetAllInSupport.computeAllIn(order),
         QuoteDateTimes.formatDate(order.getCreatedAt()),
@@ -73,6 +82,7 @@ public record QuoteListItem(
         QuoteStatusSupport.isExpired(order),
         QuoteStatusSupport.isVoided(order),
         QuoteSheetFieldsDto.from(order),
+        blankToNull(supplier),
         order.getCreatedBy(),
         order.getCreatedByName(),
         operable,
@@ -81,6 +91,7 @@ public record QuoteListItem(
         Boolean.TRUE.equals(order.getCostRiskActive()),
         order.getCostRiskReason(),
         QuoteDateTimes.format(order.getCostRiskAt()),
+        QuoteStatusSupport.resolveRootQuoteId(order),
         revisionNo,
         QuoteStatusSupport.revisionLabel(revisionNo),
         order.getCurrentVersion() == null || Boolean.TRUE.equals(order.getCurrentVersion()),
@@ -98,6 +109,7 @@ public record QuoteListItem(
         transportMode,
         routeSummary,
         status,
+        archiveReason,
         totalAmount,
         allIn,
         quoteDate,
@@ -107,6 +119,7 @@ public record QuoteListItem(
         expired,
         voided,
         sheet,
+        supplier,
         createdBy,
         createdByName,
         operable,
@@ -115,9 +128,18 @@ public record QuoteListItem(
         costRiskActive,
         costRiskReason,
         costRiskAt,
+        rootQuoteId,
         revisionNo,
         revisionLabel,
         currentVersion,
         libraryRow);
+  }
+
+  private static String blankToNull(String value) {
+    if (value == null) {
+      return null;
+    }
+    String trimmed = value.trim();
+    return trimmed.isEmpty() ? null : trimmed;
   }
 }

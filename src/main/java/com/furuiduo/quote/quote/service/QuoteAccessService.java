@@ -45,8 +45,12 @@ public class QuoteAccessService {
       }
     }
     if (scope == DataScope.ASSIGNED) {
+      // 尚未认领操作人的报价单对「指定数据」范围可见，便于报价员接手
+      if (order.getCreatedBy() == null) {
+        return;
+      }
       Set<Long> assigned = permissionService.resolveAssignedDataUserIds(user);
-      if (order.getCreatedBy() != null && assigned.contains(order.getCreatedBy())) {
+      if (assigned.contains(order.getCreatedBy())) {
         return;
       }
     }
@@ -61,14 +65,33 @@ public class QuoteAccessService {
   }
 
   public boolean canOperate(SysUser user, QuoteOrder order) {
+    // 尚未认领操作人的报价单（询价递交生成）：可读即可操作，首次操作时写入操作人
+    if (order.getCreatedBy() == null) {
+      return true;
+    }
     return isSuperAdmin(user) || user.getId().equals(order.getCreatedBy());
   }
 
-  /** 单据生命周期操作：仅创建人或超级管理员 */
+  /**
+   * 询价递交生成的报价单操作人初始为空；首次保存/确认等操作时认领为当前用户。
+   * 仅改内存实体，由调用方随后 save。
+   */
+  public void claimOperatorIfAbsent(QuoteOrder order, SysUser user) {
+    if (order.getCreatedBy() != null) {
+      return;
+    }
+    order.setCreatedBy(user.getId());
+    order.setCreatedByName(user.getRealName());
+    if (order.getDeptId() == null && user.getDepartment() != null) {
+      order.setDeptId(user.getDepartment().getId());
+    }
+  }
+
+  /** 单据生命周期操作：操作人、超级管理员，或尚未认领的待报价单 */
   public void assertOperable(SysUser user, QuoteOrder order) {
     assertReadable(user, order);
     if (!canOperate(user, order)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅创建人或超级管理员可操作");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅操作人或超级管理员可操作");
     }
   }
 }

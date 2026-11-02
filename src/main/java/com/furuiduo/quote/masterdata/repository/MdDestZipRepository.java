@@ -15,35 +15,40 @@ import com.furuiduo.quote.masterdata.entity.MdDestZip;
 
 public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
 
+  /**
+   * 以城市为主表 LEFT JOIN 邮编：没有邮编的城市也会出现在列表/搜索结果中
+   * （此类行的 id 为 -cityId，zipCode 为 null，供前端识别为「仅城市」行）。
+   */
   @Query(
       value =
           """
           SELECT new com.furuiduo.quote.masterdata.dto.DestAddressRowResponse(
-            z.id, s.code, s.id, c.name, c.id, z.zipCode)
-          FROM MdDestZip z, MdDestCity c, MdUsState s
-          WHERE c.id = z.cityId
-            AND s.id = c.stateId
-            AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
+            CASE WHEN z.id IS NULL THEN -c.id ELSE z.id END,
+            s.code, s.id, c.name, c.id, z.zipCode)
+          FROM MdDestCity c
+          JOIN MdUsState s ON s.id = c.stateId
+          LEFT JOIN MdDestZip z ON z.cityId = c.id
+          WHERE (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
               :keyword = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
               OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
-              OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
+              OR (z.zipCode IS NOT NULL AND UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%')))
             )
           ORDER BY s.code ASC, c.name ASC, z.zipCode ASC
           """,
       countQuery =
           """
-          SELECT COUNT(z)
-          FROM MdDestZip z, MdDestCity c, MdUsState s
-          WHERE c.id = z.cityId
-            AND s.id = c.stateId
-            AND (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
+          SELECT COUNT(c)
+          FROM MdDestCity c
+          JOIN MdUsState s ON s.id = c.stateId
+          LEFT JOIN MdDestZip z ON z.cityId = c.id
+          WHERE (:stateCode = '' OR UPPER(s.code) = UPPER(:stateCode))
             AND (
               :keyword = ''
               OR UPPER(s.code) LIKE CONCAT('%', UPPER(:keyword), '%')
               OR UPPER(c.name) LIKE UPPER(CONCAT('%', :keyword, '%'))
-              OR UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%'))
+              OR (z.zipCode IS NOT NULL AND UPPER(z.zipCode) LIKE UPPER(CONCAT('%', :keyword, '%')))
             )
           """)
   Page<DestAddressRowResponse> searchRows(
@@ -142,4 +147,16 @@ public interface MdDestZipRepository extends JpaRepository<MdDestZip, Long> {
       """)
   List<String> findDistinctCityNamesByZipCode(
       @Param("zipCode") String zipCode, @Param("stateCode") String stateCode);
+
+  /** 邮编 → [州码, 城市名] 全量映射（导入时校验 ZIP 与 CITY/STATE 一致性用）。 */
+  @Query(
+      """
+      SELECT s.code, c.name
+      FROM MdDestZip z, MdDestCity c, MdUsState s
+      WHERE z.cityId = c.id
+        AND c.stateId = s.id
+        AND UPPER(TRIM(z.zipCode)) = UPPER(TRIM(:zipCode))
+      ORDER BY s.code ASC, c.name ASC
+      """)
+  List<Object[]> findCityStateByZipCode(@Param("zipCode") String zipCode);
 }

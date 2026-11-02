@@ -42,6 +42,10 @@ public class QuoteLibraryEntry {
   @Column(name = "confirm_status", nullable = false, length = 32)
   private QuoteLibraryConfirmStatus confirmStatus = QuoteLibraryConfirmStatus.pendingConfirm;
 
+  /** 归档：旧版熏蒸报价库条目对业务列表隐藏 */
+  @Column(nullable = false)
+  private boolean archived = false;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "promoted_by")
   private SysUser promotedBy;

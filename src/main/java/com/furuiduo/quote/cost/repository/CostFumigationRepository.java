@@ -16,17 +16,24 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
   @Query(
       """
       SELECT f FROM CostFumigation f WHERE
-      (:station = '' OR UPPER(TRIM(f.station)) = UPPER(:station))
+      f.archived = false
+      AND (:station = '' OR UPPER(TRIM(f.station)) = UPPER(:station))
       ORDER BY f.updatedAt DESC
       """)
   List<CostFumigation> matchByStation(@Param("station") String station);
 
+  /**
+   * 熏蒸点下拉选项来源：成本库中未归档、有站点名称的记录去重。
+   * 归档（archived=true）多为历史/迁移数据，不应再出现在报价单、询价单的可选列表中。
+   */
   @Query(
       value =
           """
           SELECT DISTINCT TRIM(station) AS station
           FROM cost_fumigation
-          WHERE station IS NOT NULL AND TRIM(station) <> ''
+          WHERE archived = false
+            AND station IS NOT NULL
+            AND TRIM(station) <> ''
           ORDER BY station
           """,
       nativeQuery = true)
@@ -35,8 +42,9 @@ public interface CostFumigationRepository extends JpaRepository<CostFumigation, 
   @Query(
       """
       SELECT f FROM CostFumigation f WHERE
-      (:region = '' OR LOWER(COALESCE(f.region, '')) LIKE LOWER(CONCAT('%', :region, '%')))
-      AND (:station = '' OR LOWER(COALESCE(f.station, '')) LIKE LOWER(CONCAT('%', :station, '%')))
+      f.archived = false
+      AND (:region = '' OR cast(function('regexp_like', COALESCE(f.region, ''), :region, 'i') as boolean))
+      AND (:station = '' OR cast(function('regexp_like', COALESCE(f.station, ''), :station, 'i') as boolean))
       AND (:restrictIds = false OR f.id IN :ids)
       """)
   Page<CostFumigation> search(

@@ -9,7 +9,7 @@ public record WorkspaceTodoDto(
     @Schema(description = "客户名称") String customer,
     @Schema(
             description =
-                "待办类型：completeDraft/approveQuote/followSent/confirmWon/reviewCostRisk/archiveLost")
+                "待办类型：completeDraft/approveQuote/followSent/confirmWon/reviewCostRisk/archiveLost/pendingQuote/confirmLibraryRoad/confirmLibrarySea/confirmLibraryFumigation")
         String todoType,
     @Schema(description = "优先级：urgent/high/medium") String priority,
     @Schema(description = "时间标签") String time,

@@ -26,15 +26,20 @@ public interface CostSeaRepository extends JpaRepository<CostSea, Long> {
       @Param("pod") String pod,
       @Param("ssl") String ssl);
 
+  /**
+   * 列表/导出搜索：por、pol、pod、ssl、containerType、agent 支持多选，
+   * 参数为「值1|值2」形式，服务层转成正则后由 regexp_like 做 OR 包含匹配
+   * （pol 等字段存 "A/B" 并联值，必须用包含匹配而非 IN）。
+   */
   @Query(
       """
       SELECT s FROM CostSea s WHERE
-      (:por = '' OR LOWER(COALESCE(s.por, '')) LIKE LOWER(CONCAT('%', :por, '%')))
-      AND (:pol = '' OR LOWER(COALESCE(s.pol, '')) LIKE LOWER(CONCAT('%', :pol, '%')))
-      AND (:pod = '' OR LOWER(COALESCE(s.pod, '')) LIKE LOWER(CONCAT('%', :pod, '%')))
-      AND (:ssl = '' OR LOWER(COALESCE(s.ssl, '')) LIKE LOWER(CONCAT('%', :ssl, '%')))
-      AND (:containerType = '' OR LOWER(COALESCE(s.containerType, '')) LIKE LOWER(CONCAT('%', :containerType, '%')))
-      AND (:agent = '' OR LOWER(COALESCE(s.agent, '')) LIKE LOWER(CONCAT('%', :agent, '%')))
+      (:por = '' OR cast(function('regexp_like', COALESCE(s.por, ''), :por, 'i') as boolean))
+      AND (:pol = '' OR cast(function('regexp_like', COALESCE(s.pol, ''), :pol, 'i') as boolean))
+      AND (:pod = '' OR cast(function('regexp_like', COALESCE(s.pod, ''), :pod, 'i') as boolean))
+      AND (:ssl = '' OR cast(function('regexp_like', COALESCE(s.ssl, ''), :ssl, 'i') as boolean))
+      AND (:containerType = '' OR cast(function('regexp_like', COALESCE(s.containerType, ''), :containerType, 'i') as boolean))
+      AND (:agent = '' OR cast(function('regexp_like', COALESCE(s.agent, ''), :agent, 'i') as boolean))
       AND (:remark = '' OR LOWER(COALESCE(s.remark, '')) LIKE LOWER(CONCAT('%', :remark, '%')))
       AND (:restrictIds = false OR s.id IN :ids)
       """)

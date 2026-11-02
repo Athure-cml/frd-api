@@ -47,6 +47,7 @@ public final class MenuRegistry {
         .meta("title", "page.quote.title")
         .requireAnyPermission(
             PermissionCodes.QUOTE_VIEW,
+            PermissionCodes.INQUIRY_VIEW,
             PermissionCodes.QUOTE_LIBRARY_ROAD_VIEW,
             PermissionCodes.QUOTE_LIBRARY_SEA_VIEW,
             PermissionCodes.QUOTE_LIBRARY_FUMIGATION_VIEW)
@@ -54,8 +55,16 @@ public final class MenuRegistry {
             MenuRouteDto.of("QuoteList", "/quotes/list")
                 .component("/quote/list/index")
                 .meta("icon", "lucide:list")
+                .meta("keepAlive", true)
                 .meta("title", "page.quote.list")
                 .requirePermission(PermissionCodes.QUOTE_VIEW))
+        .child(
+            MenuRouteDto.of("InquiryList", "/quotes/inquiry")
+                .component("/quote/inquiry/list/index")
+                .meta("icon", "lucide:clipboard-list")
+                .meta("keepAlive", true)
+                .meta("title", "page.inquiry.list")
+                .requirePermission(PermissionCodes.INQUIRY_VIEW))
         .child(
             MenuRouteDto.of("QuoteLibrarySea", "/quotes/library/sea")
                 .component("/quote/library/sea/index")

@@ -357,6 +357,12 @@ public class OperationLogSupport {
     if (path.endsWith("/export")) {
       return "导出报价单";
     }
+    if (path.endsWith("/mail/send")) {
+      return "发送报价单邮件";
+    }
+    if (path.endsWith("/mail/resend")) {
+      return "重新发送报价邮件";
+    }
     return null;
   }
 

@@ -150,9 +150,13 @@ public final class QuoteCostSnapshotMapper {
     return map;
   }
 
+  /** 新版熏蒸快照 schemaVersion（单级表头）；历史快照无此字段按旧版渲染 */
+  public static final int FUMIGATION_SCHEMA_V2 = 2;
+
   /** 字段名与成本库列表一致 */
   public static Map<String, Object> fumigationSnapshot(CostFumigation fum) {
     Map<String, Object> map = new HashMap<>();
+    map.put("schemaVersion", FUMIGATION_SCHEMA_V2);
     map.put("region", fum.getRegion());
     map.put("station", fum.getStation());
     map.put("outdoorNonOak", fum.getOutdoorNonOak());
@@ -162,6 +166,7 @@ public final class QuoteCostSnapshotMapper {
     map.put("indoorOak", fum.getIndoorOak());
     map.put("indoorValidity", fum.getIndoorValidity());
     map.put("address", fum.getAddress());
+    map.put("remark", fum.getRemark());
     map.put("updatedAt", fum.getUpdatedAt() != null ? fum.getUpdatedAt().toString() : null);
     map.put(
         "status",
@@ -226,6 +231,7 @@ public final class QuoteCostSnapshotMapper {
 
   public static Map<String, Object> fumigationSnapshotFromResponse(FumigationCostResponse row) {
     Map<String, Object> map = new HashMap<>();
+    map.put("schemaVersion", FUMIGATION_SCHEMA_V2);
     map.put("region", row.region());
     map.put("station", row.station());
     map.put("outdoorNonOak", row.outdoorNonOak());
@@ -235,6 +241,7 @@ public final class QuoteCostSnapshotMapper {
     map.put("indoorOak", row.indoorOak());
     map.put("indoorValidity", row.indoorValidity());
     map.put("address", row.address());
+    map.put("remark", row.remark());
     map.put("updatedAt", row.updatedAt());
     map.put("status", row.status() != null ? row.status().name() : null);
     map.put("fromQuoteLibrary", true);

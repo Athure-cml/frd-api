@@ -28,6 +28,7 @@ import com.furuiduo.quote.common.PageResult;
 import com.furuiduo.quote.common.RequestIds;
 import com.furuiduo.quote.config.OpenApiConfig;
 import com.furuiduo.quote.cost.service.CostFumigationService;
+import com.furuiduo.quote.mail.QuoteQuotedMailService;
 import com.furuiduo.quote.masterdata.dto.DestAddressRowResponse;
 import com.furuiduo.quote.masterdata.service.DestAddressService;
 import com.furuiduo.quote.quote.dto.QuoteApprovalCommentRequest;
@@ -41,12 +42,15 @@ import com.furuiduo.quote.quote.dto.QuoteGenerateSheetRequest;
 import com.furuiduo.quote.quote.dto.QuoteDocFeeResponse;
 import com.furuiduo.quote.quote.dto.QuoteGenerateSheetResponse;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
+import com.furuiduo.quote.quote.dto.QuoteMailLogResponse;
+import com.furuiduo.quote.quote.dto.QuoteMailSendRequest;
+import com.furuiduo.quote.quote.entity.QuoteMailTrigger;
+import com.furuiduo.quote.quote.repository.QuoteMailLogRepository;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpResponse;
 import com.furuiduo.quote.quote.dto.QuoteFollowUpSaveRequest;
 import com.furuiduo.quote.quote.dto.QuoteListItem;
 import com.furuiduo.quote.quote.dto.QuoteMatchCostsRequest;
 import com.furuiduo.quote.quote.dto.QuoteMatchCostsResponse;
-import com.furuiduo.quote.quote.dto.QuoteReviseRequest;
 import com.furuiduo.quote.quote.dto.QuoteSaveRequest;
 import com.furuiduo.quote.quote.service.QuoteCommandService;
 import com.furuiduo.quote.quote.service.QuoteCostImportApplyService;
@@ -70,6 +74,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/quotes")
 public class QuoteController {
 
+  /** 人工发送收件邮箱格式校验 */
+  private static final java.util.regex.Pattern EMAIL_PATTERN =
+      java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$");
+
   private final AuthService authService;
   private final PermissionService permissionService;
   private final QuoteQueryService quoteQueryService;
@@ -82,6 +90,8 @@ public class QuoteController {
   private final QuoteSheetGenerateService quoteSheetGenerateService;
   private final QuoteCostImportApplyService quoteCostImportApplyService;
   private final CostFumigationService costFumigationService;
+  private final QuoteMailLogRepository quoteMailLogRepository;
+  private final QuoteQuotedMailService quoteQuotedMailService;
 
   public QuoteController(
       AuthService authService,
@@ -95,7 +105,9 @@ public class QuoteController {
       DestAddressService destAddressService,
       QuoteSheetGenerateService quoteSheetGenerateService,
       QuoteCostImportApplyService quoteCostImportApplyService,
-      CostFumigationService costFumigationService) {
+      CostFumigationService costFumigationService,
+      QuoteMailLogRepository quoteMailLogRepository,
+      QuoteQuotedMailService quoteQuotedMailService) {
     this.authService = authService;
     this.permissionService = permissionService;
     this.quoteQueryService = quoteQueryService;
@@ -107,6 +119,8 @@ public class QuoteController {
     this.destAddressService = destAddressService;
     this.quoteSheetGenerateService = quoteSheetGenerateService;
     this.quoteCostImportApplyService = quoteCostImportApplyService;
+    this.quoteMailLogRepository = quoteMailLogRepository;
+    this.quoteQuotedMailService = quoteQuotedMailService;
     this.costFumigationService = costFumigationService;
   }
 
@@ -130,6 +144,7 @@ public class QuoteController {
       @RequestParam(required = false) String pod,
       @RequestParam(required = false) String pickUpAddress,
       @RequestParam(required = false) String fumigationPoint,
+      @RequestParam(required = false) String supplier,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName,
       @RequestParam(required = false) Long createdBy,
@@ -154,6 +169,7 @@ public class QuoteController {
             pod,
             pickUpAddress,
             fumigationPoint,
+            supplier,
             ssl,
             followUpByName,
             createdBy,
@@ -279,7 +295,7 @@ public class QuoteController {
   }
 
   @Operation(
-      summary = "删除报价单",
+      summary = "退回报价单（取消待报价，询价单回到待递交）",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @DeleteMapping("/{id}")
   public ApiResponse<Void> delete(
@@ -388,6 +404,102 @@ public class QuoteController {
   }
 
   @Operation(
+      summary = "确认报价",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/confirm")
+  public ApiResponse<QuoteDetailResponse> confirmQuote(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireEdit(user);
+    return ApiResponse.ok(quoteWorkflowService.confirmQuote(user, id));
+  }
+
+  @Operation(
+      summary = "已报价发信流水",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @GetMapping("/{id}/mail-logs")
+  public ApiResponse<List<QuoteMailLogResponse>> mailLogs(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireView(user);
+    return ApiResponse.ok(
+        quoteMailLogRepository.findByQuoteIdOrderByCreatedAtDescIdDesc(id).stream()
+            .map(QuoteMailLogResponse::from)
+            .toList());
+  }
+
+  @Operation(
+      summary = "重新发送已报价邮件",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/mail/resend")
+  public ApiResponse<List<QuoteMailLogResponse>> resendMail(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id) {
+    SysUser user = authService.requireUser(authorization);
+    requireEdit(user);
+    QuoteDetailResponse detail = quoteQueryService.getById(user, id);
+    if (!"QUOTED".equals(detail.status())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已报价状态可重发邮件");
+    }
+    quoteQuotedMailService.scheduleAfterQuoted(
+        id, user.getId(), user.getRealName(), QuoteMailTrigger.RESEND);
+    return ApiResponse.ok(
+        quoteMailLogRepository.findByQuoteIdOrderByCreatedAtDescIdDesc(id).stream()
+            .map(QuoteMailLogResponse::from)
+            .toList());
+  }
+
+  @Operation(
+      summary = "人工发送报价单邮件（指定收件邮箱）",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
+  @PostMapping("/{id}/mail/send")
+  public ApiResponse<List<QuoteMailLogResponse>> sendMail(
+      @RequestHeader(value = "Authorization", required = false) String authorization,
+      @PathVariable Long id,
+      @RequestBody(required = false) QuoteMailSendRequest request) {
+    SysUser user = authService.requireUser(authorization);
+    requireEdit(user);
+    QuoteDetailResponse detail = quoteQueryService.getById(user, id);
+    if (!"QUOTED".equals(detail.status())) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已报价状态可发送报价单邮件");
+    }
+    List<String> emails = normalizeEmails(request == null ? null : request.toEmails());
+    if (emails.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写收件邮箱");
+    }
+    for (String email : emails) {
+      if (!EMAIL_PATTERN.matcher(email).matches()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邮箱格式不正确：" + email);
+      }
+    }
+    String blocked = quoteQuotedMailService.manualSendBlockedReason();
+    if (blocked != null) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, blocked);
+    }
+    quoteQuotedMailService.scheduleManualSend(id, emails, user.getId(), user.getRealName());
+    return ApiResponse.ok(
+        quoteMailLogRepository.findByQuoteIdOrderByCreatedAtDescIdDesc(id).stream()
+            .map(QuoteMailLogResponse::from)
+            .toList());
+  }
+
+  /** 收件邮箱归一：支持逗号/分号/空格分隔的整串，去空去重。 */
+  private static List<String> normalizeEmails(List<String> raw) {
+    if (raw == null || raw.isEmpty()) {
+      return List.of();
+    }
+    return raw.stream()
+        .filter(item -> item != null && !item.isBlank())
+        .flatMap(item -> java.util.Arrays.stream(item.split("[,;，；\\s]+")))
+        .map(String::trim)
+        .filter(item -> !item.isEmpty())
+        .distinct()
+        .toList();
+  }
+
+  @Operation(
       summary = "作废",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/void")
@@ -424,17 +536,17 @@ public class QuoteController {
   }
 
   @Operation(
-      summary = "发起变更（已确认报价 → 变更草稿）",
+      summary = "变更保存（新单直接落已报价，旧版归档）",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME))
   @PostMapping("/{id}/revise")
   public ApiResponse<QuoteDetailResponse> revise(
       @RequestHeader(value = "Authorization", required = false) String authorization,
       @PathVariable Long id,
-      @Valid @RequestBody QuoteReviseRequest body) {
+      @RequestBody QuoteSaveRequest body) {
     SysUser user = authService.requireUser(authorization);
     requireCreate(user);
     requireEdit(user);
-    return ApiResponse.ok(quoteWorkflowService.reviseAsNew(user, id, body));
+    return ApiResponse.ok(quoteWorkflowService.commitRevision(user, id, body));
   }
 
   @Operation(
@@ -456,6 +568,7 @@ public class QuoteController {
       @RequestParam(required = false) String pod,
       @RequestParam(required = false) String pickUpAddress,
       @RequestParam(required = false) String fumigationPoint,
+      @RequestParam(required = false) String supplier,
       @RequestParam(required = false) String ssl,
       @RequestParam(required = false) String followUpByName,
       @RequestParam(required = false) Long createdBy) {
@@ -477,6 +590,7 @@ public class QuoteController {
             pod,
             pickUpAddress,
             fumigationPoint,
+            supplier,
             ssl,
             followUpByName,
             createdBy);

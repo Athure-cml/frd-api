@@ -17,6 +17,8 @@ public interface CostGridTemplateRepository extends JpaRepository<CostGridTempla
 
   long countByLibraryAndMode(String library, String mode);
 
+  long countByLibraryAndModeAndLegacyFalse(String library, String mode);
+
   Optional<CostGridTemplate> findByLibraryAndModeAndCode(String library, String mode, String code);
 
   Optional<CostGridTemplate> findFirstByLibraryAndModeAndDefaultTemplateTrue(

@@ -224,6 +224,62 @@ public class QuoteCostMatchService {
     return result;
   }
 
+  /**
+   * 报价列表 SUPPLIER：取引入的卡车（ROAD）成本快照中的 supplier；快照缺失时回落成本库当前值。
+   * 不落库 quote_order。
+   */
+  @Transactional(readOnly = true)
+  public Map<Long, String> roadSuppliersByQuoteIds(Collection<Long> quoteIds) {
+    Map<Long, QuoteCostSnapshot> snapshots =
+        firstSnapshotEntitiesByQuoteIds(quoteIds, QuoteCostType.ROAD);
+    if (snapshots.isEmpty()) {
+      return Map.of();
+    }
+
+    Map<Long, String> result = new HashMap<>();
+    Map<Long, Long> fallbackRefByQuote = new HashMap<>();
+    for (Map.Entry<Long, QuoteCostSnapshot> entry : snapshots.entrySet()) {
+      QuoteCostSnapshot snapshot = entry.getValue();
+      String fromSnap = snapshotSupplier(snapshot);
+      if (fromSnap != null) {
+        result.put(entry.getKey(), fromSnap);
+        continue;
+      }
+      if (snapshot.getCostRefId() != null) {
+        fallbackRefByQuote.put(entry.getKey(), snapshot.getCostRefId());
+      }
+    }
+
+    if (!fallbackRefByQuote.isEmpty()) {
+      Map<Long, CostRoad> roads =
+          costRoadRepository.findAllById(fallbackRefByQuote.values()).stream()
+              .collect(Collectors.toMap(CostRoad::getId, Function.identity()));
+      for (Map.Entry<Long, Long> entry : fallbackRefByQuote.entrySet()) {
+        CostRoad road = roads.get(entry.getValue());
+        if (road == null) {
+          continue;
+        }
+        String supplier = road.getSupplier() == null ? "" : road.getSupplier().trim();
+        if (!supplier.isEmpty()) {
+          result.put(entry.getKey(), supplier);
+        }
+      }
+    }
+    return result;
+  }
+
+  private static String snapshotSupplier(QuoteCostSnapshot snapshot) {
+    if (snapshot == null || snapshot.getSnapshotJson() == null) {
+      return null;
+    }
+    Object raw = snapshot.getSnapshotJson().get("supplier");
+    if (raw == null) {
+      return null;
+    }
+    String text = String.valueOf(raw).trim();
+    return text.isEmpty() ? null : text;
+  }
+
   /** 报价库行：从成本库同步最新数据，并写入报价规则处理后的费用。 */
   @Transactional(readOnly = true)
   public Map<Long, Map<String, Object>> buildLibraryRows(
@@ -311,12 +367,14 @@ public class QuoteCostMatchService {
     String oceanFreight = null;
     String ssl = null;
     BigDecimal truckingFee = null;
+    BigDecimal truckingFee2 = null;
     BigDecimal nsLift = null;
     BigDecimal chassis = null;
     BigDecimal waiting = null;
     BigDecimal redeliveryFee = null;
     String truckRemark = null;
     BigDecimal truckingOak = null;
+    int roadIndex = 0;
 
     for (QuoteCostMatchItemDto item : matches) {
       Map<String, Object> snap = item.snapshot();
@@ -352,15 +410,21 @@ public class QuoteCostMatchService {
         pickUpAddress = firstNonBlank(pickUpAddress, text(snap.get("logYardNameAddress")));
         por = firstNonBlank(por, text(snap.get("por")));
         pol = firstNonBlank(pol, text(snap.get("pol")));
-        truckingFee = toBigDecimal(snap.get("allInNoFm"));
-        truckingOak = toBigDecimal(snap.get("allInFmOneWay"));
-        nsLift = toBigDecimal(snap.get("nsLift"));
-        chassis = toBigDecimal(snap.get("chassis"));
-        waiting = toBigDecimal(snap.get("waitingFee"));
-        redeliveryFee = toBigDecimal(snap.get("redelivery"));
-        truckRemark =
-            firstNonBlank(
-                truckRemark, QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(snap));
+        BigDecimal roadFee = toBigDecimal(snap.get("allInNoFm"));
+        if (roadIndex == 0) {
+          truckingFee = roadFee;
+          truckingOak = toBigDecimal(snap.get("allInFmOneWay"));
+          nsLift = toBigDecimal(snap.get("nsLift"));
+          chassis = toBigDecimal(snap.get("chassis"));
+          waiting = toBigDecimal(snap.get("waitingFee"));
+          redeliveryFee = toBigDecimal(snap.get("redelivery"));
+          truckRemark =
+              firstNonBlank(
+                  truckRemark, QuoteCostMatchSupport.resolveRoadRemarkFromSnapshot(snap));
+        } else if (roadIndex == 1) {
+          truckingFee2 = roadFee;
+        }
+        roadIndex++;
       }
     }
 
@@ -375,6 +439,7 @@ public class QuoteCostMatchService {
         oceanFreight,
         ssl,
         truckingFee,
+        truckingFee2,
         nsLift,
         chassis,
         waiting,
@@ -396,7 +461,7 @@ public class QuoteCostMatchService {
 
   private QuoteSheetFieldsDto emptySuggested() {
     return new QuoteSheetFieldsDto(
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null, null, null, null, null);
   }
 

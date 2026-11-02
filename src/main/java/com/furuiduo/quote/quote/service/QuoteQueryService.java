@@ -1,7 +1,10 @@
 package com.furuiduo.quote.quote.service;
 
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +45,7 @@ public class QuoteQueryService {
   private final OperationLogService operationLogService;
   private final QuoteApprovalLogService quoteApprovalLogService;
   private final ApprovalConfigService approvalConfigService;
+  private final InquiryQuoteSyncService inquiryQuoteSyncService;
 
   public QuoteQueryService(
       QuoteOrderRepository quoteOrderRepository,
@@ -51,7 +55,8 @@ public class QuoteQueryService {
       QuoteFollowUpService quoteFollowUpService,
       OperationLogService operationLogService,
       QuoteApprovalLogService quoteApprovalLogService,
-      ApprovalConfigService approvalConfigService) {
+      ApprovalConfigService approvalConfigService,
+      InquiryQuoteSyncService inquiryQuoteSyncService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.permissionService = permissionService;
     this.quoteAccessService = quoteAccessService;
@@ -60,6 +65,7 @@ public class QuoteQueryService {
     this.operationLogService = operationLogService;
     this.quoteApprovalLogService = quoteApprovalLogService;
     this.approvalConfigService = approvalConfigService;
+    this.inquiryQuoteSyncService = inquiryQuoteSyncService;
   }
 
   @Transactional
@@ -79,12 +85,13 @@ public class QuoteQueryService {
       String pod,
       String pickUpAddress,
       String fumigationPoint,
+      String supplier,
       String ssl,
       String followUpByName,
       Long createdBy,
       String libraryMode,
       Long libraryCostId) {
-    quoteOrderRepository.voidQuotesPastValidUntil();
+    inquiryQuoteSyncService.syncExpiredQuotesAndInquiries();
     DataScopeFilter scope = DataScopeFilter.from(user, permissionService);
 
     var pageable =
@@ -101,7 +108,10 @@ public class QuoteQueryService {
     String qNo = SearchText.orEmpty(quoteNo);
     String qCustomer = SearchText.orEmpty(customerName);
     QuoteTransportMode qTransport = parseTransportMode(transportMode);
-    QuoteStatus qStatus = parseStatus(status);
+    Set<QuoteStatus> qStatuses = QuoteStatusSupport.statusesForBusinessFilter(status);
+    boolean statusFilterEmpty = qStatuses == null || qStatuses.isEmpty();
+    Collection<QuoteStatus> statusArgs =
+        statusFilterEmpty ? EnumSet.of(QuoteStatus.PENDING_QUOTE) : qStatuses;
     String qZip = SearchText.orEmpty(zipCode);
     String qCity = SearchText.orEmpty(city);
     String qState = SearchText.orEmpty(state);
@@ -110,6 +120,7 @@ public class QuoteQueryService {
     String qPod = SearchText.orEmpty(pod);
     String qPickUp = SearchText.orEmpty(pickUpAddress);
     String qFumigation = SearchText.orEmpty(fumigationPoint);
+    String qSupplier = SearchText.orEmpty(supplier);
     String qSsl = SearchText.orEmpty(ssl);
     String qFollow = SearchText.orEmpty(followUpByName);
 
@@ -121,7 +132,8 @@ public class QuoteQueryService {
                 qNo,
                 qCustomer,
                 qTransport,
-                qStatus,
+                statusFilterEmpty,
+                statusArgs,
                 qZip,
                 qCity,
                 qState,
@@ -130,6 +142,7 @@ public class QuoteQueryService {
                 qPod,
                 qPickUp,
                 qFumigation,
+                qSupplier,
                 qSsl,
                 qFollow,
                 createdBy,
@@ -146,7 +159,8 @@ public class QuoteQueryService {
                     qNo,
                     qCustomer,
                     qTransport,
-                    qStatus,
+                    statusFilterEmpty,
+                    statusArgs,
                     qZip,
                     qCity,
                     qState,
@@ -155,6 +169,7 @@ public class QuoteQueryService {
                     qPod,
                     qPickUp,
                     qFumigation,
+                    qSupplier,
                     qSsl,
                     qFollow,
                     createdBy,
@@ -171,7 +186,8 @@ public class QuoteQueryService {
                     qNo,
                     qCustomer,
                     qTransport,
-                    qStatus,
+                    statusFilterEmpty,
+                    statusArgs,
                     qZip,
                     qCity,
                     qState,
@@ -180,6 +196,7 @@ public class QuoteQueryService {
                     qPod,
                     qPickUp,
                     qFumigation,
+                    qSupplier,
                     qSsl,
                     qFollow,
                     createdBy,
@@ -197,6 +214,9 @@ public class QuoteQueryService {
             ? Map.of()
             : quoteCostMatchService.buildLibraryRows(result.getContent(), libraryCostType);
 
+    List<Long> pageQuoteIds = result.getContent().stream().map(QuoteOrder::getId).toList();
+    Map<Long, String> roadSuppliers = quoteCostMatchService.roadSuppliersByQuoteIds(pageQuoteIds);
+
     return new PageResult<>(
         result.getContent().stream()
             .map(
@@ -204,7 +224,8 @@ public class QuoteQueryService {
                     QuoteListItem.from(
                         order,
                         quoteAccessService.canOperate(user, order),
-                        libraryRows.get(order.getId())))
+                        libraryRows.get(order.getId()),
+                        roadSuppliers.get(order.getId())))
             .toList(),
         result.getTotalElements());
   }
@@ -224,6 +245,7 @@ public class QuoteQueryService {
       String pod,
       String pickUpAddress,
       String fumigationPoint,
+      String supplier,
       String ssl,
       String followUpByName,
       Long createdBy) {
@@ -231,12 +253,17 @@ public class QuoteQueryService {
     var pageable =
         Pageable.unpaged(
             Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+    Set<QuoteStatus> qStatuses = QuoteStatusSupport.statusesForBusinessFilter(status);
+    boolean statusFilterEmpty = qStatuses == null || qStatuses.isEmpty();
+    Collection<QuoteStatus> statusArgs =
+        statusFilterEmpty ? EnumSet.of(QuoteStatus.PENDING_QUOTE) : qStatuses;
     return quoteOrderRepository
         .search(
             SearchText.orEmpty(quoteNo),
             SearchText.orEmpty(customerName),
             parseTransportMode(transportMode),
-            parseStatus(status),
+            statusFilterEmpty,
+            statusArgs,
             SearchText.orEmpty(zipCode),
             SearchText.orEmpty(city),
             SearchText.orEmpty(state),
@@ -245,6 +272,7 @@ public class QuoteQueryService {
             SearchText.orEmpty(pod),
             SearchText.orEmpty(pickUpAddress),
             SearchText.orEmpty(fumigationPoint),
+            SearchText.orEmpty(supplier),
             SearchText.orEmpty(ssl),
             SearchText.orEmpty(followUpByName),
             createdBy,
@@ -269,6 +297,9 @@ public class QuoteQueryService {
     if (QuoteStatusSupport.applyExpiredAsVoided(order)) {
       order.setUpdatedAt(java.time.LocalDateTime.now());
       order = quoteOrderRepository.save(order);
+      if (InquiryQuoteSyncService.isExpiredArchive(order)) {
+        inquiryQuoteSyncService.onQuoteExpired(order);
+      }
     }
     return QuoteDetailResponse.from(
         order,
@@ -314,17 +345,6 @@ public class QuoteQueryService {
       case "fumigation" -> QuoteCostType.FUMIGATION;
       default -> null;
     };
-  }
-
-  private QuoteStatus parseStatus(String value) {
-    if (value == null || value.isBlank()) {
-      return null;
-    }
-    try {
-      return QuoteStatus.valueOf(value);
-    } catch (IllegalArgumentException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的报价状态");
-    }
   }
 
   void assertReadable(SysUser user, QuoteOrder order) {

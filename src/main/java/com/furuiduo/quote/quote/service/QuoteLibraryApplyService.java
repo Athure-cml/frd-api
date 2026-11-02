@@ -35,8 +35,8 @@ public class QuoteLibraryApplyService {
     String por = text(row.por());
     QuoteRuleContext noFmCtx = buildContext(por, null, false);
     QuoteRuleContext fmCtx = buildContext(por, null, true);
-    BigDecimal allInNoFm = applyTruckingFee(row.allInNoFm(), noFmCtx);
-    // ALL IN FM：成本为空或 0 时不套报价规则，避免「无价格」被加成 0+加价
+    // 卡车三类 ALL IN：成本为空或 0 时不套报价规则，避免「无价格」被加成 0+加价
+    BigDecimal allInNoFm = applyTruckingFeeIfPresent(row.allInNoFm(), noFmCtx);
     BigDecimal allInFmOneWay = applyTruckingFeeIfPresent(row.allInFmOneWay(), fmCtx);
     BigDecimal allInFmRound = applyTruckingFeeIfPresent(row.allInFmRound(), fmCtx);
     return new RoadCostResponse(
@@ -85,8 +85,8 @@ public class QuoteLibraryApplyService {
     if (base == null) {
       base = toBigDecimal(snap.get("freight"));
     }
-    BigDecimal processed =
-        base != null ? quoteRuleEngine.applyDecimalTarget("OCEAN_FREIGHT", base, ctx) : null;
+    // 海运 ALL IN：为空或 0 时不套 OCEAN_FREIGHT，避免无价格被加成
+    BigDecimal processed = applyOceanFreightIfPresent(base, ctx);
     return new FreightCostResponse(
         row.id(),
         row.por(),
@@ -275,12 +275,20 @@ public class QuoteLibraryApplyService {
     return quoteRuleEngine.applyDecimalTarget("TRUCKING_FEE", base, ctx);
   }
 
-  /** ALL IN FM NON OAK / OAK：仅有正数成本时才套 TRUCKING_FEE 规则 */
+  /** 卡车 ALL IN：仅有正数成本时才套 TRUCKING_FEE 规则 */
   private BigDecimal applyTruckingFeeIfPresent(BigDecimal base, QuoteRuleContext ctx) {
     if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
       return base;
     }
     return applyTruckingFee(base, ctx);
+  }
+
+  /** 海运 ALL IN：仅有正数成本时才套 OCEAN_FREIGHT 规则 */
+  private BigDecimal applyOceanFreightIfPresent(BigDecimal base, QuoteRuleContext ctx) {
+    if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
+      return base;
+    }
+    return quoteRuleEngine.applyDecimalTarget("OCEAN_FREIGHT", base, ctx);
   }
 
   /** 熏蒸 NON OAK：成本为空或 0 时不套规则，避免无价格被加成 0+加价 */

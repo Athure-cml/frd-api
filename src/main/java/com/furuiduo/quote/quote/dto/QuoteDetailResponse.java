@@ -23,6 +23,7 @@ public record QuoteDetailResponse(
     @Schema(description = "运输方式") String transportMode,
     @Schema(description = "路线摘要") String routeSummary,
     @Schema(description = "状态") String status,
+    @Schema(description = "归档原因：SUPERSEDED|QUOTED_EXPIRED|PENDING_EXPIRED") String archiveReason,
     @Schema(description = "总金额") BigDecimal totalAmount,
     @Schema(description = "币种") String currency,
     @Schema(description = "基准币种") String baseCurrency,
@@ -44,6 +45,7 @@ public record QuoteDetailResponse(
     @Schema(description = "创建人") String createdByName,
     @Schema(description = "部门ID") Long deptId,
     @Schema(description = "提交时间") String submittedAt,
+    @Schema(description = "报价日期（与列表一致，取创建日 yyyy-MM-dd）") String quoteDate,
     @Schema(description = "创建时间") String createdAt,
     @Schema(description = "更新时间") String updatedAt,
     @Schema(description = "变更来源报价单 ID") Long parentQuoteId,
@@ -80,7 +82,7 @@ public record QuoteDetailResponse(
       List<QuoteFollowUpResponse> followUps,
       boolean operable,
       List<String> costRiskModes) {
-    String status = QuoteStatusSupport.displayStatus(order.getStatus());
+    String status = QuoteStatusSupport.displayStatus(order);
     boolean editable =
         QuoteStatusSupport.isEditable(order.getStatus()) && order.getDeletedAt() == null;
     Integer revisionNo = order.getRevisionNo() == null ? 0 : order.getRevisionNo();
@@ -94,6 +96,7 @@ public record QuoteDetailResponse(
         order.getTransportMode().name(),
         order.getRouteSummary(),
         status,
+        order.getArchiveReason() == null ? null : order.getArchiveReason().name(),
         order.getTotalAmount(),
         order.getCurrency(),
         order.getBaseCurrency(),
@@ -115,6 +118,7 @@ public record QuoteDetailResponse(
         order.getCreatedByName(),
         order.getDeptId(),
         QuoteDateTimes.format(order.getSubmittedAt()),
+        QuoteDateTimes.formatDate(order.getCreatedAt()),
         QuoteDateTimes.format(order.getCreatedAt()),
         QuoteDateTimes.format(order.getUpdatedAt()),
         order.getParentQuoteId(),

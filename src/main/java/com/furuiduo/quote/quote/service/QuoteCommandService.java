@@ -15,6 +15,7 @@ import com.furuiduo.quote.currency.service.CurrencyCommandService;
 import com.furuiduo.quote.customer.entity.Customer;
 import com.furuiduo.quote.customer.service.CustomerCommandService;
 import com.furuiduo.quote.exchangerate.support.ExchangeRateResolver;
+import com.furuiduo.quote.masterdata.service.DestAddressService;
 import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
 import com.furuiduo.quote.quote.dto.QuoteLineSaveRequest;
@@ -42,6 +43,8 @@ public class QuoteCommandService {
   private final QuoteCostRiskService quoteCostRiskService;
   private final QuoteApprovalLogService quoteApprovalLogService;
   private final QuoteLibraryUsageService quoteLibraryUsageService;
+  private final InquiryQuoteSyncService inquiryQuoteSyncService;
+  private final DestAddressService destAddressService;
 
   public QuoteCommandService(
       QuoteOrderRepository quoteOrderRepository,
@@ -54,7 +57,9 @@ public class QuoteCommandService {
       QuoteCostMatchService quoteCostMatchService,
       QuoteCostRiskService quoteCostRiskService,
       QuoteApprovalLogService quoteApprovalLogService,
-      QuoteLibraryUsageService quoteLibraryUsageService) {
+      QuoteLibraryUsageService quoteLibraryUsageService,
+      InquiryQuoteSyncService inquiryQuoteSyncService,
+      DestAddressService destAddressService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteQueryService = quoteQueryService;
     this.quoteAccessService = quoteAccessService;
@@ -66,6 +71,8 @@ public class QuoteCommandService {
     this.quoteCostRiskService = quoteCostRiskService;
     this.quoteApprovalLogService = quoteApprovalLogService;
     this.quoteLibraryUsageService = quoteLibraryUsageService;
+    this.inquiryQuoteSyncService = inquiryQuoteSyncService;
+    this.destAddressService = destAddressService;
   }
 
   @Transactional
@@ -74,7 +81,7 @@ public class QuoteCommandService {
 
     QuoteOrder order = new QuoteOrder();
     order.setQuoteNo(quoteNoGenerator.next());
-    order.setStatus(QuoteStatus.DRAFT);
+    order.setStatus(QuoteStatus.PENDING_QUOTE);
     order.setCreatedBy(user.getId());
     order.setCreatedByName(user.getRealName());
     order.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -86,6 +93,7 @@ public class QuoteCommandService {
       saved.setCurrentVersion(true);
       saved = quoteOrderRepository.save(saved);
     }
+    inquiryQuoteSyncService.syncValidUntilFromQuote(saved);
     if (request.costMatches() != null && !request.costMatches().isEmpty()) {
       quoteCostMatchService.replaceSnapshots(saved, request.costMatches());
     }
@@ -97,12 +105,15 @@ public class QuoteCommandService {
     validateSaveRequest(request);
 
     QuoteOrder order = requireEditable(user, id);
+    quoteAccessService.claimOperatorIfAbsent(order, user);
     applySaveRequest(order, request);
     quoteCostRiskService.clearOnSave(user, order);
     order.setUpdatedAt(LocalDateTime.now());
 
     QuoteOrder saved = quoteOrderRepository.save(order);
-    if (QuoteStatusSupport.normalize(order.getStatus()) == QuoteStatus.DRAFT
+    inquiryQuoteSyncService.syncValidUntilFromQuote(saved);
+    QuoteStatus savedStatus = QuoteStatusSupport.normalize(order.getStatus());
+    if ((savedStatus == QuoteStatus.DRAFT || savedStatus == QuoteStatus.PENDING_QUOTE)
         && request.costMatches() != null
         && !request.costMatches().isEmpty()) {
       quoteCostMatchService.replaceSnapshots(saved, request.costMatches());
@@ -110,12 +121,17 @@ public class QuoteCommandService {
     return quoteQueryService.getById(user, saved.getId());
   }
 
+  /**
+   * 退回报价单（原删除）：取消待报价单据，关联询价单回到待递交。
+   */
   @Transactional
   public void delete(SysUser user, Long id) {
     QuoteOrder order = requireDeletable(user, id);
     Long parentId = order.getParentQuoteId();
     Long rootId = QuoteStatusSupport.resolveRootQuoteId(order);
     Integer revisionNo = order.getRevisionNo();
+    // 先同步询价单（退回待递交），再取消报价单
+    inquiryQuoteSyncService.onQuoteReturned(order);
     if (quoteApprovalLogService.hasLogs(id)) {
       // 有审批记录：软删，保留审批日志；补齐打印快照供审批详情展示
       quoteApprovalLogService.ensurePrintSnapshots(
@@ -140,7 +156,8 @@ public class QuoteCommandService {
         quoteOrderRepository.existsOpenRevision(
             rootId,
             0,
-            java.util.EnumSet.of(QuoteStatus.DRAFT, QuoteStatus.PENDING_APPROVAL));
+            java.util.EnumSet.of(
+                QuoteStatus.DRAFT, QuoteStatus.PENDING_QUOTE, QuoteStatus.PENDING_APPROVAL));
     if (openExists) {
       return;
     }
@@ -149,7 +166,7 @@ public class QuoteCommandService {
         .ifPresent(
             parent -> {
               if (QuoteStatusSupport.normalize(parent.getStatus()) == QuoteStatus.REVISING) {
-                parent.setStatus(QuoteStatus.SENT);
+                parent.setStatus(QuoteStatus.QUOTED);
                 parent.setUpdatedAt(LocalDateTime.now());
                 quoteOrderRepository.save(parent);
               }
@@ -195,7 +212,7 @@ public class QuoteCommandService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除");
     }
     if (!QuoteStatusSupport.isDeletable(order.getStatus())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿报价可删除");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待报价可退回");
     }
     return order;
   }
@@ -289,9 +306,13 @@ public class QuoteCommandService {
   }
 
   private void applySheetFields(QuoteOrder order, QuoteSaveRequest request) {
-    order.setZipCode(trimToNull(request.zipCode()));
-    order.setCity(trimToNull(request.city()));
-    order.setState(trimToNull(request.state()));
+    // 地址规范化：缺 ZIP 用 City+State 补；缺 City/State 用 ZIP 反带；City 统一主数据写法
+    DestAddressService.RouteAddress address =
+        destAddressService.normalizeRouteAddress(
+            request.zipCode(), request.city(), request.state());
+    order.setZipCode(trimToNull(address.zipCode()));
+    order.setCity(trimToNull(address.city()));
+    order.setState(trimToNull(address.state()));
     order.setPickUpAddress(trimToNull(request.pickUpAddress()));
     order.setPor(trimToNull(request.por()));
     order.setPol(trimToNull(request.pol()));
@@ -299,6 +320,7 @@ public class QuoteCommandService {
     order.setOfUsd(trimToNull(request.oceanFreight()));
     order.setSsl(trimToNull(request.ssl()));
     order.setTruckingFee(request.truckingFee());
+    order.setTruckingFee2(request.truckingFee2());
     order.setNsLift(request.nsLift());
     order.setChassis(request.chassis());
     order.setWaiting(request.waiting());

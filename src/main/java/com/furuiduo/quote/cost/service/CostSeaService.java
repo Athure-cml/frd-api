@@ -52,6 +52,7 @@ import com.furuiduo.quote.cost.support.CostTemplateImportSupport;
 import com.furuiduo.quote.cost.support.CostValidityStatus;
 import com.furuiduo.quote.cost.support.SeaAllInCalculator;
 import com.furuiduo.quote.quote.service.QuoteLibraryEntryService;
+import com.furuiduo.quote.quote.support.QuoteCostRiskFeeSupport;
 
 @Service
 public class CostSeaService {
@@ -126,12 +127,12 @@ public class CostSeaService {
     }
     int safePage = Math.max(page, 1);
     int safePageSize = Math.min(Math.max(pageSize, 1), 200);
-    String p = SearchText.orEmpty(por);
-    String pl = SearchText.orEmpty(pol);
-    String pd = SearchText.orEmpty(pod);
-    String s = SearchText.orEmpty(ssl);
-    String ct = SearchText.orEmpty(containerType);
-    String a = SearchText.orEmpty(agent);
+    String p = SearchText.toRegex(por);
+    String pl = SearchText.toRegex(pol);
+    String pd = SearchText.toRegex(pod);
+    String s = SearchText.toRegex(ssl);
+    String ct = SearchText.toRegex(containerType);
+    String a = SearchText.toRegex(agent);
     String rm = SearchText.orEmpty(remark);
     String fvd = SearchText.orEmpty(freightValidDate);
     String fed = SearchText.orEmpty(freightEffDate);
@@ -191,12 +192,12 @@ public class CostSeaService {
     if (CostHighlightListFilter.isEmptyRestriction(restrictToIds)) {
       return List.of();
     }
-    String p = SearchText.orEmpty(por);
-    String pl = SearchText.orEmpty(pol);
-    String pd = SearchText.orEmpty(pod);
-    String s = SearchText.orEmpty(ssl);
-    String ct = SearchText.orEmpty(containerType);
-    String a = SearchText.orEmpty(agent);
+    String p = SearchText.toRegex(por);
+    String pl = SearchText.toRegex(pol);
+    String pd = SearchText.toRegex(pod);
+    String s = SearchText.toRegex(ssl);
+    String ct = SearchText.toRegex(containerType);
+    String a = SearchText.toRegex(agent);
     String rm = SearchText.orEmpty(remark);
     String fvd = SearchText.orEmpty(freightValidDate);
     String fed = SearchText.orEmpty(freightEffDate);
@@ -249,12 +250,12 @@ public class CostSeaService {
       String status,
       String remark,
       CostGridSort.Parsed sort) {
-    String p = SearchText.orEmpty(por);
-    String pl = SearchText.orEmpty(pol);
-    String pd = SearchText.orEmpty(pod);
-    String s = SearchText.orEmpty(ssl);
-    String ct = SearchText.orEmpty(containerType);
-    String a = SearchText.orEmpty(agent);
+    String p = SearchText.toRegex(por);
+    String pl = SearchText.toRegex(pol);
+    String pd = SearchText.toRegex(pod);
+    String s = SearchText.toRegex(ssl);
+    String ct = SearchText.toRegex(containerType);
+    String a = SearchText.toRegex(agent);
     String rm = SearchText.orEmpty(remark);
     String fvd = SearchText.orEmpty(freightValidDate);
     String fed = SearchText.orEmpty(freightEffDate);
@@ -324,12 +325,16 @@ public class CostSeaService {
   public FreightCostResponse update(Long id, FreightCostSaveRequest request) {
     quoteLibraryEntryService.ensureNotWonLocked(CostHighlightMode.sea, id);
     CostSea entity = requireEntity(id);
+    String feeBefore = QuoteCostRiskFeeSupport.seaSignature(entity);
     applySave(entity, request);
     validateEntityRequired(entity, null);
     validateMasterRefs(entity);
     entity.touch();
     FreightCostResponse saved = FreightCostResponse.fromSea(repository.save(entity));
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, id);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.sea,
+        id,
+        QuoteCostRiskFeeSupport.changed(feeBefore, QuoteCostRiskFeeSupport.seaSignature(entity)));
     return saved;
   }
 
@@ -396,7 +401,7 @@ public class CostSeaService {
         CostValidityStatus.resolve(CostStatus.active, source.getFreightValidDate()));
     source.touch();
     repository.save(source);
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, sourceId);
+    // 续期只回填源行有效期，不触发报价成本异常
     copyHighlightsIfRequested(sourceId, created.id());
     return created;
   }
@@ -543,6 +548,7 @@ public class CostSeaService {
     int previewLimit =
         CostBatchPreviewSupport.resolvePreviewLimit(previewOnly, request.previewLimit());
     List<FreightCostResponse> items = new ArrayList<>();
+    List<Long> feeChangedIds = new ArrayList<>();
     int updated = 0;
     for (Long id : ids) {
       if (previewOnly && items.size() >= previewLimit) {
@@ -554,16 +560,22 @@ public class CostSeaService {
         applySeaBatchUpdateFields(preview, fields);
         items.add(FreightCostResponse.fromSea(preview));
       } else {
+        String feeBefore = QuoteCostRiskFeeSupport.seaSignature(entity);
         applySeaBatchUpdateFields(entity, fields);
         entity.touch();
         repository.save(entity);
         updated++;
+        if (QuoteCostRiskFeeSupport.changed(
+            feeBefore, QuoteCostRiskFeeSupport.seaSignature(entity))) {
+          feeChangedIds.add(id);
+        }
       }
     }
     if (previewOnly) {
       return new CostBatchUpdateResult<>(total, items, total);
     }
-    quoteLibraryEntryService.syncAfterCostUpdate(CostHighlightMode.sea, ids);
+    quoteLibraryEntryService.syncAfterCostUpdate(
+        CostHighlightMode.sea, feeChangedIds, !feeChangedIds.isEmpty());
     return new CostBatchUpdateResult<>(updated, List.of(), total);
   }
 
@@ -690,12 +702,12 @@ public class CostSeaService {
       items =
           repository
               .search(
-                  SearchText.orEmpty(por),
-                  SearchText.orEmpty(pol),
-                  SearchText.orEmpty(pod),
-                  SearchText.orEmpty(ssl),
-                  SearchText.orEmpty(containerType),
-                  SearchText.orEmpty(agent),
+                  SearchText.toRegex(por),
+                  SearchText.toRegex(pol),
+                  SearchText.toRegex(pod),
+                  SearchText.toRegex(ssl),
+                  SearchText.toRegex(containerType),
+                  SearchText.toRegex(agent),
                   SearchText.orEmpty(remark),
                   false,
                   List.of(-1L),

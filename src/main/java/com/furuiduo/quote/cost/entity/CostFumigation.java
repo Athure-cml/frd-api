@@ -63,6 +63,10 @@ public class CostFumigation {
   @Column(length = 16)
   private CostStatus status = CostStatus.active;
 
+  /** 归档：旧版熏蒸数据隐藏，历史报价快照仍可引用 */
+  @Column(nullable = false)
+  private boolean archived = false;
+
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "extra_fields")
   private Map<String, Object> extraFields = new HashMap<>();

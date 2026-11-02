@@ -32,6 +32,7 @@ public record QuoteSaveRequest(
     @Schema(description = "OCEAN FREIGHT") String oceanFreight,
     @Schema(description = "SSL") String ssl,
     @Schema(description = "TRUCKING FEE") BigDecimal truckingFee,
+    @Schema(description = "TRUCKING FEE 2") BigDecimal truckingFee2,
     @Schema(description = "NS LIFT") BigDecimal nsLift,
     @Schema(description = "CHASSIS") BigDecimal chassis,
     @Schema(description = "WAITING") BigDecimal waiting,
@@ -54,7 +55,9 @@ public record QuoteSaveRequest(
     @Schema(description = "跟进人") String followUpByName,
     @Schema(description = "明细行") List<QuoteLineSaveRequest> lines,
     @Schema(description = "成本匹配结果（引入成本库后传入以冻结快照）")
-        List<QuoteCostMatchItemDto> costMatches) {
+        List<QuoteCostMatchItemDto> costMatches,
+    @Schema(description = "变更来源报价单 ID：有值时保存直接落已报价并归档旧版") Long parentQuoteId,
+    @Schema(description = "变更原因（parentQuoteId 有值时必填）") String changeReason) {
 
   public List<String> parsedServiceTypes() {
     return QuoteServiceTypesSupport.normalize(serviceTypes);
@@ -98,6 +101,7 @@ public record QuoteSaveRequest(
         order.getOfUsd(),
         order.getSsl(),
         order.getTruckingFee() != null ? order.getTruckingFee() : order.getTruckingNonOakUsd(),
+        order.getTruckingFee2(),
         order.getNsLift(),
         order.getChassis(),
         order.getWaiting(),
@@ -119,6 +123,8 @@ public record QuoteSaveRequest(
         order.getFollowUpBy(),
         order.getFollowUpByName(),
         new ArrayList<>(lines),
+        null,
+        null,
         null);
   }
 }

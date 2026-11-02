@@ -142,6 +142,63 @@ public class DestAddressService {
     return resolveZip(city, state, resolveCanonicalCityName(city, state, null));
   }
 
+  /**
+   * 录入/编辑保存时的地址规范化（只对本次保存的单据生效，不回写历史数据）：
+   *
+   * <ol>
+   *   <li>只填了 ZIP：按 ZIP 反带 City/State（主数据中 ZIP 唯一确定 City+State）；
+   *   <li>ZIP 为空但 City+State 齐全：主数据唯一邮编时自动补全；多个邮编或无邮编时保持为空；
+   *   <li>City 统一为主数据规范名（大小写/空格与系统一致）。
+   * </ol>
+   *
+   * <p>已填写的 ZIP 不会被覆盖。
+   */
+  @Transactional(readOnly = true)
+  public RouteAddress normalizeRouteAddress(String zipCode, String city, String state) {
+    String zip = trimToEmpty(zipCode);
+    String cityName = trimToEmpty(city);
+    String stateCode = trimToEmpty(state);
+    if (zip.isEmpty() && (cityName.isEmpty() || stateCode.isEmpty())) {
+      return new RouteAddress(zip, cityName, stateCode);
+    }
+    if (!zip.isEmpty() && (cityName.isEmpty() || stateCode.isEmpty())) {
+      List<Object[]> mappings = zipRepository.findCityStateByZipCode(zip);
+      if (mappings.size() == 1) {
+        Object[] row = mappings.get(0);
+        String masterState = row[0] == null ? "" : String.valueOf(row[0]).trim();
+        String masterCity = row[1] == null ? "" : String.valueOf(row[1]).trim();
+        // 已填写的州与 ZIP 所属州冲突时不反带城市，保留用户输入
+        boolean stateMatches =
+            stateCode.isEmpty() || masterState.isEmpty() || masterState.equalsIgnoreCase(stateCode);
+        if (cityName.isEmpty() && stateMatches) {
+          cityName = masterCity;
+        }
+        if (stateCode.isEmpty()) {
+          stateCode = masterState;
+        }
+      }
+      return new RouteAddress(zip, cityName, stateCode);
+    }
+    Optional<String> canonical = resolveCanonicalCityName(cityName, stateCode, zip);
+    if (canonical.isPresent()) {
+      cityName = canonical.get();
+    }
+    if (zip.isEmpty()) {
+      DestZipResolveItemResponse resolved = resolveZip(cityName, stateCode, canonical);
+      if ("unique".equals(resolved.status()) && resolved.zipCode() != null) {
+        zip = resolved.zipCode().trim();
+      }
+    }
+    return new RouteAddress(zip, cityName, stateCode);
+  }
+
+  /** 规范化后的地址三元组。 */
+  public record RouteAddress(String zipCode, String city, String state) {}
+
+  private static String trimToEmpty(String value) {
+    return value == null ? "" : value.trim();
+  }
+
   private DestZipResolveItemResponse resolveZip(
       String city, String state, Optional<String> canonical) {
     String normalizedCity = city == null ? "" : city.trim();

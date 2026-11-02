@@ -10,11 +10,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.furuiduo.quote.approval.service.ApprovalConfigService;
+import com.furuiduo.quote.mail.QuoteQuotedMailService;
+import com.furuiduo.quote.quote.entity.QuoteMailTrigger;
 import com.furuiduo.quote.quote.dto.QuoteCostMatchItemDto;
 import com.furuiduo.quote.quote.dto.QuoteDetailResponse;
-import com.furuiduo.quote.quote.dto.QuoteReviseRequest;
+import com.furuiduo.quote.quote.dto.QuoteSaveRequest;
 import com.furuiduo.quote.quote.entity.QuoteApprovalAction;
 import com.furuiduo.quote.quote.entity.QuoteApprovalLog;
+import com.furuiduo.quote.quote.entity.QuoteArchiveReason;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteOrderLine;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
@@ -39,7 +42,10 @@ public class QuoteWorkflowService {
   private final ApprovalConfigService approvalConfigService;
   private final QuoteCostMatchService quoteCostMatchService;
   private final QuoteCostRiskService quoteCostRiskService;
+  private final InquiryQuoteSyncService inquiryQuoteSyncService;
   private final OperationLogService operationLogService;
+  private final QuoteCommandService quoteCommandService;
+  private final QuoteQuotedMailService quoteQuotedMailService;
 
   public QuoteWorkflowService(
       QuoteOrderRepository quoteOrderRepository,
@@ -50,7 +56,10 @@ public class QuoteWorkflowService {
       ApprovalConfigService approvalConfigService,
       QuoteCostMatchService quoteCostMatchService,
       QuoteCostRiskService quoteCostRiskService,
-      OperationLogService operationLogService) {
+      InquiryQuoteSyncService inquiryQuoteSyncService,
+      OperationLogService operationLogService,
+      QuoteCommandService quoteCommandService,
+      QuoteQuotedMailService quoteQuotedMailService) {
     this.quoteOrderRepository = quoteOrderRepository;
     this.quoteAccessService = quoteAccessService;
     this.quoteNoGenerator = quoteNoGenerator;
@@ -59,15 +68,56 @@ public class QuoteWorkflowService {
     this.approvalConfigService = approvalConfigService;
     this.quoteCostMatchService = quoteCostMatchService;
     this.quoteCostRiskService = quoteCostRiskService;
+    this.inquiryQuoteSyncService = inquiryQuoteSyncService;
     this.operationLogService = operationLogService;
+    this.quoteCommandService = quoteCommandService;
+    this.quoteQuotedMailService = quoteQuotedMailService;
   }
 
-  /** 草稿 → 待审批 */
+  /**
+   * 确认报价：待报价（草稿/询价生成单）→ 已报价。
+   * 关联询价单同步为已报价。
+   */
+  @Transactional
+  public QuoteDetailResponse confirmQuote(SysUser user, Long id) {
+    QuoteOrder order = requireOperableOrder(user, id);
+    QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    if (status != QuoteStatus.DRAFT
+        && status != QuoteStatus.PENDING_QUOTE
+        && status != QuoteStatus.PENDING_APPROVAL) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待报价状态可确认报价");
+    }
+    if (order.getDeletedAt() != null) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除");
+    }
+    order.setStatus(QuoteStatus.QUOTED);
+    order.setApprovedBy(user.getId());
+    order.setApprovedByName(user.getRealName());
+    order.setApprovedAt(LocalDateTime.now());
+    order.setUpdatedAt(LocalDateTime.now());
+    if (order.getRootQuoteId() == null) {
+      order.setRootQuoteId(order.getId());
+      order.setCurrentVersion(true);
+    }
+    if (order.getRevisionNo() != null && order.getRevisionNo() > 0) {
+      supersedePreviousVersions(order);
+      order.setCurrentVersion(true);
+      quoteCostRiskService.clearRisk(user, order);
+    }
+    QuoteOrder saved = quoteOrderRepository.save(order);
+    inquiryQuoteSyncService.onQuoteConfirmed(saved);
+    quoteQuotedMailService.scheduleAfterQuoted(
+        saved.getId(), user.getId(), user.getRealName(), QuoteMailTrigger.CONFIRM);
+    return quoteQueryService.getById(user, saved.getId());
+  }
+
+  /** 待报价 → 待审批 */
   @Transactional
   public QuoteDetailResponse submitForApproval(SysUser user, Long id, String comment) {
     QuoteOrder order = requireOperableOrder(user, id);
-    if (QuoteStatusSupport.normalize(order.getStatus()) != QuoteStatus.DRAFT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅草稿可提交审批");
+    QuoteStatus current = QuoteStatusSupport.normalize(order.getStatus());
+    if (current != QuoteStatus.DRAFT && current != QuoteStatus.PENDING_QUOTE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待报价可提交审批");
     }
     if (order.getDeletedAt() != null) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已删除");
@@ -128,7 +178,7 @@ public class QuoteWorkflowService {
           user);
       return quoteQueryService.getById(user, saved.getId());
     }
-    order.setStatus(QuoteStatus.SENT);
+    order.setStatus(QuoteStatus.QUOTED);
     order.setApprovedBy(user.getId());
     order.setApprovedByName(user.getRealName());
     order.setApprovedAt(LocalDateTime.now());
@@ -144,11 +194,14 @@ public class QuoteWorkflowService {
       order.setCurrentVersion(true);
     }
     QuoteOrder saved = quoteOrderRepository.save(order);
+    inquiryQuoteSyncService.onQuoteConfirmed(saved);
+    quoteQuotedMailService.scheduleAfterQuoted(
+        saved.getId(), user.getId(), user.getRealName(), QuoteMailTrigger.APPROVE);
     quoteApprovalLogService.append(
         saved.getId(),
         QuoteApprovalAction.APPROVE,
         QuoteStatus.PENDING_APPROVAL,
-        QuoteStatus.SENT,
+        QuoteStatus.QUOTED,
         comment,
         resolveNodeTitle(QuoteApprovalAction.APPROVE, saved.getId()),
         user);
@@ -164,14 +217,14 @@ public class QuoteWorkflowService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待审批报价可驳回");
     }
     requireCurrentApprover(user, order.getId());
-    order.setStatus(QuoteStatus.DRAFT);
+    order.setStatus(QuoteStatus.PENDING_QUOTE);
     order.setUpdatedAt(LocalDateTime.now());
     QuoteOrder saved = quoteOrderRepository.save(order);
     quoteApprovalLogService.append(
         saved.getId(),
         QuoteApprovalAction.REJECT,
         QuoteStatus.PENDING_APPROVAL,
-        QuoteStatus.DRAFT,
+        QuoteStatus.PENDING_QUOTE,
         comment,
         resolveNodeTitle(QuoteApprovalAction.REJECT, saved.getId()),
         user);
@@ -186,14 +239,14 @@ public class QuoteWorkflowService {
     if (status != QuoteStatus.PENDING_APPROVAL) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待审批报价可撤回");
     }
-    order.setStatus(QuoteStatus.DRAFT);
+    order.setStatus(QuoteStatus.PENDING_QUOTE);
     order.setUpdatedAt(LocalDateTime.now());
     QuoteOrder saved = quoteOrderRepository.save(order);
     quoteApprovalLogService.append(
         saved.getId(),
         QuoteApprovalAction.ROLLBACK,
         QuoteStatus.PENDING_APPROVAL,
-        QuoteStatus.DRAFT,
+        QuoteStatus.PENDING_QUOTE,
         comment,
         QuoteApprovalSupport.nodeTitle(QuoteApprovalAction.ROLLBACK, List.of(), 0),
         user);
@@ -205,8 +258,8 @@ public class QuoteWorkflowService {
   public QuoteDetailResponse reject(SysUser user, Long id) {
     QuoteOrder order = requireOrder(user, id);
     QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
-    if (status != QuoteStatus.SENT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已确认报价可拒绝");
+    if (status != QuoteStatus.SENT && status != QuoteStatus.QUOTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已报价可拒绝");
     }
     order.setStatus(QuoteStatus.REJECTED);
     order.setUpdatedAt(LocalDateTime.now());
@@ -224,8 +277,8 @@ public class QuoteWorkflowService {
     if (QuoteStatusSupport.isAbandoned(status)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "已放弃的报价不可成交");
     }
-    if (status != QuoteStatus.SENT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已确认报价可标记成交");
+    if (status != QuoteStatus.SENT && status != QuoteStatus.QUOTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已报价可标记成交");
     }
     if (!Boolean.TRUE.equals(order.getCurrentVersion())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅当前生效版本可标记成交");
@@ -239,7 +292,7 @@ public class QuoteWorkflowService {
     return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
   }
 
-  /** 作废 → 已作废 */
+  /** 作废 → 已作废（仅待报价；已报价只能变更。关联询价单一并作废） */
   @Transactional
   public QuoteDetailResponse voidQuote(SysUser user, Long id) {
     QuoteOrder order = requireOperableOrder(user, id);
@@ -247,25 +300,21 @@ public class QuoteWorkflowService {
     if (status == QuoteStatus.VOIDED) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已作废");
     }
-    if (status == QuoteStatus.WON) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "已成交报价不可作废");
-    }
     if (QuoteStatusSupport.isAbandoned(status)) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "报价单已放弃");
     }
-    if (status != QuoteStatus.SENT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已确认报价可作废");
+    if (status != QuoteStatus.PENDING_QUOTE && status != QuoteStatus.DRAFT) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅待报价可作废；已报价请使用变更");
     }
     if (!Boolean.TRUE.equals(order.getCurrentVersion())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅当前生效版本可作废");
     }
-    if (Boolean.TRUE.equals(order.getCostRiskActive())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "存在成本风险的报价不可作废，请先发起变更");
-    }
     order.setStatus(QuoteStatus.VOIDED);
     quoteCostRiskService.clearRisk(user, order);
     order.setUpdatedAt(LocalDateTime.now());
-    return quoteQueryService.getById(user, quoteOrderRepository.save(order).getId());
+    QuoteOrder saved = quoteOrderRepository.save(order);
+    inquiryQuoteSyncService.onQuoteVoided(saved);
+    return quoteQueryService.getById(user, saved.getId());
   }
 
   @Transactional
@@ -278,7 +327,7 @@ public class QuoteWorkflowService {
 
     QuoteOrder copy = new QuoteOrder();
     copy.setQuoteNo(quoteNoGenerator.next());
-    copy.setStatus(QuoteStatus.DRAFT);
+    copy.setStatus(QuoteStatus.PENDING_QUOTE);
     copy.setCreatedBy(user.getId());
     copy.setCreatedByName(user.getRealName());
     copy.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
@@ -323,24 +372,30 @@ public class QuoteWorkflowService {
   }
 
   /**
-   * 已确认报价发起变更：复制为新草稿（含成本快照），原单进入「变更中」。
-   * 同一版本族同一时间仅允许一张进行中的变更单。
+   * 变更提交：用户在新单页重填费用后保存。
+   *
+   * <p>不创建待报价草稿；直接落「已报价」，并将旧版归档（SUPERSEDED）。
+   * 基础信息由前端带入，报价库数据由用户重新引入。
    */
   @Transactional
-  public QuoteDetailResponse reviseAsNew(SysUser user, Long id, QuoteReviseRequest request) {
-    if (request == null || request.changeReason() == null || request.changeReason().isBlank()) {
+  public QuoteDetailResponse commitRevision(SysUser user, Long parentId, QuoteSaveRequest request) {
+    if (request == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求不能为空");
+    }
+    String reason = request.changeReason() == null ? "" : request.changeReason().trim();
+    if (reason.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "变更原因不能为空");
     }
     QuoteOrder source =
         quoteOrderRepository
-            .findWithLinesById(id)
+            .findWithLinesById(parentId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "报价单不存在"));
     quoteAccessService.assertReadable(user, source);
     quoteAccessService.assertOperable(user, source);
 
     QuoteStatus status = QuoteStatusSupport.normalize(source.getStatus());
-    if (status != QuoteStatus.SENT) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已确认报价可发起变更");
+    if (status != QuoteStatus.SENT && status != QuoteStatus.QUOTED) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "仅已报价可发起变更");
     }
     if (!Boolean.TRUE.equals(source.getCurrentVersion())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "仅当前生效版本可发起变更");
@@ -352,87 +407,57 @@ public class QuoteWorkflowService {
         quoteOrderRepository.existsOpenRevision(
             rootId,
             0,
-            EnumSet.of(QuoteStatus.DRAFT, QuoteStatus.PENDING_APPROVAL));
+            EnumSet.of(
+                QuoteStatus.DRAFT,
+                QuoteStatus.PENDING_QUOTE,
+                QuoteStatus.PENDING_APPROVAL));
     if (openExists) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "该报价已有进行中的变更单，请先处理完成");
     }
 
+    // 先按普通新建落库，再升为已报价变更版
+    QuoteDetailResponse created = quoteCommandService.create(user, request);
+    QuoteOrder revision =
+        quoteOrderRepository
+            .findWithLinesById(created.id())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "变更单创建失败"));
+
     int nextRevision = quoteOrderRepository.findMaxRevisionNo(rootId) + 1;
-    QuoteOrder revision = new QuoteOrder();
-    revision.setQuoteNo(quoteNoGenerator.next());
-    revision.setStatus(QuoteStatus.DRAFT);
-    revision.setCreatedBy(user.getId());
-    revision.setCreatedByName(user.getRealName());
-    revision.setDeptId(user.getDepartment() != null ? user.getDepartment().getId() : null);
-    revision.setCustomerId(source.getCustomerId());
-    revision.setCustomerName(source.getCustomerName());
-    revision.setServiceTypes(QuoteServiceTypesSupport.copyOf(source.getServiceTypes()));
-    revision.setTransportMode(source.getTransportMode());
-    revision.setRouteSummary(source.getRouteSummary());
-    revision.setCurrency(source.getCurrency());
-    revision.setBaseCurrency(source.getBaseCurrency());
-    revision.setExchangeRate(source.getExchangeRate());
-    revision.setValidUntil(source.getValidUntil());
-    revision.setRemark(source.getRemark());
-    revision.setTotalAmount(source.getTotalAmount());
-    copySheetFields(source, revision);
-    for (QuoteOrderLine line : source.getLines()) {
-      QuoteOrderLine cloned = new QuoteOrderLine();
-      cloned.setQuoteOrder(revision);
-      cloned.setSort(line.getSort());
-      cloned.setItemName(line.getItemName());
-      cloned.setSpec(line.getSpec());
-      cloned.setCostMode(line.getCostMode());
-      cloned.setCostRefId(line.getCostRefId());
-      cloned.setQuantity(line.getQuantity());
-      cloned.setUnit(line.getUnit());
-      cloned.setUnitPrice(line.getUnitPrice());
-      cloned.setAmount(line.getAmount());
-      cloned.setExtraJson(line.getExtraJson());
-      revision.getLines().add(cloned);
-    }
+    revision.setStatus(QuoteStatus.QUOTED);
     revision.setParentQuoteId(source.getId());
     revision.setRootQuoteId(rootId);
     revision.setRevisionNo(nextRevision);
-    revision.setChangeReason(request.changeReason().trim());
-    revision.setCurrentVersion(false);
+    revision.setChangeReason(reason);
+    revision.setInquiryId(source.getInquiryId());
+    revision.setCurrentVersion(true);
     revision.setSupersededByQuoteId(null);
-    revision.setCostRiskActive(false);
-    revision.setCostRiskReason(null);
-    revision.setCostRiskAt(null);
-    revision.setCreatedAt(LocalDateTime.now());
+    revision.setApprovedBy(user.getId());
+    revision.setApprovedByName(user.getRealName());
+    revision.setApprovedAt(LocalDateTime.now());
     revision.setUpdatedAt(LocalDateTime.now());
-
+    quoteCostRiskService.clearRisk(user, revision);
     QuoteOrder saved = quoteOrderRepository.save(revision);
-    List<QuoteCostMatchItemDto> snapshots = quoteCostMatchService.listSnapshots(source.getId(), null);
-    if (!snapshots.isEmpty()) {
-      quoteCostMatchService.persistSnapshots(saved, snapshots);
-    }
 
-    source.setStatus(QuoteStatus.REVISING);
-    // 保留成本风险标记：变更中列表优先展示「变更中」；
-    // 若变更草稿被删除恢复为已确认时，仍应回到成本异常状态
-    source.setUpdatedAt(LocalDateTime.now());
-    quoteOrderRepository.save(source);
+    supersedePreviousVersions(saved);
+    inquiryQuoteSyncService.onQuoteConfirmed(saved);
+    quoteQuotedMailService.scheduleAfterQuoted(
+        saved.getId(), user.getId(), user.getRealName(), QuoteMailTrigger.REVISION);
 
-    String reason = request.changeReason().trim();
-    // 写入变更单自身的操作日志，便于在变更单页查看原因
-    String reasonSummary =
-        reason.length() > 80 ? reason.substring(0, 80) + "…" : reason;
+    String reasonSummary = reason.length() > 80 ? reason.substring(0, 80) + "…" : reason;
     operationLogService.recordSuccess(
         user,
         "quote",
         OperationAction.CREATE,
         "QuoteOrder",
         String.valueOf(saved.getId()),
-        "变更创建 "
+        "变更保存 "
             + saved.getQuoteNo()
             + "（来源 "
             + source.getQuoteNo()
             + "），原因："
             + reasonSummary,
         "POST",
-        "/quotes/" + saved.getId() + "/revise-created",
+        "/quotes/" + parentId + "/revise",
         null,
         null);
 
@@ -461,14 +486,16 @@ public class QuoteWorkflowService {
         continue;
       }
       QuoteStatus memberStatus = QuoteStatusSupport.normalize(member.getStatus());
-      if (memberStatus == QuoteStatus.SUPERSEDED) {
+      if (memberStatus == QuoteStatus.SUPERSEDED || memberStatus == QuoteStatus.ARCHIVED) {
         member.setCurrentVersion(false);
         continue;
       }
       if (memberStatus == QuoteStatus.SENT
+          || memberStatus == QuoteStatus.QUOTED
           || memberStatus == QuoteStatus.REVISING
           || Boolean.TRUE.equals(member.getCurrentVersion())) {
-        member.setStatus(QuoteStatus.SUPERSEDED);
+        member.setStatus(QuoteStatus.ARCHIVED);
+        member.setArchiveReason(QuoteArchiveReason.SUPERSEDED);
         member.setCurrentVersion(false);
         member.setSupersededByQuoteId(approvedRevision.getId());
         quoteCostRiskService.clearRisk(null, member);
@@ -544,6 +571,9 @@ public class QuoteWorkflowService {
     if (QuoteStatusSupport.applyExpiredAsVoided(order)) {
       order.setUpdatedAt(LocalDateTime.now());
       quoteOrderRepository.save(order);
+      if (InquiryQuoteSyncService.isExpiredArchive(order)) {
+        inquiryQuoteSyncService.onQuoteExpired(order);
+      }
     }
     return order;
   }
@@ -551,6 +581,8 @@ public class QuoteWorkflowService {
   private QuoteOrder requireOperableOrder(SysUser user, Long id) {
     QuoteOrder order = requireOrder(user, id);
     quoteAccessService.assertOperable(user, order);
+    // 询价递交后操作人暂空：首次确认/作废等操作时认领（随后 save 落库）
+    quoteAccessService.claimOperatorIfAbsent(order, user);
     return order;
   }
 

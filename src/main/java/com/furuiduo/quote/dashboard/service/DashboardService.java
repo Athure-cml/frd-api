@@ -1,7 +1,6 @@
 package com.furuiduo.quote.dashboard.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -17,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.furuiduo.quote.approval.service.ApprovalConfigService;
 import com.furuiduo.quote.cost.entity.CostFumigation;
+import com.furuiduo.quote.cost.entity.CostHighlightMode;
 import com.furuiduo.quote.cost.entity.CostRoad;
 import com.furuiduo.quote.cost.entity.CostSea;
 import com.furuiduo.quote.cost.repository.CostFumigationRepository;
@@ -37,14 +37,18 @@ import com.furuiduo.quote.dashboard.support.DashboardScopeParams;
 import com.furuiduo.quote.quote.entity.QuoteApprovalLog;
 import com.furuiduo.quote.quote.entity.QuoteCostSnapshot;
 import com.furuiduo.quote.quote.entity.QuoteCostType;
+import com.furuiduo.quote.quote.entity.QuoteLibraryConfirmStatus;
 import com.furuiduo.quote.quote.entity.QuoteOrder;
 import com.furuiduo.quote.quote.entity.QuoteStatus;
 import com.furuiduo.quote.quote.repository.QuoteApprovalLogRepository;
 import com.furuiduo.quote.quote.repository.QuoteCostSnapshotRepository;
+import com.furuiduo.quote.quote.repository.QuoteLibraryEntryRepository;
+import com.furuiduo.quote.quote.repository.QuoteMailLogRepository;
 import com.furuiduo.quote.quote.support.QuoteApprovalSupport;
 import com.furuiduo.quote.quote.support.QuoteCostRiskSupport;
 import com.furuiduo.quote.quote.support.QuoteDateTimes;
 import com.furuiduo.quote.quote.support.QuoteStatusSupport;
+import com.furuiduo.quote.sys.PermissionCodes;
 import com.furuiduo.quote.sys.entity.SysUser;
 import com.furuiduo.quote.sys.service.PermissionService;
 
@@ -58,10 +62,12 @@ public class DashboardService {
   private final CostRoadRepository costRoadRepository;
   private final CostSeaRepository costSeaRepository;
   private final CostFumigationRepository costFumigationRepository;
+  private final QuoteLibraryEntryRepository quoteLibraryEntryRepository;
   private final PermissionService permissionService;
   private final ApprovalConfigService approvalConfigService;
   private final QuoteApprovalLogRepository quoteApprovalLogRepository;
   private final SysUserNotificationStateRepository notificationStateRepository;
+  private final QuoteMailLogRepository quoteMailLogRepository;
 
   public DashboardService(
       DashboardQueryRepository dashboardQueryRepository,
@@ -69,19 +75,23 @@ public class DashboardService {
       CostRoadRepository costRoadRepository,
       CostSeaRepository costSeaRepository,
       CostFumigationRepository costFumigationRepository,
+      QuoteLibraryEntryRepository quoteLibraryEntryRepository,
       PermissionService permissionService,
       ApprovalConfigService approvalConfigService,
       QuoteApprovalLogRepository quoteApprovalLogRepository,
-      SysUserNotificationStateRepository notificationStateRepository) {
+      SysUserNotificationStateRepository notificationStateRepository,
+      QuoteMailLogRepository quoteMailLogRepository) {
     this.dashboardQueryRepository = dashboardQueryRepository;
     this.quoteCostSnapshotRepository = quoteCostSnapshotRepository;
     this.costRoadRepository = costRoadRepository;
     this.costSeaRepository = costSeaRepository;
     this.costFumigationRepository = costFumigationRepository;
+    this.quoteLibraryEntryRepository = quoteLibraryEntryRepository;
     this.permissionService = permissionService;
     this.approvalConfigService = approvalConfigService;
     this.quoteApprovalLogRepository = quoteApprovalLogRepository;
     this.notificationStateRepository = notificationStateRepository;
+    this.quoteMailLogRepository = quoteMailLogRepository;
   }
 
   public WorkspaceResponse getWorkspace(SysUser user) {
@@ -92,7 +102,8 @@ public class DashboardService {
     LocalDateTime todayStart = today.atStartOfDay();
     LocalDateTime yesterdayStart = today.minusDays(1).atStartOfDay();
 
-    List<WorkspaceMetricDto> metrics = buildMetrics(scope, monthStart, tomorrow, todayStart, yesterdayStart, today);
+    List<WorkspaceMetricDto> metrics =
+        buildMetrics(scope, monthStart, tomorrow, todayStart, yesterdayStart);
     List<WorkspaceTodoDto> todos = buildTodos(scope, user, 6);
     List<WorkspacePipelineDto> pipeline = buildPipeline(scope);
     List<WorkspaceNoticeDto> notices = buildNotices(user, today);
@@ -209,63 +220,59 @@ public class DashboardService {
       LocalDateTime monthStart,
       LocalDateTime tomorrow,
       LocalDateTime todayStart,
-      LocalDateTime yesterdayStart,
-      LocalDate today) {
-    long monthQuotes = dashboardQueryRepository.countCreatedBetween(scope, monthStart, tomorrow);
-    long monthQuotesTrend =
-        dashboardQueryRepository.countCreatedBetween(scope, todayStart, tomorrow)
-            - dashboardQueryRepository.countCreatedBetween(scope, yesterdayStart, todayStart);
+      LocalDateTime yesterdayStart) {
+    long monthInquiries =
+        dashboardQueryRepository.countInquiriesCreatedBetween(scope, monthStart, tomorrow);
+    long monthInquiriesTrend =
+        dashboardQueryRepository.countInquiriesCreatedBetween(scope, todayStart, tomorrow)
+            - dashboardQueryRepository.countInquiriesCreatedBetween(
+                scope, yesterdayStart, todayStart);
 
-    BigDecimal monthAmountRaw =
-        dashboardQueryRepository.sumAmountCreatedBetween(scope, monthStart, tomorrow);
-    long monthAmount =
-        monthAmountRaw.divide(BigDecimal.valueOf(10_000), 0, RoundingMode.HALF_UP).longValue();
-    BigDecimal monthAmountToday =
-        dashboardQueryRepository.sumAmountCreatedBetween(scope, todayStart, tomorrow);
-    BigDecimal monthAmountYesterday =
-        dashboardQueryRepository.sumAmountCreatedBetween(scope, yesterdayStart, todayStart);
-    long monthAmountTrend =
-        monthAmountToday
-            .divide(BigDecimal.valueOf(10_000), 0, RoundingMode.HALF_UP)
-            .subtract(
-                monthAmountYesterday.divide(BigDecimal.valueOf(10_000), 0, RoundingMode.HALF_UP))
-            .longValue();
+    long monthQuoted = dashboardQueryRepository.countQuotedBetween(scope, monthStart, tomorrow);
+    long monthQuotedTrend =
+        dashboardQueryRepository.countQuotedBetween(scope, todayStart, tomorrow)
+            - dashboardQueryRepository.countQuotedBetween(scope, yesterdayStart, todayStart);
 
-    long wonMonth = dashboardQueryRepository.countWonBetween(scope, monthStart, tomorrow);
-    long closedMonth = dashboardQueryRepository.countClosedBetween(scope, monthStart, tomorrow);
-    long winRate =
-        closedMonth == 0 ? 0 : Math.round(wonMonth * 100.0 / closedMonth);
+    // 转换率只统计有关联询价单的已报价，避免历史无询价报价单抬高比率
+    long monthQuotedLinked =
+        dashboardQueryRepository.countQuotedLinkedInquiryBetween(scope, monthStart, tomorrow);
+    long conversionRate =
+        monthInquiries == 0 ? 0 : Math.round(monthQuotedLinked * 100.0 / monthInquiries);
+    long inquiriesToday =
+        dashboardQueryRepository.countInquiriesCreatedBetween(scope, todayStart, tomorrow);
+    long quotedLinkedToday =
+        dashboardQueryRepository.countQuotedLinkedInquiryBetween(scope, todayStart, tomorrow);
+    long inquiriesYesterday =
+        dashboardQueryRepository.countInquiriesCreatedBetween(scope, yesterdayStart, todayStart);
+    long quotedLinkedYesterday =
+        dashboardQueryRepository.countQuotedLinkedInquiryBetween(scope, yesterdayStart, todayStart);
+    long conversionToday =
+        inquiriesToday == 0 ? 0 : Math.round(quotedLinkedToday * 100.0 / inquiriesToday);
+    long conversionYesterday =
+        inquiriesYesterday == 0
+            ? 0
+            : Math.round(quotedLinkedYesterday * 100.0 / inquiriesYesterday);
+    long conversionTrend = conversionToday - conversionYesterday;
 
-    long wonToday = dashboardQueryRepository.countWonBetween(scope, todayStart, tomorrow);
-    long closedToday = dashboardQueryRepository.countClosedBetween(scope, todayStart, tomorrow);
-    long wonYesterday = dashboardQueryRepository.countWonBetween(scope, yesterdayStart, todayStart);
-    long closedYesterday =
-        dashboardQueryRepository.countClosedBetween(scope, yesterdayStart, todayStart);
-    long winRateToday = closedToday == 0 ? 0 : Math.round(wonToday * 100.0 / closedToday);
-    long winRateYesterday =
-        closedYesterday == 0 ? 0 : Math.round(wonYesterday * 100.0 / closedYesterday);
-    long winRateTrend = winRateToday - winRateYesterday;
+    long pendingQuote = dashboardQueryRepository.countPendingQuote(scope);
+    long pendingQuoteTrend =
+        dashboardQueryRepository.countByStatusesUpdatedBetween(
+                scope, List.of("PENDING_QUOTE", "DRAFT"), todayStart, tomorrow)
+            - dashboardQueryRepository.countByStatusesUpdatedBetween(
+                scope, List.of("PENDING_QUOTE", "DRAFT"), yesterdayStart, todayStart);
 
-    long followUp =
-        dashboardQueryRepository.countByStatuses(
-            scope, List.of("PENDING_APPROVAL", "SENT", "PENDING", "EFFECTIVE", "FOLLOWING"));
-    long followUpTrend =
-        countFollowUpUpdatedBetween(scope, todayStart, tomorrow)
-            - countFollowUpUpdatedBetween(scope, yesterdayStart, todayStart);
-
-    LocalDate deadline = today.plusDays(EXPIRING_DAYS);
-    long expiringSoon = dashboardQueryRepository.countExpiringSoon(scope, today, deadline);
-    long expiringYesterday =
-        dashboardQueryRepository.countExpiringSoon(
-            scope, today.minusDays(1), today.minusDays(1).plusDays(EXPIRING_DAYS));
-    long expiringTrend = expiringSoon - expiringYesterday;
+    long costRisk = dashboardQueryRepository.countCostRiskActive(scope);
+    long costRiskTrend =
+        dashboardQueryRepository.countCostRiskActiveUpdatedBetween(scope, todayStart, tomorrow)
+            - dashboardQueryRepository.countCostRiskActiveUpdatedBetween(
+                scope, yesterdayStart, todayStart);
 
     return List.of(
-        new WorkspaceMetricDto("monthQuotes", monthQuotes, monthQuotesTrend),
-        new WorkspaceMetricDto("monthAmount", monthAmount, monthAmountTrend),
-        new WorkspaceMetricDto("winRate", winRate, winRateTrend),
-        new WorkspaceMetricDto("followUp", followUp, followUpTrend),
-        new WorkspaceMetricDto("expiringSoon", expiringSoon, expiringTrend));
+        new WorkspaceMetricDto("monthInquiries", monthInquiries, monthInquiriesTrend),
+        new WorkspaceMetricDto("monthQuoted", monthQuoted, monthQuotedTrend),
+        new WorkspaceMetricDto("conversionRate", conversionRate, conversionTrend),
+        new WorkspaceMetricDto("pendingQuote", pendingQuote, pendingQuoteTrend),
+        new WorkspaceMetricDto("costRisk", costRisk, costRiskTrend));
   }
 
   public List<WorkspaceTodoDto> listTodos(SysUser user) {
@@ -283,14 +290,44 @@ public class DashboardService {
     int capped = Math.max(1, Math.min(limit, 100));
     DashboardScopeParams mine = DashboardScopeParams.self(user);
     List<WorkspaceTodoDto> todos = new ArrayList<>();
-    for (QuoteOrder order : dashboardQueryRepository.findCostRiskQuotes(mine, capped)) {
-      todos.add(toCostRiskTodo(order));
+    // 待确认报价库：按海运/卡车/熏蒸分条提示
+    for (WorkspaceTodoDto libraryTodo : buildLibraryConfirmTodos(user)) {
+      if (todos.size() >= capped) {
+        break;
+      }
+      todos.add(libraryTodo);
+    }
+    // 成本异常提醒：待报价 / 已报价均保留
+    if (todos.size() < capped) {
+      int riskLimit = capped - todos.size();
+      for (QuoteOrder order : dashboardQueryRepository.findCostRiskQuotes(mine, riskLimit)) {
+        todos.add(toCostRiskTodo(order));
+      }
+    }
+    // 待发送邮件：已报价发信失败，仅报价单操作人可见
+    if (todos.size() < capped) {
+      int mailLimit = capped - todos.size();
+      for (Object[] row : quoteMailLogRepository.findLatestFailedByOperator(user.getId(), mailLimit)) {
+        Long quoteId = ((Number) row[0]).longValue();
+        String quoteNo = row[1] == null ? "" : row[1].toString();
+        String customerName = row[2] == null ? "" : row[2].toString();
+        LocalDateTime failedAt = row[5] instanceof LocalDateTime t ? t : LocalDateTime.now();
+        todos.add(
+            new WorkspaceTodoDto(
+                quoteId,
+                quoteNo,
+                customerName,
+                "pendingMail",
+                "urgent",
+                formatTimeLabel(failedAt),
+                false));
+      }
     }
     int remaining = Math.max(0, capped - todos.size());
     if (remaining > 0) {
       int candidateLimit = Math.min(200, Math.max(20, capped * 4));
       List<QuoteOrder> candidates =
-          dashboardQueryRepository.findRecentActionable(scope, candidateLimit);
+          dashboardQueryRepository.findTodoCandidates(scope, candidateLimit);
       Map<Long, List<QuoteApprovalLog>> logsById = loadApprovalLogs(candidates);
       List<QuoteApprovalSupport.FlowNode> flow = quoteFlowNodes();
       candidates.stream()
@@ -302,17 +339,83 @@ public class DashboardService {
     return todos;
   }
 
+  /**
+   * 待确认报价库待办：仅有对应报价库「确认」权限时展示。
+   * {@code quoteNo} 存模式编码（road/sea/fumigation），{@code customer} 存待确认条数。
+   */
+  private List<WorkspaceTodoDto> buildLibraryConfirmTodos(SysUser user) {
+    List<WorkspaceTodoDto> todos = new ArrayList<>();
+    appendLibraryConfirmTodo(
+        todos,
+        user,
+        CostHighlightMode.road,
+        PermissionCodes.QUOTE_LIBRARY_ROAD_CONFIRM,
+        "confirmLibraryRoad",
+        -101L);
+    appendLibraryConfirmTodo(
+        todos,
+        user,
+        CostHighlightMode.sea,
+        PermissionCodes.QUOTE_LIBRARY_SEA_CONFIRM,
+        "confirmLibrarySea",
+        -102L);
+    appendLibraryConfirmTodo(
+        todos,
+        user,
+        CostHighlightMode.fumigation,
+        PermissionCodes.QUOTE_LIBRARY_FUMIGATION_CONFIRM,
+        "confirmLibraryFumigation",
+        -103L);
+    return todos;
+  }
+
+  private void appendLibraryConfirmTodo(
+      List<WorkspaceTodoDto> todos,
+      SysUser user,
+      CostHighlightMode mode,
+      String confirmCode,
+      String todoType,
+      long syntheticId) {
+    if (!permissionService.hasPermission(user, confirmCode)) {
+      return;
+    }
+    long count =
+        quoteLibraryEntryRepository.countByCostModeAndConfirmStatusAndArchivedFalse(
+            mode, QuoteLibraryConfirmStatus.pendingConfirm);
+    if (count <= 0) {
+      return;
+    }
+    todos.add(
+        new WorkspaceTodoDto(
+            syntheticId,
+            mode.name(),
+            String.valueOf(count),
+            todoType,
+            "high",
+            "",
+            false));
+  }
+
   private boolean includeTodo(
       QuoteOrder order,
       SysUser user,
       Map<Long, List<QuoteApprovalLog>> logsById,
       List<QuoteApprovalSupport.FlowNode> flow) {
     QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
+    // 已报价不进待办
+    if (QuoteStatusSupport.isQuotedLike(status)) {
+      return false;
+    }
     if (status == QuoteStatus.PENDING_APPROVAL) {
       List<QuoteApprovalLog> logs = logsById.getOrDefault(order.getId(), List.of());
       return QuoteApprovalSupport.isCurrentApprover(user.getId(), logs, flow);
     }
-    return user.getId() != null && user.getId().equals(order.getCreatedBy());
+    // 待报价：未认领时对范围内人员提醒；已认领仅提醒操作人
+    if (status == QuoteStatus.PENDING_QUOTE || status == QuoteStatus.DRAFT) {
+      return order.getCreatedBy() == null
+          || (user.getId() != null && user.getId().equals(order.getCreatedBy()));
+    }
+    return false;
   }
 
   private List<QuoteApprovalSupport.FlowNode> quoteFlowNodes() {
@@ -357,44 +460,35 @@ public class DashboardService {
     LocalDate startMonth = today.minusMonths(11).withDayOfMonth(1);
     LocalDateTime from = startMonth.atStartOfDay();
     LocalDateTime to = today.plusMonths(1).withDayOfMonth(1).atStartOfDay();
-    Map<String, Double> quotedByMonth =
-        monthAmountMap(dashboardQueryRepository.sumAmountByCreatedMonth(scope, from, to));
-    Map<String, Double> wonByMonth =
-        monthAmountMap(dashboardQueryRepository.sumWonAmountByUpdatedMonth(scope, from, to));
+    Map<String, Long> inquiriesByMonth =
+        monthCountMap(dashboardQueryRepository.countInquiriesByCreatedMonth(scope, from, to));
+    Map<String, Long> quotedByMonth =
+        monthCountMap(dashboardQueryRepository.countQuotedByMonth(scope, from, to));
     List<String> months = new ArrayList<>();
-    List<Double> quoted = new ArrayList<>();
-    List<Double> won = new ArrayList<>();
+    List<Long> inquiries = new ArrayList<>();
+    List<Long> quoted = new ArrayList<>();
     for (int i = 0; i < 12; i++) {
       LocalDate month = startMonth.plusMonths(i);
       String key = String.format("%04d-%02d", month.getYear(), month.getMonthValue());
       months.add(key);
-      quoted.add(quotedByMonth.getOrDefault(key, 0D));
-      won.add(wonByMonth.getOrDefault(key, 0D));
+      inquiries.add(inquiriesByMonth.getOrDefault(key, 0L));
+      quoted.add(quotedByMonth.getOrDefault(key, 0L));
     }
-    return new WorkspaceQuoteStatsDto(months, quoted, won);
+    return new WorkspaceQuoteStatsDto(months, inquiries, quoted);
   }
 
-  private Map<String, Double> monthAmountMap(List<Object[]> rows) {
-    Map<String, Double> map = new LinkedHashMap<>();
+  private Map<String, Long> monthCountMap(List<Object[]> rows) {
+    Map<String, Long> map = new LinkedHashMap<>();
     for (Object[] row : rows) {
       if (row == null || row.length < 3 || row[0] == null || row[1] == null) {
         continue;
       }
       int year = ((Number) row[0]).intValue();
       int month = ((Number) row[1]).intValue();
-      map.put(String.format("%04d-%02d", year, month), toWan(row[2]));
+      long count = row[2] instanceof Number number ? number.longValue() : 0L;
+      map.put(String.format("%04d-%02d", year, month), count);
     }
     return map;
-  }
-
-  private double toWan(Object raw) {
-    BigDecimal amount = BigDecimal.ZERO;
-    if (raw instanceof BigDecimal decimal) {
-      amount = decimal;
-    } else if (raw instanceof Number number) {
-      amount = BigDecimal.valueOf(number.doubleValue());
-    }
-    return amount.divide(BigDecimal.valueOf(10_000), 2, RoundingMode.HALF_UP).doubleValue();
   }
 
   private List<WorkspaceNoticeDto> buildNotices(SysUser user, LocalDate today) {
@@ -429,6 +523,28 @@ public class DashboardService {
                   order.getCostRiskAt() != null
                       ? order.getCostRiskAt()
                       : LocalDateTime.now()),
+              payload));
+    }
+
+    // 已报价邮件发送失败：仅推送给报价单操作人（创建人）
+    for (Object[] row : quoteMailLogRepository.findLatestFailedByOperator(user.getId(), 5)) {
+      Long quoteId = ((Number) row[0]).longValue();
+      String quoteNo = row[1] == null ? "" : row[1].toString();
+      String customerName = row[2] == null ? "" : row[2].toString();
+      String toEmail = row[3] == null ? "" : row[3].toString();
+      String errorMessage = row[4] == null ? "" : row[4].toString();
+      LocalDateTime failedAt = row[5] instanceof LocalDateTime t ? t : LocalDateTime.now();
+      Map<String, Object> payload = new HashMap<>();
+      payload.put("quoteId", quoteId);
+      payload.put("quoteNo", quoteNo);
+      payload.put("customerName", customerName);
+      payload.put("toEmail", toEmail);
+      payload.put("reason", errorMessage);
+      notices.add(
+          new WorkspaceNoticeDto(
+              "mail-failed-" + quoteId,
+              "MAIL_FAILED",
+              QuoteDateTimes.format(failedAt),
               payload));
     }
 
@@ -520,22 +636,10 @@ public class DashboardService {
     QuoteStatus status = QuoteStatusSupport.normalize(order.getStatus());
     String todoType =
         switch (status) {
-          case DRAFT -> "completeDraft";
-          case PENDING_APPROVAL -> "approveQuote";
-          case WON -> "confirmWon";
-          case REJECTED, EXPIRED, VOIDED -> "archiveLost";
-          default -> "followSent";
+          case PENDING_APPROVAL, PENDING -> "approveQuote";
+          default -> "pendingQuote";
         };
-    String priority =
-        switch (status) {
-          case DRAFT -> "medium";
-          case PENDING_APPROVAL -> "urgent";
-          case SENT -> "high";
-          case WON -> "high";
-          default -> "medium";
-        };
-    boolean done =
-        status == QuoteStatus.WON || QuoteStatusSupport.isAbandoned(status);
+    String priority = status == QuoteStatus.PENDING_APPROVAL ? "urgent" : "high";
     return new WorkspaceTodoDto(
         order.getId(),
         order.getQuoteNo(),
@@ -543,7 +647,7 @@ public class DashboardService {
         todoType,
         priority,
         formatTimeLabel(order.getUpdatedAt()),
-        done);
+        false);
   }
 
   private WorkspacePipelineDto toPipeline(QuoteOrder order) {
@@ -621,10 +725,4 @@ public class DashboardService {
 
   private record StaleQuoteNotice(
       Long quoteId, String quoteNo, String routeSummary, String costType) {}
-
-  private long countFollowUpUpdatedBetween(
-      DashboardScopeParams scope, LocalDateTime from, LocalDateTime to) {
-    return dashboardQueryRepository.countByStatusesUpdatedBetween(
-        scope, List.of("PENDING_APPROVAL", "SENT", "PENDING", "EFFECTIVE", "FOLLOWING"), from, to);
-  }
 }

@@ -238,7 +238,7 @@ public class QuoteSheetGenerateService {
             oceanFreight,
             ssl,
             truckingFee,
-            nsLift,
+            null,            nsLift,
             chassis,
             waiting,
             redeliveryFee,

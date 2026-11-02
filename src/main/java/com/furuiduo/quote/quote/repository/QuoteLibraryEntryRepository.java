@@ -23,12 +23,21 @@ public interface QuoteLibraryEntryRepository extends JpaRepository<QuoteLibraryE
 
   void deleteByCostModeAndCostIdIn(CostHighlightMode costMode, Collection<Long> costIds);
 
-  @Query("select e.costId from QuoteLibraryEntry e where e.costMode = :mode")
+  @Query(
+      "select e.costId from QuoteLibraryEntry e where e.costMode = :mode and e.archived = false")
   Set<Long> findCostIdsByCostMode(@Param("mode") CostHighlightMode mode);
 
   @Query(
-      "select e.costId from QuoteLibraryEntry e where e.costMode = :mode and e.confirmStatus in :statuses")
+      """
+      select e.costId from QuoteLibraryEntry e
+      where e.costMode = :mode
+        and e.archived = false
+        and e.confirmStatus in :statuses
+      """)
   Set<Long> findCostIdsByCostModeAndConfirmStatusIn(
       @Param("mode") CostHighlightMode mode,
       @Param("statuses") Collection<QuoteLibraryConfirmStatus> statuses);
+
+  long countByCostModeAndConfirmStatusAndArchivedFalse(
+      CostHighlightMode costMode, QuoteLibraryConfirmStatus confirmStatus);
 }

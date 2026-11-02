@@ -38,14 +38,11 @@ public class CostTemplateLayoutMigrator implements ApplicationRunner {
     fillBuiltinIfEmpty(LIBRARY_COST, "road", "road_default", CostTemplateLayouts.roadDefault());
     fillBuiltinIfEmpty(LIBRARY_COST, "sea", "sea_default", CostTemplateLayouts.seaDefault());
     fillBuiltinIfEmpty(
-        LIBRARY_COST, "fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
+        LIBRARY_COST, "fumigation", "fumigation_v2", CostTemplateLayouts.fumigationDefault());
     fillBuiltinIfEmpty(LIBRARY_QUOTE, "road", "q_road_default", CostTemplateLayouts.roadDefault());
     fillBuiltinIfEmpty(LIBRARY_QUOTE, "sea", "q_sea_default", CostTemplateLayouts.seaDefault());
     fillBuiltinIfEmpty(
-        LIBRARY_QUOTE,
-        "fumigation",
-        "q_fumigation_default",
-        CostTemplateLayouts.fumigationDefault());
+        LIBRARY_QUOTE, "fumigation", "q_fumigation_v2", CostTemplateLayouts.fumigationDefault());
 
     for (CostGridTemplate template : repository.findAll()) {
       CostTableTemplateLayout current = template.getLayout();

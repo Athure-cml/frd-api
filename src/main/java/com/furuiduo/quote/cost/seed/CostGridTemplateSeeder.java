@@ -29,15 +29,11 @@ public class CostGridTemplateSeeder implements ApplicationRunner {
     repository.backfillCostLibrary();
     seedIfEmpty(LIBRARY_COST, "road", "road_default", CostTemplateLayouts.roadDefault());
     seedIfEmpty(LIBRARY_COST, "sea", "sea_default", CostTemplateLayouts.seaDefault());
-    seedIfEmpty(
-        LIBRARY_COST, "fumigation", "fumigation_default", CostTemplateLayouts.fumigationDefault());
+    // 旧版 fumigation_default 可能已标 legacy；无可用模板时补种 V2 单级表头
+    seedFumigationV2IfNeeded(LIBRARY_COST, "fumigation_v2");
     seedIfEmpty(LIBRARY_QUOTE, "road", "q_road_default", CostTemplateLayouts.roadDefault());
     seedIfEmpty(LIBRARY_QUOTE, "sea", "q_sea_default", CostTemplateLayouts.seaDefault());
-    seedIfEmpty(
-        LIBRARY_QUOTE,
-        "fumigation",
-        "q_fumigation_default",
-        CostTemplateLayouts.fumigationDefault());
+    seedFumigationV2IfNeeded(LIBRARY_QUOTE, "q_fumigation_v2");
   }
 
   private void seedIfEmpty(
@@ -48,6 +44,24 @@ public class CostGridTemplateSeeder implements ApplicationRunner {
     if (repository.countByLibraryAndMode(library, mode) > 0) {
       return;
     }
+    saveDefault(library, mode, code, layout);
+  }
+
+  private void seedFumigationV2IfNeeded(String library, String code) {
+    if (repository.countByLibraryAndModeAndLegacyFalse(library, "fumigation") > 0) {
+      return;
+    }
+    if (repository.findByLibraryAndModeAndCode(library, "fumigation", code).isPresent()) {
+      return;
+    }
+    saveDefault(library, "fumigation", code, CostTemplateLayouts.fumigationDefault());
+  }
+
+  private void saveDefault(
+      String library,
+      String mode,
+      String code,
+      com.furuiduo.quote.cost.dto.CostTableTemplateLayout layout) {
     CostGridTemplate template = new CostGridTemplate();
     template.setLibrary(library);
     template.setMode(mode);
@@ -57,6 +71,7 @@ public class CostGridTemplateSeeder implements ApplicationRunner {
             ? "page.quote.library.template.defaultName"
             : "page.costLibrary.template.defaultName");
     template.setDefaultTemplate(true);
+    template.setLegacy(false);
     template.setLayout(layout);
     template.touch();
     repository.save(template);

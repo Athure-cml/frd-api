@@ -176,6 +176,7 @@ public class QuoteCostImportApplyService {
         null,
         null,
         truckingFee,
+        null,
         // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
         new BigDecimal("150"),
         new BigDecimal("45"),
@@ -229,6 +230,7 @@ public class QuoteCostImportApplyService {
         null,
         null,
         null,
+        null,
         null);
   }
 
@@ -236,6 +238,7 @@ public class QuoteCostImportApplyService {
       Map<String, Object> snap, LocalDate quoteDate) {
     FumigationRates rates = resolveFumigationRatesFromSnapshot(snap, quoteDate);
     return new QuoteSheetFieldsDto(
+        null,
         null,
         null,
         null,
@@ -290,6 +293,7 @@ public class QuoteCostImportApplyService {
         null,
         null,
         truckingFee,
+        null,
         // 卡车额外费用业务固定值，不从报价库取值；二次送箱费 AT COST 不落数字
         new BigDecimal("150"),
         new BigDecimal("45"),
@@ -346,6 +350,7 @@ public class QuoteCostImportApplyService {
         null,
         null,
         null,
+        null,
         null);
   }
 
@@ -359,6 +364,7 @@ public class QuoteCostImportApplyService {
         quoteRuleEngine.applyDecimalTarget("FM_NON_OAK", nonOakBase, ctx);
     BigDecimal fmOak = quoteRuleEngine.applyDecimalTarget("FM_OAK", oakBase, ctx);
     return new QuoteSheetFieldsDto(
+        null,
         null,
         null,
         null,

@@ -55,6 +55,12 @@ public final class PermissionCodes {
   public static final String QUOTE_EXPORT = "quote:export";
   public static final String QUOTE_DELETE = "quote:delete";
 
+  public static final String INQUIRY_VIEW = "inquiry:view";
+  public static final String INQUIRY_CREATE = "inquiry:create";
+  public static final String INQUIRY_EDIT = "inquiry:edit";
+  public static final String INQUIRY_SUBMIT = "inquiry:submit";
+  public static final String INQUIRY_DELETE = "inquiry:delete";
+
   public static final String QUOTE_LIBRARY_ROAD_VIEW = "quote:library:road:view";
   public static final String QUOTE_LIBRARY_ROAD_EDIT = "quote:library:road:edit";
   public static final String QUOTE_LIBRARY_ROAD_CONFIRM = "quote:library:road:confirm";
@@ -195,6 +201,11 @@ public final class PermissionCodes {
       APPROVAL_CONFIG_MANAGE,
       QUOTE_EXPORT,
       QUOTE_DELETE,
+      INQUIRY_VIEW,
+      INQUIRY_CREATE,
+      INQUIRY_EDIT,
+      INQUIRY_SUBMIT,
+      INQUIRY_DELETE,
       QUOTE_LIBRARY_ROAD_VIEW,
       QUOTE_LIBRARY_ROAD_EDIT,
       QUOTE_LIBRARY_ROAD_CONFIRM,

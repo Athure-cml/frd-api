@@ -45,6 +45,10 @@ public class CostGridTemplate {
   @Column(name = "is_default", nullable = false)
   private boolean defaultTemplate;
 
+  /** legacy：旧版锁定模板，模板管理隐藏，仅历史快照展示用 */
+  @Column(nullable = false)
+  private boolean legacy = false;
+
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(nullable = false)
   private CostTableTemplateLayout layout;
